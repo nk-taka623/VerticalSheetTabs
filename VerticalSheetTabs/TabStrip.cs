@@ -270,7 +270,7 @@ namespace VerticalSheetTabs
             var gone = _selFolders.Where(id =>
             {
                 StripRow r = _rows.FirstOrDefault(x => x.IsFolder && x.FolderId == id);
-                return r == null || (r.Members.Count > 0 && !r.Members.All(_selected.Contains));
+                return r == null;
             }).ToList();
             foreach (string id in gone) _selFolders.Remove(id);
             if (_anchorFolder != null && !_rows.Any(x => x.IsFolder && x.FolderId == _anchorFolder)) _anchorFolder = null;
@@ -448,25 +448,45 @@ namespace VerticalSheetTabs
         {
             int left = row.Left + Px(InsetLeft);
             int right = row.Right - Px(InsetRight);
+            int radius = Px(CornerRadius);
             bool selected = _selFolders.Contains(folder.FolderId);
+            bool colored = folder.ColorBgr >= 0;
+            Color color = colored
+                ? Color.FromArgb(folder.ColorBgr & 0xFF, (folder.ColorBgr >> 8) & 0xFF, (folder.ColorBgr >> 16) & 0xFF)
+                : Color.Empty;
+            Color textColor = selected ? TextColor : Theme.InactiveText;
+
+            // like a sheet tab: selected = white (with the color fading in from the top), not selected
+            // with a color = a box in that color
             if (selected)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
-                using (GraphicsPath path = RoundedRect(body, Px(CornerRadius)))
+                using (GraphicsPath path = RoundedRect(body, radius))
                 {
                     using (var brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
+                    if (colored)
+                    {
+                        Rectangle inner = Rectangle.Inflate(body, -1, -1);
+                        Color bottom = Mix(Color.White, color, 0.45);
+                        using (var brush = new LinearGradientBrush(new Rectangle(inner.X, inner.Y - 1, inner.Width, inner.Height + 2), Color.White, bottom, LinearGradientMode.Vertical))
+                        using (GraphicsPath innerPath = RoundedRect(inner, Math.Max(1, radius - 1)))
+                        {
+                            g.FillPath(brush, innerPath);
+                        }
+                    }
                     using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
             }
-            if (folder.ColorBgr >= 0)
+            else if (colored)
             {
-                Color c = Color.FromArgb(folder.ColorBgr & 0xFF, (folder.ColorBgr >> 8) & 0xFF, (folder.ColorBgr >> 16) & 0xFF);
-                var bar = new Rectangle(row.Left, row.Top + Px(ColoredTop), Px(FolderBarWidth), row.Height - Px(ColoredTop) - Px(BottomInset));
-                using (GraphicsPath path = RoundedRect(bar, Math.Max(1, Px(FolderBarWidth) / 2)))
-                using (var brush = new SolidBrush(c))
+                var body = new Rectangle(left, row.Top + Px(ColoredTop), right - left, row.Height - Px(ColoredTop) - Px(BottomInset));
+                using (GraphicsPath path = RoundedRect(body, radius))
+                using (var brush = new SolidBrush(color))
                 {
                     g.FillPath(brush, path);
                 }
+                double luma = (color.R * 299 + color.G * 587 + color.B * 114) / 1000.0;
+                textColor = luma >= 150 ? TextColor : Color.White;
             }
 
             // closed: a right-pointing chevron; open: the same turned down
@@ -476,7 +496,7 @@ namespace VerticalSheetTabs
             Point[] chevron = folder.Expanded
                 ? new[] { new Point(cx - h / 2, cy - w / 2), new Point(cx, cy + w / 2), new Point(cx + h / 2, cy - w / 2) }
                 : new[] { new Point(cx - w / 2, cy - h / 2), new Point(cx + w / 2, cy), new Point(cx - w / 2, cy + h / 2) };
-            using (var pen = new Pen(selected ? TextColor : Theme.InactiveText, Math.Max(1.5f, Px(1.4))))
+            using (var pen = new Pen(textColor, Math.Max(1.5f, Px(1.4))))
             {
                 pen.LineJoin = LineJoin.Miter;
                 g.DrawLines(pen, chevron);
@@ -488,7 +508,7 @@ namespace VerticalSheetTabs
             if (_editor == null || _editingFolderId != folder.FolderId)
             {
                 using (var bold = new Font(TabFont, FontStyle.Bold))
-                using (var brush = new SolidBrush(selected ? TextColor : Theme.InactiveText))
+                using (var brush = new SolidBrush(textColor))
                 using (var format = new StringFormat(StringFormat.GenericDefault))
                 {
                     format.Alignment = StringAlignment.Near;
@@ -629,6 +649,7 @@ namespace VerticalSheetTabs
         {
             base.OnMouseDown(e);
             Focus();
+            _toggleOffFolder = null; // a drag swallows the button release, so nothing may be left over
             if (e.Button == MouseButtons.Left && !StructureProtected && PlusButtonRect().Contains(e.Location))
             {
                 _plusDown = true;
@@ -660,7 +681,6 @@ namespace VerticalSheetTabs
                         return;
                     }
                     SelectFolderByClick(row, index, ctrl, shift);
-                    _selectionPending = row.Members.Count > 0;
                     Invalidate();
                     return;
                 }
@@ -670,7 +690,6 @@ namespace VerticalSheetTabs
                     if (SheetMenu != null || FolderMenu != null) ContextMenuStrip = FolderMenu;
                     if (!_selFolders.Contains(row.FolderId)) SelectFolderByClick(row, index, false, false);
                     Invalidate();
-                    if (row.Members.Count > 0) Raise();
                 }
                 return;
             }
@@ -742,48 +761,12 @@ namespace VerticalSheetTabs
             _anchorFolder = row.FolderId;
             if (ctrl)
             {
-                if (_selFolders.Contains(row.FolderId))
-                {
-                    _selFolders.Remove(row.FolderId);
-                    foreach (string m in row.Members) _selected.Remove(m);
-                    if (_selected.Count == 0 && _active != null) _selected.Add(_active);
-                    else if (!_selected.Contains(_active)) _active = SelectedInOrder().FirstOrDefault();
-                }
-                else
-                {
-                    _selFolders.Add(row.FolderId);
-                    foreach (string m in row.Members) _selected.Add(m);
-                    if (row.Members.Count > 0) _active = row.Members[0];
-                }
+                if (!_selFolders.Remove(row.FolderId)) _selFolders.Add(row.FolderId);
                 return;
             }
-            if (_selFolders.Contains(row.FolderId) && _selFolders.Count + _selected.Count > 1 && row.Members.All(_selected.Contains))
-            {
-                return; // a click inside a selection keeps it (a drag may follow)
-            }
+            // The sheets inside a folder are not selected with it: the folder commands (right click)
+            // act on all of them. Selecting a folder does not touch the selection of sheets.
             _selFolders = new HashSet<string> { row.FolderId };
-            if (row.Members.Count > 0)
-            {
-                _selected = new HashSet<string>(row.Members);
-                _active = row.Members[0];
-            }
-        }
-
-        // Takes a folder and its sheets out of the selection; Excel always keeps one sheet selected,
-        // so when nothing else is left the active sheet stays.
-        private void DeselectFolder(string folderId)
-        {
-            StripRow row = FolderRow(folderId);
-            _selFolders.Remove(folderId);
-            if (row == null) return;
-            string active = _active;
-            foreach (string m in row.Members) _selected.Remove(m);
-            if (_selected.Count == 0 && active != null)
-            {
-                _selected.Add(active);
-                _active = active;
-            }
-            else if (!_selected.Contains(_active)) _active = SelectedInOrder().FirstOrDefault();
         }
 
         // Selects every row from the anchor (the last clicked folder, otherwise the active sheet) to this one.
@@ -797,11 +780,11 @@ namespace VerticalSheetTabs
             for (int i = lo; i <= hi; i++)
             {
                 StripRow r = _rows[i];
-                if (r.IsFolder) { folders.Add(r.FolderId); foreach (string m in r.Members) sheets.Add(m); }
+                if (r.IsFolder) folders.Add(r.FolderId);
                 else sheets.Add(r.Sheet);
             }
-            if (sheets.Count == 0) return;
             _selFolders = folders;
+            if (sheets.Count == 0) return;
             _selected = sheets;
             if (!_selected.Contains(_active)) _active = SelectedInOrder().First();
         }
@@ -815,9 +798,8 @@ namespace VerticalSheetTabs
             _toggleOffFolder = null;
             if (toggleOff != null && noDrag && e.Button == MouseButtons.Left)
             {
-                DeselectFolder(toggleOff);
+                _selFolders.Remove(toggleOff);
                 Invalidate();
-                Raise();
                 return;
             }
             if (_plusDown)
@@ -843,13 +825,13 @@ namespace VerticalSheetTabs
             if (e.KeyCode == Keys.Delete)
             {
                 e.Handled = true;
-                if (!StructureProtected && DeleteKeyRequested != null) DeleteKeyRequested(SelectedInOrder(), _selFolders.ToList());
+                if (!StructureProtected && DeleteKeyRequested != null) DeleteKeyRequested(_selFolders.Count > 0 ? new List<string>() : SelectedInOrder(), _selFolders.ToList());
                 return;
             }
             if (e.KeyCode == Keys.F2)
             {
                 e.Handled = true;
-                if (_selFolders.Count == 1 && _selected.Count <= FolderRow(_selFolders.First()).Members.Count) BeginRenameFolder(_selFolders.First());
+                if (_selFolders.Count == 1) BeginRenameFolder(_selFolders.First());
                 else BeginRenameActive();
                 return;
             }
@@ -921,14 +903,23 @@ namespace VerticalSheetTabs
             int index = _dragIndex;
             _dragIndex = -1;
             _selectionPending = false; // a drag does not change the selection in Excel by itself
+            _toggleOffFolder = null;
             if (index >= _rows.Count) return;
 
             // Dragging something selected takes the whole selection along (sheets and folders).
             StripRow row = _rows[index];
-            bool inSelection = row.IsFolder || _selected.Contains(row.Sheet);
-            _dragSheets = inSelection ? SelectedInOrder() : new List<string> { row.Sheet };
-            _dragFolders = inSelection ? _selFolders.ToList() : new List<string>();
-            if (row.IsFolder && !_dragFolders.Contains(row.FolderId)) _dragFolders.Add(row.FolderId);
+            // A folder row takes the selected folders (with their sheets); a sheet row takes the selected sheets.
+            if (row.IsFolder)
+            {
+                _dragSheets = new List<string>();
+                _dragFolders = _selFolders.ToList();
+                if (!_dragFolders.Contains(row.FolderId)) _dragFolders.Add(row.FolderId);
+            }
+            else
+            {
+                _dragSheets = _selected.Contains(row.Sheet) ? SelectedInOrder() : new List<string> { row.Sheet };
+                _dragFolders = new List<string>();
+            }
             _dragNames = _dragSheets;
             _dragging = true;
             try
