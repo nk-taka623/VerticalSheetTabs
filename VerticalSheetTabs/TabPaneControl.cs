@@ -44,7 +44,6 @@ namespace VerticalSheetTabs
         public Func<Color[]> ThemeColorProvider { get; set; }
 
         private readonly ContextMenuStrip _menu = new ContextMenuStrip();
-        private readonly Button _add = new Button();
 
         public TabPaneControl()
         {
@@ -53,14 +52,9 @@ namespace VerticalSheetTabs
             _strip.RenameRequested += (o, n) => { if (RenameRequested != null) RenameRequested(o, n); };
             _strip.MoveRequested += (names, before, copy) => { if (MoveRequested != null) MoveRequested(names, before, copy); };
 
-            // The "+" button adds a sheet after the active one, like Excel's own.
-            _add.Text = "+";
-            _add.Dock = DockStyle.Bottom;
-            _add.FlatStyle = FlatStyle.Flat;
-            _add.Click += (s, e) => { if (AddRequested != null) AddRequested(); };
-            // The Fill control must be added first.
+            // The "+" (adds a sheet after the active one, like Excel's own) is drawn by the strip.
+            _strip.AddRequested += () => { if (AddRequested != null) AddRequested(); };
             Controls.Add(_strip);
-            Controls.Add(_add);
 
             // The first item is ours; the sheet items follow Excel's own tab menu order.
             var settings = new ToolStripMenuItem("タブ表示の設定");
@@ -137,7 +131,6 @@ namespace VerticalSheetTabs
 
         public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors)
         {
-            _add.Enabled = !StructureProtected;
             _strip.StructureProtected = StructureProtected;
             _strip.SetSheets(names, activeName, selected, colors);
         }

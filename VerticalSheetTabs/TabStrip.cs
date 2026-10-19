@@ -20,6 +20,8 @@ namespace VerticalSheetTabs
         private static readonly Color Underline = Color.FromArgb(16, 124, 65);
         private static readonly Color TextColor = Color.FromArgb(36, 36, 36);
         private static readonly Color Separator = Color.FromArgb(209, 209, 209);
+        private static readonly Color PlusColor = Color.FromArgb(57, 57, 56);
+        private static readonly Color PlusHoverBack = Color.FromArgb(250, 250, 250);
 
         // ---- Excel's metrics in DIP (physical px at 125% / 1.25) ----
         private const double RowHeight = 32;
@@ -33,6 +35,10 @@ namespace VerticalSheetTabs
         // Excel's tab text is about 9pt "Yu Gothic" (the measured width of "Sheet1" matches it).
         private const string FontFamilyName = "Yu Gothic";
         private const double FontPixelsAt96 = 15.5;
+        // The "+" (new sheet) button: a plain plus sign that gets a light rounded square on hover.
+        private const double PlusArm = 10.5, PlusThickness = 1.6, PlusHoverSize = 24, PlusHoverRadius = 3.2;
+        // The drop marker while dragging: Excel shows a small black triangle at the insertion point.
+        private const double MarkerWidth = 4, MarkerHeight = 8;
 
         private List<string> _names = new List<string>();
         private HashSet<string> _selected = new HashSet<string>();
@@ -56,6 +62,7 @@ namespace VerticalSheetTabs
         // Activating a sheet moves the focus into Excel, which would cancel a drag that has just
         // started. So a left click only reaches Excel when the button is released.
         private bool _selectionPending;
+        private bool _plusHot, _plusDown;
 
         // (selected sheets in tab order, the active one) after the user changed the selection.
         public event Action<IList<string>, string> SelectionRequested;
@@ -63,10 +70,13 @@ namespace VerticalSheetTabs
         public event Action<string, string> RenameRequested;
         // (sheets, the sheet they are dropped in front of or null for the end, copy instead of move)
         public event Action<IList<string>, string, bool> MoveRequested;
+        // The "+" button was clicked.
+        public event Action AddRequested;
 
         // With the workbook structure protected the tabs can be neither dragged nor renamed.
         public bool StructureProtected { get; set; }
 
+        // With the workbook structure protected the "+" button is dimmed as well.
         public int SelectedCount { get { return _selected.Count; } }
         public string ActiveName { get { return _active; } }
 
@@ -77,6 +87,7 @@ namespace VerticalSheetTabs
             TabStop = true;
             AllowDrop = true;
             BackColor = BarBack;
+            _scroll.Dock = DockStyle.None;
             _scroll.Scroll += (s, e) => { _scrollY = _scroll.Value; Invalidate(); };
             Controls.Add(_scroll);
         }
@@ -168,9 +179,14 @@ namespace VerticalSheetTabs
 
         // ---- geometry ----
 
+        // The "+" sits after the last tab like in Excel; when the tabs overflow it stays at the bottom.
+        private bool Pinned { get { return (_names.Count + 1) * RowPx > ClientSize.Height; } }
+
+        private int ViewHeight { get { return Pinned ? Math.Max(0, ClientSize.Height - RowPx) : ClientSize.Height; } }
+
         public int IndexFromPoint(Point p)
         {
-            if (p.Y < 0 || RowPx <= 0) return -1;
+            if (p.Y < 0 || p.Y >= ViewHeight || RowPx <= 0) return -1;
             int i = (p.Y + _scrollY) / RowPx;
             return i >= 0 && i < _names.Count ? i : -1;
         }
@@ -182,14 +198,21 @@ namespace VerticalSheetTabs
 
         private int ContentWidth { get { return ClientSize.Width - (_scroll.Visible ? _scroll.Width : 0); } }
 
+        private Rectangle PlusButtonRect()
+        {
+            int top = Pinned ? ClientSize.Height - RowPx : _names.Count * RowPx;
+            int size = Px(PlusHoverSize);
+            return new Rectangle((ClientSize.Width - size) / 2, top + (RowPx - size) / 2, size, size);
+        }
+
         // An exception here would break the in-place activation of the whole task pane (the pane
         // would then be shown without being attached to Excel's windows and get no mouse input),
         // so the scroll bar is only touched with values that are valid for it.
         private void UpdateScrollBar()
         {
-            int height = ClientSize.Height;
+            int view = ViewHeight;
             int total = _names.Count * RowPx;
-            bool need = height > 0 && total > height;
+            bool need = ClientSize.Height > 0 && Pinned && view > 0;
             _scroll.Visible = need;
             if (!need)
             {
@@ -198,11 +221,12 @@ namespace VerticalSheetTabs
             }
             try
             {
+                _scroll.SetBounds(ClientSize.Width - _scroll.Width, 0, _scroll.Width, view);
                 _scroll.Minimum = 0;
-                _scroll.LargeChange = height;
+                _scroll.LargeChange = view;
                 _scroll.SmallChange = RowPx;
                 _scroll.Maximum = total - 1;
-                _scrollY = Math.Max(0, Math.Min(_scrollY, total - height));
+                _scrollY = Math.Max(0, Math.Min(_scrollY, total - view));
                 _scroll.Value = Math.Max(0, Math.Min(_scrollY, _scroll.Maximum - _scroll.LargeChange + 1));
             }
             catch (ArgumentException)
@@ -214,7 +238,7 @@ namespace VerticalSheetTabs
         private void SetScroll(int y)
         {
             if (!_scroll.Visible) return;
-            int max = Math.Max(0, _names.Count * RowPx - ClientSize.Height);
+            int max = Math.Max(0, _names.Count * RowPx - ViewHeight);
             _scrollY = Math.Max(0, Math.Min(y, max));
             try
             {
@@ -232,7 +256,7 @@ namespace VerticalSheetTabs
             if (index < 0 || !_scroll.Visible) return;
             Rectangle r = RowRect(index);
             if (r.Top < 0) SetScroll(_scrollY + r.Top);
-            else if (r.Bottom > ClientSize.Height) SetScroll(_scrollY + r.Bottom - ClientSize.Height);
+            else if (r.Bottom > ViewHeight) SetScroll(_scrollY + r.Bottom - ViewHeight);
         }
 
         protected override void OnResize(EventArgs e)
@@ -262,11 +286,13 @@ namespace VerticalSheetTabs
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.Half;
 
+            // the tabs scroll inside the area above the pinned "+" row
+            g.SetClip(new Rectangle(0, 0, ClientSize.Width, ViewHeight));
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
             for (int i = first; i < _names.Count; i++)
             {
                 Rectangle row = RowRect(i);
-                if (row.Top > ClientSize.Height) break;
+                if (row.Top > ViewHeight) break;
                 if (row.Bottom < 0) continue;
                 DrawTab(g, i, row);
             }
@@ -274,11 +300,43 @@ namespace VerticalSheetTabs
             if (_dropIndex >= 0 && _names.Count > 0)
             {
                 int y = _dropIndex < _names.Count ? RowRect(_dropIndex).Top : RowRect(_names.Count - 1).Bottom;
-                using (var brush = new SolidBrush(SystemColors.Highlight))
+                DrawDropMarker(g, y);
+            }
+            g.ResetClip();
+
+            DrawPlus(g);
+        }
+
+        // Excel marks the place a dragged tab will land with a small black triangle; here it points
+        // into the stack from the left edge.
+        private void DrawDropMarker(Graphics g, int y)
+        {
+            int w = Px(MarkerWidth), h = Px(MarkerHeight);
+            var points = new[] { new Point(0, y - h / 2), new Point(w, y), new Point(0, y + h / 2) };
+            using (var brush = new SolidBrush(Color.Black)) g.FillPolygon(brush, points);
+        }
+
+        private void DrawPlus(Graphics g)
+        {
+            bool enabled = !StructureProtected;
+            Rectangle box = PlusButtonRect();
+            if (_plusHot && enabled)
+            {
+                using (GraphicsPath path = RoundedRect(box, Px(PlusHoverRadius)))
+                using (var brush = new SolidBrush(PlusHoverBack))
                 {
-                    g.FillRectangle(brush, 0, Math.Max(0, y - 1), ContentWidth, 2);
+                    g.FillPath(brush, path);
                 }
             }
+            int arm = Px(PlusArm), thick = Math.Max(1, Px(PlusThickness));
+            int cx = box.Left + box.Width / 2, cy = box.Top + box.Height / 2;
+            g.SmoothingMode = SmoothingMode.None;
+            using (var brush = new SolidBrush(enabled ? PlusColor : Color.FromArgb(166, 166, 166)))
+            {
+                g.FillRectangle(brush, cx - arm / 2, cy - thick / 2, arm, thick);
+                g.FillRectangle(brush, cx - thick / 2, cy - arm / 2, thick, arm);
+            }
+            g.SmoothingMode = SmoothingMode.AntiAlias;
         }
 
         private void DrawTab(Graphics g, int index, Rectangle row)
@@ -404,6 +462,11 @@ namespace VerticalSheetTabs
         {
             base.OnMouseDown(e);
             Focus();
+            if (e.Button == MouseButtons.Left && !StructureProtected && PlusButtonRect().Contains(e.Location))
+            {
+                _plusDown = true;
+                return;
+            }
             int index = IndexFromPoint(e.Location);
             if (index < 0) return;
             string name = _names[index];
@@ -461,6 +524,12 @@ namespace VerticalSheetTabs
         {
             base.OnMouseUp(e);
             _dragIndex = -1;
+            if (_plusDown)
+            {
+                _plusDown = false;
+                if (e.Button == MouseButtons.Left && PlusButtonRect().Contains(e.Location) && AddRequested != null) AddRequested();
+                return;
+            }
             if (e.Button != MouseButtons.Left || !_selectionPending) return;
             _selectionPending = false;
             Raise();
@@ -486,11 +555,25 @@ namespace VerticalSheetTabs
             Raise();
         }
 
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            SetPlusHot(false);
+        }
+
+        private void SetPlusHot(bool hot)
+        {
+            if (_plusHot == hot) return;
+            _plusHot = hot;
+            Invalidate();
+        }
+
         // ---- drag and drop ----
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
+            SetPlusHot(!StructureProtected && PlusButtonRect().Contains(e.Location));
             if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected) return;
             Size drag = SystemInformation.DragSize;
             if (Math.Abs(e.X - _dragOrigin.X) < drag.Width && Math.Abs(e.Y - _dragOrigin.Y) < drag.Height) return;
@@ -582,7 +665,7 @@ namespace VerticalSheetTabs
         {
             int edge = Math.Max(8, RowPx / 2);
             if (p.Y < edge) SetScroll(_scrollY - RowPx / 2);
-            else if (p.Y > ClientSize.Height - edge) SetScroll(_scrollY + RowPx / 2);
+            else if (p.Y > ViewHeight - edge) SetScroll(_scrollY + RowPx / 2);
         }
 
         // ---- renaming ----
