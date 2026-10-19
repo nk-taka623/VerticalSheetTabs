@@ -15,6 +15,7 @@ namespace VerticalSheetTabs
 
         private void ThisAddIn_Startup(object sender, System.EventArgs e)
         {
+            DpiHelper.ExcelWindow = new IntPtr(this.Application.Hwnd);
             _panes = new PaneManager(this.CustomTaskPanes, this.Application);
 
             this.Application.WindowActivate += Application_WindowActivate;

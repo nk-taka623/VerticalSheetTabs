@@ -174,7 +174,7 @@ namespace VerticalSheetTabs
             try
             {
                 if (!_entries.ContainsValue(entry)) return;
-                int dpi = entry.Control.DeviceDpi;
+                int dpi = DpiHelper.GetDpi(entry.Control.Handle); // the real DPI (Control.DeviceDpi says 96 in a task pane)
                 entry.Chrome = entry.Pane.Width - entry.Control.Width;
                 int contentPx = entry.Settings.WidthDip > 0
                     ? (int)Math.Round(entry.Settings.WidthDip * dpi / 96.0)
@@ -205,7 +205,7 @@ namespace VerticalSheetTabs
                     // While the pane has never been shown (horizontal-only mode) the stored width stays as is.
                     if (entry.Initialized)
                     {
-                        entry.Settings.WidthDip = (int)Math.Round(entry.Control.Width * 96.0 / entry.Control.DeviceDpi);
+                        entry.Settings.WidthDip = (int)Math.Round(entry.Control.Width * 96.0 / DpiHelper.GetDpi(entry.Control.Handle));
                     }
                     entry.Settings.Save(workbook);
                 }
@@ -545,6 +545,10 @@ namespace VerticalSheetTabs
         {
             try
             {
+                // Already the selection in Excel: do not touch it, a click on the active tab must not
+                // move the focus into the grid (that would cancel a double click that renames).
+                if (SameSelection(entry, names, active)) return;
+
                 var ordered = new List<string> { active };
                 foreach (string n in names) if (n != active) ordered.Add(n);
 
@@ -558,6 +562,28 @@ namespace VerticalSheetTabs
             catch (Exception)
             {
                 // The sheet may have just been renamed or deleted; the next sync fixes the list.
+            }
+        }
+
+        private static bool SameSelection(Entry entry, IList<string> names, string active)
+        {
+            try
+            {
+                string current;
+                object activeSheet = entry.Window.ActiveSheet;
+                if (activeSheet == null || !IsVisibleSheet(activeSheet, out current) || current != active) return false;
+
+                var selected = new HashSet<string>();
+                foreach (object sheet in (System.Collections.IEnumerable)entry.Window.SelectedSheets)
+                {
+                    string name;
+                    if (IsVisibleSheet(sheet, out name)) selected.Add(name);
+                }
+                return selected.SetEquals(names);
+            }
+            catch (Exception)
+            {
+                return false;
             }
         }
 

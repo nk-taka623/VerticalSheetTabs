@@ -204,10 +204,15 @@
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="DpiHelper.cs" />
     <Compile Include="PaneManager.cs" />
     <Compile Include="RibbonController.cs" />
     <Compile Include="SettingsForm.cs" />
     <Compile Include="TabColorPalette.cs" />
+    <Compile Include="TabTheme.cs" />
+    <Compile Include="TabStrip.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="WorkbookSettings.cs" />
     <Compile Include="TabPaneControl.cs">
       <SubType>UserControl</SubType>
