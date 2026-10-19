@@ -21,6 +21,9 @@ namespace VerticalSheetTabs
             // Pane width minus content width (title bar border, scrollbar gap); measured once.
             public int Chrome;
             public bool Initialized;
+            public bool InitPending;
+            // Visibility changes we cause ourselves must not be mistaken for the user closing the pane.
+            public DateTime IgnoreVisibleUntil;
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -29,9 +32,12 @@ namespace VerticalSheetTabs
         // are re-read on a short timer (cheap: only names are compared).
         private readonly Timer _timer = new Timer { Interval = 300 };
 
-        public PaneManager(CustomTaskPaneCollection collection)
+        private readonly Excel.Application _app;
+
+        public PaneManager(CustomTaskPaneCollection collection, Excel.Application app)
         {
             _collection = collection;
+            _app = app;
             _timer.Tick += (s, e) => SyncAll();
             _timer.Start();
         }
@@ -47,33 +53,98 @@ namespace VerticalSheetTabs
 
             var control = new TabPaneControl();
             var pane = _collection.Add(control, "Sheet Tabs", window);
-            pane.DockPosition = settings.Side == TabSide.Right
-                ? Office.MsoCTPDockPosition.msoCTPDockPositionRight
-                : Office.MsoCTPDockPosition.msoCTPDockPositionLeft;
+            pane.DockPosition = ToDock(settings.Side);
             pane.Width = 150; // temporary; the real width is applied in InitializeWidth
-            pane.Visible = true;
 
             var entry = new Entry { Pane = pane, Control = control, Window = window, Workbook = workbook, Settings = settings };
             _entries[hwnd] = entry;
 
-            // The pane is laid out asynchronously, so the content width is only
-            // reliable a moment after it is shown.
-            var init = new Timer { Interval = 250 };
-            init.Tick += (s, e) =>
-            {
-                init.Stop();
-                init.Dispose();
-                InitializeWidth(entry);
-            };
-            init.Start();
-
-            pane.DockPositionChanged += (s, e) => RefreshInfo(entry);
-            control.Resize += (s, e) => RefreshInfo(entry);
-            control.LeftClicked += (s, e) => entry.Pane.DockPosition = Office.MsoCTPDockPosition.msoCTPDockPositionLeft;
-            control.RightClicked += (s, e) => entry.Pane.DockPosition = Office.MsoCTPDockPosition.msoCTPDockPositionRight;
+            pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
             control.SheetSelected += name => ActivateSheet(entry, name);
-            RefreshInfo(entry);
+
+            ApplyMode(entry);
             SyncSheets(entry);
+        }
+
+        // Shows/hides the horizontal tabs (Excel's own) and the vertical pane per the display mode.
+        private void ApplyMode(Entry entry)
+        {
+            bool vertical = entry.Settings.Mode != TabMode.HorizontalOnly;
+            bool horizontal = entry.Settings.Mode != TabMode.VerticalOnly;
+            try
+            {
+                entry.IgnoreVisibleUntil = DateTime.Now.AddMilliseconds(1000);
+                entry.Window.DisplayWorkbookTabs = horizontal;
+                entry.Pane.Visible = vertical;
+            }
+            catch (Exception)
+            {
+                // The window may be closing.
+            }
+            // The pane is laid out asynchronously, so its content width is only
+            // reliable a moment after it is shown.
+            if (vertical && !entry.Initialized && !entry.InitPending)
+            {
+                entry.InitPending = true;
+                var init = new Timer { Interval = 250 };
+                init.Tick += (s, e) =>
+                {
+                    init.Stop();
+                    init.Dispose();
+                    InitializeWidth(entry);
+                };
+                init.Start();
+            }
+        }
+
+        // The user closed the pane with its close button: go back to the horizontal tabs only,
+        // otherwise a "vertical only" workbook would be left without any tab bar.
+        private void OnPaneVisibleChanged(Entry entry)
+        {
+            try
+            {
+                if (!_entries.ContainsValue(entry)) return;
+                if (DateTime.Now < entry.IgnoreVisibleUntil) return;
+                if (entry.Pane.Visible) return;
+                if (_app.ActiveWindow == null || _app.ActiveWindow.Hwnd != entry.Window.Hwnd) return;
+                entry.Settings.Mode = TabMode.HorizontalOnly;
+                ApplyMode(entry);
+            }
+            catch (Exception)
+            {
+                // Window/pane closing.
+            }
+        }
+
+        // Opens the settings dialog for the active window's workbook (ribbon button).
+        public void ShowSettings()
+        {
+            Entry entry;
+            Excel.Window active = _app.ActiveWindow;
+            if (active == null || !_entries.TryGetValue(active.Hwnd, out entry)) return;
+
+            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side))
+            {
+                if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
+                entry.Settings.Mode = form.Mode;
+                entry.Settings.Side = form.Side;
+            }
+            try
+            {
+                entry.Pane.DockPosition = ToDock(entry.Settings.Side);
+            }
+            catch (Exception)
+            {
+                // Window/pane closing.
+            }
+            ApplyMode(entry);
+        }
+
+        private static Office.MsoCTPDockPosition ToDock(TabSide side)
+        {
+            return side == TabSide.Right
+                ? Office.MsoCTPDockPosition.msoCTPDockPositionRight
+                : Office.MsoCTPDockPosition.msoCTPDockPositionLeft;
         }
 
         // Applies the stored width, or 16 half-width characters on first open.
@@ -89,11 +160,14 @@ namespace VerticalSheetTabs
                     : entry.Control.DefaultContentWidth();
                 entry.Pane.Width = contentPx + entry.Chrome;
                 entry.Initialized = true;
-                RefreshInfo(entry);
             }
             catch (Exception)
             {
                 // The pane may have been closed meanwhile.
+            }
+            finally
+            {
+                entry.InitPending = false;
             }
         }
 
@@ -102,13 +176,16 @@ namespace VerticalSheetTabs
         {
             foreach (Entry entry in new List<Entry>(_entries.Values))
             {
-                if (!entry.Initialized) continue;
                 if (!entry.Workbook.Equals(workbook)) continue;
                 try
                 {
                     entry.Settings.Side = entry.Pane.DockPosition == Office.MsoCTPDockPosition.msoCTPDockPositionRight
                         ? TabSide.Right : TabSide.Left;
-                    entry.Settings.WidthDip = (int)Math.Round(entry.Control.Width * 96.0 / entry.Control.DeviceDpi);
+                    // While the pane has never been shown (horizontal-only mode) the stored width stays as is.
+                    if (entry.Initialized)
+                    {
+                        entry.Settings.WidthDip = (int)Math.Round(entry.Control.Width * 96.0 / entry.Control.DeviceDpi);
+                    }
                     entry.Settings.Save(workbook);
                 }
                 catch (Exception)
@@ -194,22 +271,6 @@ namespace VerticalSheetTabs
             catch (Exception)
             {
                 // The sheet may have just been renamed or deleted; the next sync fixes the list.
-            }
-        }
-
-        private static void RefreshInfo(Entry entry)
-        {
-            try
-            {
-                string dock = entry.Pane.DockPosition == Office.MsoCTPDockPosition.msoCTPDockPositionLeft
-                    ? "Left"
-                    : entry.Pane.DockPosition == Office.MsoCTPDockPosition.msoCTPDockPositionRight
-                        ? "Right" : entry.Pane.DockPosition.ToString();
-                entry.Control.SetInfo(dock, entry.Pane.Width, entry.Chrome);
-            }
-            catch (Exception)
-            {
-                // The window or pane may already be closing.
             }
         }
     }

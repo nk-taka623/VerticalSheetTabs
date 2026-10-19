@@ -205,6 +205,8 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="PaneManager.cs" />
+    <Compile Include="RibbonController.cs" />
+    <Compile Include="SettingsForm.cs" />
     <Compile Include="WorkbookSettings.cs" />
     <Compile Include="TabPaneControl.cs">
       <SubType>UserControl</SubType>

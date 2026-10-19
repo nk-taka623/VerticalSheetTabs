@@ -15,7 +15,7 @@ namespace VerticalSheetTabs
 
         private void ThisAddIn_Startup(object sender, System.EventArgs e)
         {
-            _panes = new PaneManager(this.CustomTaskPanes);
+            _panes = new PaneManager(this.CustomTaskPanes, this.Application);
 
             this.Application.WindowActivate += Application_WindowActivate;
             this.Application.WorkbookBeforeClose += Application_WorkbookBeforeClose;
@@ -34,6 +34,11 @@ namespace VerticalSheetTabs
 
         private void ThisAddIn_Shutdown(object sender, System.EventArgs e)
         {
+        }
+
+        protected override Office.IRibbonExtensibility CreateRibbonExtensibilityObject()
+        {
+            return new RibbonController(() => { if (_panes != null) _panes.ShowSettings(); });
         }
 
         private void Application_WindowActivate(Excel.Workbook wb, Excel.Window wn)
