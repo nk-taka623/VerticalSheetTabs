@@ -30,7 +30,7 @@ namespace VerticalSheetTabs
             DropMarker = Color.Black
         };
 
-        // Dark gray (measured). The black theme is not measured and uses these values as well.
+        // Dark gray (measured). The drop marker color is assumed (not seen).
         public static readonly TabTheme Dark = new TabTheme
         {
             BarBack = Color.FromArgb(86, 86, 86),
@@ -39,6 +39,18 @@ namespace VerticalSheetTabs
             InactiveText = Color.White,
             PlusColor = Color.FromArgb(212, 212, 212),
             PlusHoverBack = Color.FromArgb(61, 61, 61),
+            DropMarker = Color.White
+        };
+
+        // Black (measured, except the hover background of the "+" and the drop marker, which are assumed).
+        public static readonly TabTheme Black = new TabTheme
+        {
+            BarBack = Color.FromArgb(10, 10, 10),
+            TabBorder = Color.FromArgb(66, 66, 66),
+            Separator = Color.FromArgb(102, 102, 102),
+            InactiveText = Color.White,
+            PlusColor = Color.FromArgb(212, 212, 212),
+            PlusHoverBack = Color.FromArgb(36, 36, 36),
             DropMarker = Color.White
         };
 
@@ -71,9 +83,10 @@ namespace VerticalSheetTabs
                     object v = key == null ? null : key.GetValue("UI Theme");
                     if (v is int) value = (int)v;
                 }
-                if (value == 3 || value == 4) return Dark;
+                if (value == 3) return Dark;
+                if (value == 4) return Black;
                 if (value == 0 || value == 5) return Light;
-                return SystemUsesDarkApps() ? Dark : Light;
+                return SystemUsesDarkApps() ? Dark : Light; // "use the system setting"
             }
             catch (Exception)
             {
