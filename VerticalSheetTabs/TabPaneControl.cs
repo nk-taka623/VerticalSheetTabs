@@ -32,6 +32,8 @@ namespace VerticalSheetTabs
         public event Action MoveCopyRequested;
         // (sheets, the sheet they are dropped in front of or null for the end, copy instead of move)
         public event Action<IList<string>, string, bool> MoveRequested;
+        // A folder row was clicked (folder id): open or close it.
+        public event Action<string> FolderToggleRequested;
 
         // The "unhide" item is only enabled while the workbook has hidden sheets.
         public bool HasHiddenSheets { get; set; }
@@ -51,6 +53,8 @@ namespace VerticalSheetTabs
             _strip.SelectionRequested += (names, active) => { if (SelectionRequested != null) SelectionRequested(names, active); };
             _strip.RenameRequested += (o, n) => { if (RenameRequested != null) RenameRequested(o, n); };
             _strip.MoveRequested += (names, before, copy) => { if (MoveRequested != null) MoveRequested(names, before, copy); };
+
+            _strip.FolderToggleRequested += id => { if (FolderToggleRequested != null) FolderToggleRequested(id); };
 
             // The "+" (adds a sheet after the active one, like Excel's own) is drawn by the strip.
             _strip.AddRequested += () => { if (AddRequested != null) AddRequested(); };
@@ -129,10 +133,10 @@ namespace VerticalSheetTabs
             return item;
         }
 
-        public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors)
+        public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors, IList<StripRow> rows)
         {
             _strip.StructureProtected = StructureProtected;
-            _strip.SetSheets(names, activeName, selected, colors);
+            _strip.SetSheets(names, activeName, selected, colors, rows);
         }
     }
 }

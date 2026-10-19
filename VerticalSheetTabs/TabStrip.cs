@@ -12,6 +12,24 @@ namespace VerticalSheetTabs
     // Agents.md 9.2). Each tab is one row of the height of Excel's tab bar. The control owns the
     // selection model (click, Ctrl+click, Shift+click), drag and drop, in-place renaming and
     // scrolling; the sheet commands themselves are reported to the pane through events.
+    // One row of the list: a sheet, or a folder (FolderId != null).
+    public class StripRow
+    {
+        public string Sheet;
+        public bool Indented;
+        public string FolderId;
+        public string FolderName;
+        public bool Expanded;
+        public int ColorBgr = -1;
+
+        public bool IsFolder { get { return FolderId != null; } }
+
+        public string Signature()
+        {
+            return IsFolder ? "F|" + FolderId + "|" + FolderName + "|" + Expanded + "|" + ColorBgr : "S|" + Sheet + "|" + Indented;
+        }
+    }
+
     public class TabStrip : Control
     {
         // ---- Excel's colors (measured, Officeテーマ: カラフル) ----
@@ -31,6 +49,9 @@ namespace VerticalSheetTabs
         private const double ActiveTextLift = 3.2;
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
+        // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
+        // with a color, a bar at its left edge.
+        private const double FolderIndent = 14, FolderMarkWidth = 6, FolderMarkHeight = 10, FolderBarWidth = 4;
         // Excel's tab text is about 9pt "Yu Gothic" (the measured width of "Sheet1" matches it).
         private const string FontFamilyName = "Yu Gothic";
         private const double FontPixelsAt96 = 15.5;
@@ -40,6 +61,9 @@ namespace VerticalSheetTabs
         private const double MarkerWidth = 4, MarkerHeight = 8;
 
         private List<string> _names = new List<string>();
+        // What is on screen, row by row (equal to the sheets when the workbook has no folders).
+        private List<StripRow> _rows = new List<StripRow>();
+        private string _rowSignature = "";
         private HashSet<string> _selected = new HashSet<string>();
         private string _active;
         private readonly Dictionary<string, int> _colors = new Dictionary<string, int>();
@@ -75,6 +99,8 @@ namespace VerticalSheetTabs
         public event Action<IList<string>, string, bool> MoveRequested;
         // The "+" button was clicked.
         public event Action AddRequested;
+        // The mark of a folder row was clicked (folder id).
+        public event Action<string> FolderToggleRequested;
 
         // With the workbook structure protected the tabs can be neither dragged nor renamed.
         public bool StructureProtected { get; set; }
@@ -145,25 +171,32 @@ namespace VerticalSheetTabs
         // ---- data from the pane ----
 
         // Updates what changed only, so the polling timer does not cause flicker.
-        public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors)
+        public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors, IList<StripRow> rows)
         {
             RefreshTheme();
+            List<StripRow> newRows = rows != null
+                ? new List<StripRow>(rows)
+                : names.Select(n => new StripRow { Sheet = n }).ToList();
+            string newSignature = string.Join("\n", newRows.Select(r => r.Signature()));
+            bool sameRows = newSignature == _rowSignature;
             bool sameColors = _colors.Count == colors.Count && _colors.All(kv => { int v; return colors.TryGetValue(kv.Key, out v) && v == kv.Value; });
             bool sameNames = _names.SequenceEqual(names);
             // While a mouse button is down the user is changing the selection; do not fight them.
             bool userBusy = Control.MouseButtons != MouseButtons.None;
             bool sameSelection = userBusy || (_active == activeName && _selected.SetEquals(selected));
-            if (sameNames && sameSelection && sameColors) return;
+            if (sameNames && sameRows && sameSelection && sameColors) return;
 
             if (!sameColors)
             {
                 _colors.Clear();
                 foreach (var kv in colors) _colors[kv.Key] = kv.Value;
             }
-            if (!sameNames)
+            if (!sameNames || !sameRows)
             {
                 EndRename(false);
                 _names = new List<string>(names);
+                _rows = newRows;
+                _rowSignature = newSignature;
                 UpdateScrollBar();
             }
             if (!userBusy)
@@ -171,7 +204,7 @@ namespace VerticalSheetTabs
                 bool activeChanged = _active != activeName;
                 _active = activeName;
                 _selected = new HashSet<string>(selected);
-                if (activeChanged) EnsureVisible(_names.IndexOf(_active));
+                if (activeChanged) EnsureVisible(RowIndexOf(_active));
             }
             Invalidate();
         }
@@ -194,15 +227,22 @@ namespace VerticalSheetTabs
         // ---- geometry ----
 
         // The "+" sits after the last tab like in Excel; when the tabs overflow it stays at the bottom.
-        private bool Pinned { get { return (_names.Count + 1) * RowPx > ClientSize.Height; } }
+        private bool Pinned { get { return (_rows.Count + 1) * RowPx > ClientSize.Height; } }
 
         private int ViewHeight { get { return Pinned ? Math.Max(0, ClientSize.Height - RowPx) : ClientSize.Height; } }
+
+        private int RowIndexOf(string sheet)
+        {
+            return sheet == null ? -1 : _rows.FindIndex(r => !r.IsFolder && r.Sheet == sheet);
+        }
+
+        private bool HasFolders { get { return _rows.Any(r => r.IsFolder); } }
 
         public int IndexFromPoint(Point p)
         {
             if (p.Y < 0 || p.Y >= ViewHeight || RowPx <= 0) return -1;
             int i = (p.Y + _scrollY) / RowPx;
-            return i >= 0 && i < _names.Count ? i : -1;
+            return i >= 0 && i < _rows.Count ? i : -1;
         }
 
         private Rectangle RowRect(int index)
@@ -214,7 +254,7 @@ namespace VerticalSheetTabs
 
         private Rectangle PlusButtonRect()
         {
-            int top = Pinned ? ClientSize.Height - RowPx : _names.Count * RowPx;
+            int top = Pinned ? ClientSize.Height - RowPx : _rows.Count * RowPx;
             int size = Px(PlusHoverSize);
             return new Rectangle((ClientSize.Width - size) / 2, top + (RowPx - size) / 2, size, size);
         }
@@ -225,7 +265,7 @@ namespace VerticalSheetTabs
         private void UpdateScrollBar()
         {
             int view = ViewHeight;
-            int total = _names.Count * RowPx;
+            int total = _rows.Count * RowPx;
             bool need = ClientSize.Height > 0 && Pinned && view > 0;
             _scroll.Visible = need;
             if (!need)
@@ -252,7 +292,7 @@ namespace VerticalSheetTabs
         private void SetScroll(int y)
         {
             if (!_scroll.Visible) return;
-            int max = Math.Max(0, _names.Count * RowPx - ViewHeight);
+            int max = Math.Max(0, _rows.Count * RowPx - ViewHeight);
             _scrollY = Math.Max(0, Math.Min(y, max));
             try
             {
@@ -303,17 +343,18 @@ namespace VerticalSheetTabs
             // the tabs scroll inside the area above the pinned "+" row
             g.SetClip(new Rectangle(0, 0, ClientSize.Width, ViewHeight));
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
-            for (int i = first; i < _names.Count; i++)
+            for (int i = first; i < _rows.Count; i++)
             {
                 Rectangle row = RowRect(i);
                 if (row.Top > ViewHeight) break;
                 if (row.Bottom < 0) continue;
-                DrawTab(g, i, row);
+                if (_rows[i].IsFolder) DrawFolder(g, _rows[i], row);
+                else DrawTab(g, _rows[i], row);
             }
 
-            if (_dropIndex >= 0 && _names.Count > 0)
+            if (_dropIndex >= 0 && _rows.Count > 0)
             {
-                int y = _dropIndex < _names.Count ? RowRect(_dropIndex).Top : RowRect(_names.Count - 1).Bottom;
+                int y = _dropIndex < _rows.Count ? RowRect(_dropIndex).Top : RowRect(_rows.Count - 1).Bottom;
                 DrawDropMarker(g, y);
             }
             g.ResetClip();
@@ -353,16 +394,73 @@ namespace VerticalSheetTabs
             g.SmoothingMode = SmoothingMode.AntiAlias;
         }
 
-        private void DrawTab(Graphics g, int index, Rectangle row)
+        // A folder: the open/closed mark, then the name in bold; a folder color shows as a bar at the left edge.
+        private void DrawFolder(Graphics g, StripRow folder, Rectangle row)
         {
-            string name = _names[index];
+            int left = row.Left + Px(InsetLeft);
+            int right = row.Right - Px(InsetRight);
+            if (folder.ColorBgr >= 0)
+            {
+                Color c = Color.FromArgb(folder.ColorBgr & 0xFF, (folder.ColorBgr >> 8) & 0xFF, (folder.ColorBgr >> 16) & 0xFF);
+                var bar = new Rectangle(row.Left, row.Top + Px(ColoredTop), Px(FolderBarWidth), row.Height - Px(ColoredTop) - Px(BottomInset));
+                using (GraphicsPath path = RoundedRect(bar, Math.Max(1, Px(FolderBarWidth) / 2)))
+                using (var brush = new SolidBrush(c))
+                {
+                    g.FillPath(brush, path);
+                }
+            }
+
+            // closed: a right-pointing chevron; open: the same turned down
+            int cx = left + Px(TextPadLeft) / 2 + Px(FolderMarkWidth) / 2;
+            int cy = row.Top + row.Height / 2;
+            int w = Px(FolderMarkWidth), h = Px(FolderMarkHeight);
+            Point[] chevron = folder.Expanded
+                ? new[] { new Point(cx - h / 2, cy - w / 2), new Point(cx, cy + w / 2), new Point(cx + h / 2, cy - w / 2) }
+                : new[] { new Point(cx - w / 2, cy - h / 2), new Point(cx + w / 2, cy), new Point(cx - w / 2, cy + h / 2) };
+            using (var pen = new Pen(Theme.InactiveText, Math.Max(1.5f, Px(1.4))))
+            {
+                pen.LineJoin = LineJoin.Miter;
+                g.DrawLines(pen, chevron);
+            }
+
+            int textLeft = left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
+            var textRect = new Rectangle(textLeft, row.Top, Math.Max(1, right - textLeft - Px(TextPadRight)), row.Height);
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            using (var bold = new Font(TabFont, FontStyle.Bold))
+            using (var brush = new SolidBrush(Theme.InactiveText))
+            using (var format = new StringFormat(StringFormat.GenericDefault))
+            {
+                format.Alignment = StringAlignment.Near;
+                format.LineAlignment = StringAlignment.Center;
+                format.Trimming = StringTrimming.EllipsisCharacter;
+                format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
+                g.DrawString(folder.FolderName, bold, brush, textRect, format);
+            }
+            DrawSeparator(g, row);
+        }
+
+        private void DrawSeparator(Graphics g, Rectangle row)
+        {
+            int sepHalf = Px(SeparatorLength) / 2;
+            int cx = row.Left + row.Width / 2;
+            using (var pen = new Pen(Theme.Separator, 1))
+            {
+                g.SmoothingMode = SmoothingMode.None;
+                g.DrawLine(pen, cx - sepHalf, row.Bottom - 1, cx + sepHalf, row.Bottom - 1);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+            }
+        }
+
+        private void DrawTab(Graphics g, StripRow tabRow, Rectangle row)
+        {
+            string name = tabRow.Sheet;
             bool selected = _selected.Contains(name);
             bool active = selected && name == _active;
             int bgr;
             bool colored = _colors.TryGetValue(name, out bgr);
             Color tabColor = colored ? Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF) : Color.Empty;
 
-            int left = row.Left + Px(InsetLeft);
+            int left = row.Left + Px(InsetLeft) + (tabRow.Indented ? Px(FolderIndent) : 0);
             int right = row.Right - Px(InsetRight);
             int radius = Px(CornerRadius);
             Color textColor = selected ? TextColor : Theme.InactiveText;
@@ -411,14 +509,7 @@ namespace VerticalSheetTabs
             }
 
             // the separator between tabs: Excel's thin line, turned to lie across the stack
-            int sepHalf = Px(SeparatorLength) / 2;
-            int cx = row.Left + row.Width / 2;
-            using (var pen = new Pen(Theme.Separator, 1))
-            {
-                g.SmoothingMode = SmoothingMode.None;
-                g.DrawLine(pen, cx - sepHalf, row.Bottom - 1, cx + sepHalf, row.Bottom - 1);
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-            }
+            DrawSeparator(g, row);
 
             // text: left aligned, the active tab's text sits higher (the underline needs room)
             int lift = active ? Px(ActiveTextLift) : 0;
@@ -483,7 +574,13 @@ namespace VerticalSheetTabs
             }
             int index = IndexFromPoint(e.Location);
             if (index < 0) return;
-            string name = _names[index];
+            if (_rows[index].IsFolder)
+            {
+                // Selecting folders comes with the folder commands; for now a click opens or closes it.
+                if (e.Button == MouseButtons.Left && FolderToggleRequested != null) FolderToggleRequested(_rows[index].FolderId);
+                return;
+            }
+            string name = _rows[index].Sheet;
 
             if (e.Button == MouseButtons.Left)
             {
@@ -506,7 +603,7 @@ namespace VerticalSheetTabs
                 else if ((ModifierKeys & Keys.Shift) != 0 && _names.IndexOf(_active) >= 0)
                 {
                     int a = _names.IndexOf(_active);
-                    int lo = Math.Min(a, index), hi = Math.Max(a, index);
+                    int lo = Math.Min(a, _names.IndexOf(name)), hi = Math.Max(a, _names.IndexOf(name));
                     _selected = new HashSet<string>(_names.Skip(lo).Take(hi - lo + 1));
                     // the anchor stays the active sheet
                 }
@@ -559,11 +656,12 @@ namespace VerticalSheetTabs
         {
             base.OnKeyDown(e);
             if (e.KeyCode != Keys.Up && e.KeyCode != Keys.Down) return;
-            int i = _names.IndexOf(_active) + (e.KeyCode == Keys.Down ? 1 : -1);
-            if (i < 0 || i >= _names.Count) return;
+            int i = RowIndexOf(_active) + (e.KeyCode == Keys.Down ? 1 : -1);
+            while (i >= 0 && i < _rows.Count && _rows[i].IsFolder) i += e.KeyCode == Keys.Down ? 1 : -1;
+            if (i < 0 || i >= _rows.Count) return;
             e.Handled = true;
-            _selected = new HashSet<string> { _names[i] };
-            _active = _names[i];
+            _selected = new HashSet<string> { _rows[i].Sheet };
+            _active = _rows[i].Sheet;
             EnsureVisible(i);
             Invalidate();
             Raise();
@@ -583,9 +681,11 @@ namespace VerticalSheetTabs
             if (index == _hoverIndex) return;
             _hoverIndex = index;
             _tip.Hide(this);
-            if (index < 0 || Control.MouseButtons != MouseButtons.None || !IsTextCut(_names[index])) return;
+            if (index < 0 || Control.MouseButtons != MouseButtons.None) return;
+            string text = _rows[index].IsFolder ? _rows[index].FolderName : _rows[index].Sheet;
+            if (!IsTextCut(text)) return;
             Rectangle row = RowRect(index);
-            _tip.Show(_names[index], this, row.Left + Px(InsetLeft + TextPadLeft), row.Bottom, 4000);
+            _tip.Show(text, this, row.Left + Px(InsetLeft + TextPadLeft), row.Bottom, 4000);
         }
 
         // Whether the name does not fit the tab (it is then drawn with a trailing "…").
@@ -614,17 +714,18 @@ namespace VerticalSheetTabs
             base.OnMouseMove(e);
             SetPlusHot(!StructureProtected && PlusButtonRect().Contains(e.Location));
             UpdateTip(e.Location);
-            if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected) return;
+            // Moving sheets and folders by drag comes with the folder commands (Agents.md 12.3, 8-3).
+            if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected || HasFolders) return;
             Size drag = SystemInformation.DragSize;
             if (Math.Abs(e.X - _dragOrigin.X) < drag.Width && Math.Abs(e.Y - _dragOrigin.Y) < drag.Height) return;
 
             int index = _dragIndex;
             _dragIndex = -1;
             _selectionPending = false; // a drag does not change the selection in Excel by itself
-            if (index >= _names.Count) return;
+            if (index >= _rows.Count || _rows[index].IsFolder) return;
 
             // Dragging a sheet of the group takes the whole group along.
-            string name = _names[index];
+            string name = _rows[index].Sheet;
             _dragNames = _selected.Contains(name) ? SelectedInOrder() : new List<string> { name };
             _dragging = true;
             try
@@ -695,7 +796,7 @@ namespace VerticalSheetTabs
         private int InsertIndexAt(Point p)
         {
             int index = IndexFromPoint(p);
-            if (index < 0) return _names.Count;
+            if (index < 0) return _rows.Count;
             Rectangle r = RowRect(index);
             return p.Y < r.Top + r.Height / 2 ? index : index + 1;
         }
@@ -715,23 +816,23 @@ namespace VerticalSheetTabs
             base.OnMouseDoubleClick(e);
             if (e.Button != MouseButtons.Left) return;
             int index = IndexFromPoint(e.Location);
-            if (index >= 0) BeginRename(index);
+            if (index >= 0 && !_rows[index].IsFolder) BeginRename(index);
         }
 
         public void BeginRenameActive()
         {
-            BeginRename(_names.IndexOf(_active));
+            BeginRename(RowIndexOf(_active));
         }
 
         // In-place name editing: Enter or leaving the box commits, Esc cancels. The length limit
         // is Excel's 31 characters; the other rules are checked by PaneManager when it renames.
         private void BeginRename(int index)
         {
-            if (index < 0 || index >= _names.Count || StructureProtected) return;
+            if (index < 0 || index >= _rows.Count || _rows[index].IsFolder || StructureProtected) return;
             EndRename(false);
             Rectangle r = RowRect(index);
-            _editingName = _names[index];
-            int left = r.Left + Px(InsetLeft);
+            _editingName = _rows[index].Sheet;
+            int left = r.Left + Px(InsetLeft) + (_rows[index].Indented ? Px(FolderIndent) : 0);
             int right = r.Right - Px(InsetRight);
             _editor = new TextBox
             {

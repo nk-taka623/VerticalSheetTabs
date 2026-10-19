@@ -27,6 +27,11 @@ namespace VerticalSheetTabs
             public DateTime IgnoreVisibleUntil;
             // Consecutive failed syncs: the window is probably gone.
             public int Failures;
+            // The folder structure (Agents.md chapter 12); written to the workbook when it is saved.
+            public FolderModel Folders = new FolderModel();
+            // The sheet names (hidden ones too) the keys below were read for.
+            public string KeySignature;
+            public List<string> Keys = new List<string>();
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -63,6 +68,7 @@ namespace VerticalSheetTabs
             pane.Width = 150; // temporary; the real width is applied in InitializeWidth
 
             var entry = new Entry { Pane = pane, Control = control, Window = window, Workbook = workbook, Settings = settings };
+            entry.Folders = FolderStore.Load(workbook);
             _entries[hwnd] = entry;
 
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
@@ -82,6 +88,7 @@ namespace VerticalSheetTabs
             control.RenameRequested += (oldName, newName) => RenameSheet(entry, oldName, newName);
             control.MoveCopyRequested += () => RunExcelCommand(entry, "SheetMoveOrCopy");
             control.MoveRequested += (names, before, copy) => MoveOrCopySheets(entry, names, before, copy);
+            control.FolderToggleRequested += id => ToggleFolder(entry, id);
 
             ApplyMode(entry);
             SyncSheets(entry);
@@ -214,6 +221,13 @@ namespace VerticalSheetTabs
             foreach (Entry entry in new List<Entry>(_entries.Values))
             {
                 if (!entry.Workbook.Equals(workbook)) continue;
+                try
+                {
+                    FolderStore.Save(entry.Workbook, entry.Folders);
+                }
+                catch (Exception)
+                {
+                }
                 try
                 {
                     entry.Settings.Side = entry.Pane.DockPosition == Office.MsoCTPDockPosition.msoCTPDockPositionRight
@@ -358,11 +372,16 @@ namespace VerticalSheetTabs
             {
                 var names = new List<string>();
                 var colors = new Dictionary<string, int>();
+                var allNames = new List<string>();
+                var visibleAt = new List<bool>();
                 bool anyHidden = false;
                 foreach (object sheet in entry.Workbook.Sheets)
                 {
                     string name;
-                    if (IsVisibleSheet(sheet, out name))
+                    bool visible = IsVisibleSheet(sheet, out name);
+                    allNames.Add(name ?? "?");
+                    visibleAt.Add(visible);
+                    if (visible)
                     {
                         names.Add(name);
                         int bgr;
@@ -388,7 +407,8 @@ namespace VerticalSheetTabs
                 if (selected.Count == 0 && active != null) selected.Add(active);
 
                 entry.Control.ActiveSheetProtected = IsSheetProtected(activeSheet);
-                entry.Control.SetSheets(names, active, selected, colors);
+                List<StripRow> rows = BuildRows(entry, allNames, visibleAt);
+                entry.Control.SetSheets(names, active, selected, colors, rows);
                 return true;
             }
             catch (Exception)
@@ -397,6 +417,72 @@ namespace VerticalSheetTabs
                 // The next timer tick will retry.
                 return false;
             }
+        }
+
+        // The rows of the vertical list when the workbook has folders; null = one row per visible sheet.
+        // Sheets of a closed folder get no row.
+        private static List<StripRow> BuildRows(Entry entry, List<string> allNames, List<bool> visibleAt)
+        {
+            if (!entry.Folders.HasFolders) return null;
+
+            string signature = string.Join("|", allNames);
+            if (signature != entry.KeySignature || entry.Keys.Count != allNames.Count)
+            {
+                entry.Keys = FolderStore.SheetKeys(entry.Workbook, true);
+                entry.KeySignature = signature;
+                entry.Folders.Reconcile(entry.Keys);
+            }
+            var nameOf = new Dictionary<string, string>();
+            for (int i = 0; i < entry.Keys.Count && i < allNames.Count; i++)
+            {
+                if (visibleAt[i]) nameOf[entry.Keys[i]] = allNames[i];
+            }
+
+            var rows = new List<StripRow>();
+            foreach (FolderNode node in entry.Folders.Nodes)
+            {
+                string name;
+                if (!node.IsFolder)
+                {
+                    if (nameOf.TryGetValue(node.SheetCode, out name)) rows.Add(new StripRow { Sheet = name });
+                    continue;
+                }
+                rows.Add(new StripRow
+                {
+                    FolderId = node.FolderId,
+                    FolderName = node.Name,
+                    Expanded = node.Expanded,
+                    ColorBgr = FolderColorBgr(entry, node.Color)
+                });
+                if (!node.Expanded) continue;
+                foreach (string code in node.Sheets)
+                {
+                    if (nameOf.TryGetValue(code, out name)) rows.Add(new StripRow { Sheet = name, Indented = true });
+                }
+            }
+            return rows;
+        }
+
+        // A folder's color as 0xBBGGRR, -1 for none.
+        private static int FolderColorBgr(Entry entry, TabColorChoice choice)
+        {
+            if (choice == null) return -1;
+            if (choice.Kind == TabColorKind.Rgb) return choice.Bgr;
+            if (choice.Kind != TabColorKind.Theme) return -1;
+            System.Drawing.Color[] theme = ThemeColors(entry);
+            int[] order = { 2, 1, 4, 3, 5, 6, 7, 8, 9, 10 };
+            int pos = Array.IndexOf(order, choice.ThemeIndex);
+            if (theme == null || pos < 0) return -1;
+            System.Drawing.Color c = TabColorPalette.ApplyTint(theme[pos], choice.Tint);
+            return c.R | (c.G << 8) | (c.B << 16);
+        }
+
+        private void ToggleFolder(Entry entry, string folderId)
+        {
+            FolderNode node = entry.Folders.Nodes.Find(n => n.IsFolder && n.FolderId == folderId);
+            if (node == null) return;
+            node.Expanded = !node.Expanded;
+            SyncSheets(entry);
         }
 
         // The tab color as Excel stores it (0xBBGGRR); false when the tab has no color.
