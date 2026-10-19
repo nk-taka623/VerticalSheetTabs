@@ -11,12 +11,36 @@ namespace VerticalSheetTabs
 {
     public partial class ThisAddIn
     {
+        private PaneManager _panes;
+
         private void ThisAddIn_Startup(object sender, System.EventArgs e)
         {
+            _panes = new PaneManager(this.CustomTaskPanes);
+
+            this.Application.WindowActivate += Application_WindowActivate;
+            this.Application.WorkbookBeforeClose += Application_WorkbookBeforeClose;
+
+            foreach (Excel.Window w in this.Application.Windows)
+            {
+                _panes.EnsurePane(w);
+            }
         }
 
         private void ThisAddIn_Shutdown(object sender, System.EventArgs e)
         {
+        }
+
+        private void Application_WindowActivate(Excel.Workbook wb, Excel.Window wn)
+        {
+            _panes.EnsurePane(wn);
+        }
+
+        private void Application_WorkbookBeforeClose(Excel.Workbook wb, ref bool cancel)
+        {
+            foreach (Excel.Window w in wb.Windows)
+            {
+                _panes.RemovePane(w);
+            }
         }
 
         #region VSTO で生成されたコード
@@ -30,7 +54,7 @@ namespace VerticalSheetTabs
             this.Startup += new System.EventHandler(ThisAddIn_Startup);
             this.Shutdown += new System.EventHandler(ThisAddIn_Shutdown);
         }
-        
+
         #endregion
     }
 }

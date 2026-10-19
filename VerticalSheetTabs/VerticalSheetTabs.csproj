@@ -204,6 +204,10 @@
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="PaneManager.cs" />
+    <Compile Include="TabPaneControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
     <Compile Include="ThisAddIn.cs">
       <SubType>Code</SubType>
     </Compile>
