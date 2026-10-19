@@ -62,6 +62,10 @@ namespace VerticalSheetTabs
 
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
             control.SelectionRequested += (names, active) => SelectSheets(entry, names, active);
+            control.ViewCodeRequested += () => RunExcelCommand(entry, "ViewCode");
+            control.ProtectSheetRequested += () => RunExcelCommand(entry, "SheetProtect");
+            control.TabColorRequested += (names, choice) => ApplyTabColor(entry, names, choice);
+            control.ThemeColorProvider = () => ThemeColors(entry);
             control.SelectAllRequested += () => SelectAllSheets(entry);
             control.UngroupRequested += () => UngroupSheets(entry);
             control.SettingsRequested += () => ShowSettings(entry);
@@ -236,14 +240,21 @@ namespace VerticalSheetTabs
             try
             {
                 var names = new List<string>();
+                var colors = new Dictionary<string, int>();
                 bool anyHidden = false;
                 foreach (object sheet in entry.Workbook.Sheets)
                 {
                     string name;
-                    if (IsVisibleSheet(sheet, out name)) names.Add(name);
+                    if (IsVisibleSheet(sheet, out name))
+                    {
+                        names.Add(name);
+                        int bgr;
+                        if (TryGetTabColor(sheet, out bgr)) colors[name] = bgr;
+                    }
                     else if (SheetVisibility(sheet) == Excel.XlSheetVisibility.xlSheetHidden) anyHidden = true;
                 }
                 entry.Control.HasHiddenSheets = anyHidden;
+                entry.Control.StructureProtected = entry.Workbook.ProtectStructure;
 
                 string active = null;
                 object activeSheet = entry.Window.ActiveSheet;
@@ -259,12 +270,99 @@ namespace VerticalSheetTabs
                 }
                 if (selected.Count == 0 && active != null) selected.Add(active);
 
-                entry.Control.SetSheets(names, active, selected);
+                entry.Control.ActiveSheetProtected = IsSheetProtected(activeSheet);
+                entry.Control.SetSheets(names, active, selected, colors);
             }
             catch (Exception)
             {
                 // Excel is busy (e.g. a cell is being edited) or the window is closing.
                 // The next timer tick will retry.
+            }
+        }
+
+        // The tab color as Excel stores it (0xBBGGRR); false when the tab has no color.
+        private static bool TryGetTabColor(object sheet, out int bgr)
+        {
+            bgr = 0;
+            Excel.Tab tab = null;
+            var ws = sheet as Excel.Worksheet;
+            if (ws != null) tab = ws.Tab;
+            var ch = sheet as Excel.Chart;
+            if (ch != null) tab = ch.Tab;
+            if (tab == null) return false;
+
+            object index = tab.ColorIndex;
+            if (index is int && (int)index == (int)Excel.XlColorIndex.xlColorIndexNone) return false;
+            object color = tab.Color;
+            if (!(color is int)) return false;
+            bgr = (int)color;
+            return true;
+        }
+
+        private static bool IsSheetProtected(object sheet)
+        {
+            var ws = sheet as Excel.Worksheet;
+            if (ws != null) return ws.ProtectContents;
+            var ch = sheet as Excel.Chart;
+            return ch != null && ch.ProtectContents;
+        }
+
+        // The workbook's theme colors in the order of Excel's palette (white, black, two
+        // backgrounds, six accents); null falls back to the Office theme in the palette.
+        private static System.Drawing.Color[] ThemeColors(Entry entry)
+        {
+            try
+            {
+                Office.ThemeColorScheme scheme = entry.Workbook.Theme.ThemeColorScheme;
+                // XlThemeColor / MsoThemeColorSchemeIndex: 2 light1, 1 dark1, 4 light2, 3 dark2, 5..10 accent1..6
+                int[] order = { 2, 1, 4, 3, 5, 6, 7, 8, 9, 10 };
+                var colors = new System.Drawing.Color[10];
+                for (int i = 0; i < 10; i++)
+                {
+                    int bgr = scheme.Colors((Office.MsoThemeColorSchemeIndex)order[i]).RGB;
+                    colors[i] = System.Drawing.Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF);
+                }
+                return colors;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        // Applies a tab color to every selected sheet, as Excel does for a group.
+        private void ApplyTabColor(Entry entry, IList<string> names, TabColorChoice choice)
+        {
+            try
+            {
+                foreach (string name in names)
+                {
+                    object sheet = entry.Workbook.Sheets[name];
+                    Excel.Tab tab = null;
+                    var ws = sheet as Excel.Worksheet;
+                    if (ws != null) tab = ws.Tab;
+                    var ch = sheet as Excel.Chart;
+                    if (ch != null) tab = ch.Tab;
+                    if (tab == null) continue;
+
+                    switch (choice.Kind)
+                    {
+                        case TabColorKind.None:
+                            tab.ColorIndex = Excel.XlColorIndex.xlColorIndexNone;
+                            break;
+                        case TabColorKind.Rgb:
+                            tab.Color = choice.Bgr;
+                            break;
+                        default:
+                            tab.ThemeColor = (Excel.XlThemeColor)choice.ThemeIndex;
+                            tab.TintAndShade = choice.Tint;
+                            break;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                ShowMessage("シート見出しの色を変更できませんでした。シートが保護されている可能性があります。");
             }
         }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -30,6 +30,10 @@ namespace VerticalSheetTabs
         public event Action UnhideRequested;
         public event Action SelectAllRequested;
         public event Action UngroupRequested;
+        public event Action ViewCodeRequested;
+        public event Action ProtectSheetRequested;
+        // (selected sheets, the chosen tab color): Excel applies a color to every sheet of a group.
+        public event Action<IList<string>, TabColorChoice> TabColorRequested;
         // (old name, new name) after the user finishes in-place editing.
         public event Action<string, string> RenameRequested;
         public event Action MoveCopyRequested;
@@ -38,6 +42,15 @@ namespace VerticalSheetTabs
 
         // The "unhide" item is only enabled while the workbook has hidden sheets.
         public bool HasHiddenSheets { get; set; }
+        // With the workbook structure protected, Excel does not allow adding, deleting, renaming,
+        // moving, copying, hiding or unhiding sheets, so those commands are disabled.
+        public bool StructureProtected { get; set; }
+        // Whether the active sheet is protected (the menu item then reads "unprotect").
+        public bool ActiveSheetProtected { get; set; }
+        // The workbook's ten theme colors for the tab color palette; null = the Office theme.
+        public Func<Color[]> ThemeColorProvider { get; set; }
+
+        private readonly Dictionary<string, int> _colors = new Dictionary<string, int>();
 
         private readonly ContextMenuStrip _menu = new ContextMenuStrip();
         private readonly Button _add = new Button();
@@ -88,24 +101,56 @@ namespace VerticalSheetTabs
             settings.Click += (s, e) => { if (SettingsRequested != null) SettingsRequested(); };
             _menu.Items.Add(settings);
             _menu.Items.Add(new ToolStripSeparator());
-            _menu.Items.Add(MenuItem("挿入(&I)...", () => InsertRequested));
-            _menu.Items.Add(MenuItem("削除(&D)", () => DeleteRequested));
+            var insert = MenuItem("挿入(&I)...", () => InsertRequested);
+            var delete = MenuItem("削除(&D)", () => DeleteRequested);
             var rename = new ToolStripMenuItem("名前の変更(&R)");
             rename.Click += (s, e) => BeginRename(_names.IndexOf(_activeName));
-            _menu.Items.Add(rename);
-            _menu.Items.Add(MenuItem("移動またはコピー(&M)...", () => MoveCopyRequested));
-            _menu.Items.Add(new ToolStripSeparator());
-            _menu.Items.Add(MenuItem("非表示(&H)", () => HideRequested));
+            var moveCopy = MenuItem("移動またはコピー(&M)...", () => MoveCopyRequested);
+            var viewCode = MenuItem("コードの表示(&V)", () => ViewCodeRequested);
+            var protect = MenuItem("シートの保護(&P)...", () => ProtectSheetRequested);
+            var tabColor = new ToolStripMenuItem("シート見出しの色(&T)");
+            var palette = new TabColorPalette();
+            var paletteHost = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
+            tabColor.DropDown = new ToolStripDropDown { Padding = Padding.Empty };
+            tabColor.DropDown.Items.Add(paletteHost);
+            palette.ColorChosen += choice =>
+            {
+                _menu.Close();
+                if (TabColorRequested != null) TabColorRequested(SelectedInOrder(), choice);
+            };
+            tabColor.DropDownOpening += (s, e) =>
+            {
+                palette.SetTheme(ThemeColorProvider != null ? ThemeColorProvider() : null);
+                paletteHost.Size = palette.Size;
+            };
+            var hide = MenuItem("非表示(&H)", () => HideRequested);
             var unhide = MenuItem("再表示(&U)...", () => UnhideRequested);
+            var selectAll = MenuItem("すべてのシートを選択(&S)", () => SelectAllRequested);
+            var ungroup = MenuItem("シートのグループ解除(&N)", () => UngroupRequested);
+
+            _menu.Items.Add(insert);
+            _menu.Items.Add(delete);
+            _menu.Items.Add(rename);
+            _menu.Items.Add(moveCopy);
+            _menu.Items.Add(viewCode);
+            _menu.Items.Add(protect);
+            _menu.Items.Add(tabColor);
+            _menu.Items.Add(new ToolStripSeparator());
+            _menu.Items.Add(hide);
             _menu.Items.Add(unhide);
             _menu.Items.Add(new ToolStripSeparator());
-            _menu.Items.Add(MenuItem("すべてのシートを選択(&S)", () => SelectAllRequested));
-            var ungroup = MenuItem("シートのグループ解除(&N)", () => UngroupRequested);
+            _menu.Items.Add(selectAll);
             _menu.Items.Add(ungroup);
             _menu.Opening += (s, e) =>
             {
-                unhide.Enabled = HasHiddenSheets;
-                rename.Enabled = _selected.Count <= 1;
+                bool free = !StructureProtected;
+                insert.Enabled = free;
+                delete.Enabled = free;
+                rename.Enabled = free && _selected.Count <= 1;
+                moveCopy.Enabled = free;
+                hide.Enabled = free;
+                unhide.Enabled = free && HasHiddenSheets;
+                protect.Text = ActiveSheetProtected ? "シート保護の解除(&P)" : "シートの保護(&P)...";
                 ungroup.Visible = _selected.Count > 1;
             };
             _list.ContextMenuStrip = _menu;
@@ -130,8 +175,16 @@ namespace VerticalSheetTabs
 
         // Updates the list only when something actually changed, so the
         // polling timer does not cause flicker or lose the scroll position.
-        public void SetSheets(IList<string> names, string activeName, ICollection<string> selected)
+        public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors)
         {
+            _add.Enabled = !StructureProtected;
+            bool sameColors = _colors.Count == colors.Count && _colors.All(kv => { int v; return colors.TryGetValue(kv.Key, out v) && v == kv.Value; });
+            if (!sameColors)
+            {
+                _colors.Clear();
+                foreach (var kv in colors) _colors[kv.Key] = kv.Value;
+                _list.Invalidate();
+            }
             bool sameNames = _names.SequenceEqual(names);
             // While a mouse button is down the user is changing the selection; do not fight them.
             bool userBusy = Control.MouseButtons != MouseButtons.None;
@@ -166,10 +219,23 @@ namespace VerticalSheetTabs
             Color back = selected ? SystemColors.Highlight : SystemColors.Window;
             Color fore = selected ? SystemColors.HighlightText : SystemColors.WindowText;
             using (var brush = new SolidBrush(back)) e.Graphics.FillRectangle(brush, e.Bounds);
+            // A sheet with a tab color gets a bar of that color along the left edge (graphics: Step6).
+            int textLeft = 2;
+            int bgr;
+            if (_colors.TryGetValue(name, out bgr))
+            {
+                int bar = Math.Max(4, e.Bounds.Height / 3);
+                using (var brush = new SolidBrush(Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF)))
+                {
+                    e.Graphics.FillRectangle(brush, e.Bounds.X, e.Bounds.Y, bar, e.Bounds.Height);
+                }
+                textLeft = bar + 3;
+            }
             Font font = activeInGroup ? new Font(e.Font, FontStyle.Bold) : e.Font;
             try
             {
-                TextRenderer.DrawText(e.Graphics, name, font, Rectangle.Inflate(e.Bounds, -2, 0), fore,
+                var textBounds = new Rectangle(e.Bounds.X + textLeft, e.Bounds.Y, e.Bounds.Width - textLeft - 2, e.Bounds.Height);
+                TextRenderer.DrawText(e.Graphics, name, font, textBounds, fore,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             }
             finally
@@ -269,7 +335,7 @@ namespace VerticalSheetTabs
 
         private void List_MouseMove(object sender, MouseEventArgs e)
         {
-            if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null) return;
+            if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected) return;
             Size drag = SystemInformation.DragSize;
             if (Math.Abs(e.X - _dragOrigin.X) < drag.Width && Math.Abs(e.Y - _dragOrigin.Y) < drag.Height) return;
 
@@ -377,7 +443,7 @@ namespace VerticalSheetTabs
         // is Excel's 31 characters; the other rules are checked by PaneManager when it renames.
         private void BeginRename(int index)
         {
-            if (index < 0 || index >= _names.Count) return;
+            if (index < 0 || index >= _names.Count || StructureProtected) return;
             EndRename(false);
             Rectangle r = _list.GetItemRectangle(index);
             _editingName = _names[index];
