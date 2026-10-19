@@ -25,6 +25,8 @@ namespace VerticalSheetTabs
             public bool InitPending;
             // Visibility changes we cause ourselves must not be mistaken for the user closing the pane.
             public DateTime IgnoreVisibleUntil;
+            // Consecutive failed syncs: the window is probably gone.
+            public int Failures;
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -32,6 +34,9 @@ namespace VerticalSheetTabs
         // Excel raises no events for rename, reorder or hide/unhide, so the lists
         // are re-read on a short timer (cheap: only names are compared).
         private readonly Timer _timer = new Timer { Interval = 300 };
+
+        // The title bar of the task pane (Excel always shows one).
+        public const string PaneTitle = "シートタブ";
 
         private readonly Excel.Application _app;
 
@@ -53,7 +58,7 @@ namespace VerticalSheetTabs
             var settings = WorkbookSettings.Load(workbook);
 
             var control = new TabPaneControl();
-            var pane = _collection.Add(control, "Sheet Tabs", window);
+            var pane = _collection.Add(control, PaneTitle, window);
             pane.DockPosition = ToDock(settings.Side);
             pane.Width = 150; // temporary; the real width is applied in InitializeWidth
 
@@ -90,7 +95,7 @@ namespace VerticalSheetTabs
             try
             {
                 entry.IgnoreVisibleUntil = DateTime.Now.AddMilliseconds(1000);
-                entry.Window.DisplayWorkbookTabs = horizontal;
+                SetHorizontalTabs(entry, horizontal);
                 entry.Pane.Visible = vertical;
             }
             catch (Exception)
@@ -111,6 +116,17 @@ namespace VerticalSheetTabs
                 };
                 init.Start();
             }
+        }
+
+        // Changing the tab bar marks the workbook as modified, which would make Excel ask "save
+        // changes?" for a workbook the user never touched. So it is only set when it really changes,
+        // and a workbook that was unmodified stays unmodified.
+        private static void SetHorizontalTabs(Entry entry, bool show)
+        {
+            if (entry.Window.DisplayWorkbookTabs == show) return;
+            bool wasSaved = entry.Workbook.Saved;
+            entry.Window.DisplayWorkbookTabs = show;
+            if (wasSaved) entry.Workbook.Saved = true;
         }
 
         // The user closed the pane with its close button: go back to the horizontal tabs only,
@@ -217,6 +233,59 @@ namespace VerticalSheetTabs
             }
         }
 
+        // Creates the panes of all open windows that have none (after a cancelled close, or for a
+        // window that was opened without being activated).
+        public void EnsureAllPanes()
+        {
+            foreach (Excel.Workbook wb in _app.Workbooks)
+            {
+                try
+                {
+                    foreach (Excel.Window w in wb.Windows)
+                    {
+                        try
+                        {
+                            EnsurePane(w, wb);
+                        }
+                        catch (Exception)
+                        {
+                            // A hidden window, or one that is closing.
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // Workbook closing.
+                }
+            }
+        }
+
+        // The add-in is going away: give Excel's own tab bar back and remove the panes.
+        public void Shutdown()
+        {
+            _timer.Stop();
+            foreach (Entry entry in new List<Entry>(_entries.Values))
+            {
+                try
+                {
+                    if (entry.Settings.Mode == TabMode.VerticalOnly) SetHorizontalTabs(entry, true);
+                }
+                catch (Exception)
+                {
+                    // Window closing.
+                }
+                try
+                {
+                    _collection.Remove(entry.Pane);
+                }
+                catch (Exception)
+                {
+                    // Already removed.
+                }
+            }
+            _entries.Clear();
+        }
+
         public void RemovePane(Excel.Window window)
         {
             if (window == null) return;
@@ -227,15 +296,63 @@ namespace VerticalSheetTabs
             _collection.Remove(entry.Pane);
         }
 
+        // Reading every sheet's name, visibility and tab color costs several COM calls per sheet, so
+        // with hundreds of sheets a fixed 300 ms period would keep Excel busy. The period follows the
+        // measured cost of one pass (at most about 1/8 of the time is spent here), between 0.3 and 3 s.
         public void SyncAll()
         {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            SyncEntries();
+            watch.Stop();
+            int next = (int)Math.Max(300, Math.Min(3000, watch.ElapsedMilliseconds * 8));
+            if (_timer.Interval != next) _timer.Interval = next;
+        }
+
+        private DateTime _lastEnsure = DateTime.MinValue;
+
+        private void SyncEntries()
+        {
+            // A pane that is missing for an open window (the close was cancelled, or the pane could not
+            // be created while Excel was showing a dialog) is created again, at most every 3 seconds.
+            if (DateTime.Now - _lastEnsure > TimeSpan.FromSeconds(3))
+            {
+                _lastEnsure = DateTime.Now;
+                try
+                {
+                    if (_app.Windows.Count != _entries.Count) EnsureAllPanes();
+                }
+                catch (Exception)
+                {
+                    // Excel is busy or closing.
+                }
+            }
+
             foreach (Entry entry in new List<Entry>(_entries.Values))
             {
-                SyncSheets(entry);
+                if (SyncSheets(entry)) entry.Failures = 0;
+                else if (++entry.Failures > 20) PurgeEntry(entry); // about 6 seconds without an answer
             }
         }
 
-        private static void SyncSheets(Entry entry)
+        // A window that stays unreachable (closed without our noticing) loses its pane entry.
+        private void PurgeEntry(Entry entry)
+        {
+            foreach (var pair in new List<KeyValuePair<int, Entry>>(_entries))
+            {
+                if (pair.Value == entry) _entries.Remove(pair.Key);
+            }
+            try
+            {
+                _collection.Remove(entry.Pane);
+            }
+            catch (Exception)
+            {
+                // Already gone.
+            }
+        }
+
+        // Returns false when Excel could not be asked (busy, or the window/workbook is gone).
+        private static bool SyncSheets(Entry entry)
         {
             try
             {
@@ -272,11 +389,13 @@ namespace VerticalSheetTabs
 
                 entry.Control.ActiveSheetProtected = IsSheetProtected(activeSheet);
                 entry.Control.SetSheets(names, active, selected, colors);
+                return true;
             }
             catch (Exception)
             {
                 // Excel is busy (e.g. a cell is being edited) or the window is closing.
                 // The next timer tick will retry.
+                return false;
             }
         }
 
@@ -552,6 +671,18 @@ namespace VerticalSheetTabs
                 var ordered = new List<string> { active };
                 foreach (string n in names) if (n != active) ordered.Add(n);
 
+                // Selecting one sheet at a time costs about 12 ms each (3.5 s for 300 sheets), so a
+                // big group is selected with one call.
+                if (ordered.Count > 12)
+                {
+                    var group = entry.Workbook.Sheets[ordered.Cast<object>().ToArray()] as Excel.Sheets;
+                    if (group != null)
+                    {
+                        group.Select(true);
+                        return;
+                    }
+                }
+
                 bool first = true;
                 foreach (string n in ordered)
                 {
@@ -595,27 +726,10 @@ namespace VerticalSheetTabs
             if (ch != null) ch.Select(replace);
         }
 
-        // "Select all sheets": every visible sheet joins the group; the active sheet stays active.
-        private static void SelectAllSheets(Entry entry)
+        // "Select all sheets": Excel's own command (fast, and the active sheet stays active).
+        private void SelectAllSheets(Entry entry)
         {
-            try
-            {
-                var names = new List<string>();
-                foreach (object sheet in entry.Workbook.Sheets)
-                {
-                    string name;
-                    if (IsVisibleSheet(sheet, out name)) names.Add(name);
-                }
-                string active = null;
-                string activeName;
-                object activeSheet = entry.Window.ActiveSheet;
-                if (activeSheet != null && IsVisibleSheet(activeSheet, out activeName)) active = activeName;
-                if (active != null) SelectSheets(entry, names, active);
-            }
-            catch (Exception)
-            {
-                // Busy or closing.
-            }
+            RunExcelCommand(entry, "SelectAllSheets");
         }
 
         // "Ungroup sheets": only the active sheet stays selected.

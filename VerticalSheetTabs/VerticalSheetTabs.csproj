@@ -42,6 +42,30 @@
     </BootstrapperPackage>
   </ItemGroup>
 
+  <!-- ClickOnce publishing (Visual Studio: Build > Publish, or: msbuild /t:Publish /p:Configuration=Release) -->
+  <PropertyGroup>
+    <ProductName>VerticalSheetTabs</ProductName>
+    <PublisherName>VerticalSheetTabs</PublisherName>
+    <FriendlyName>縦並びシートタブ</FriendlyName>
+    <Description>Excelのシートタブを、縦並びで表示します。</Description>
+    <PublishUrl>publish\</PublishUrl>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.0</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <CreateDesktopShortcut>false</CreateDesktopShortcut>
+    <CreateWebPageOnPublish>false</CreateWebPageOnPublish>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <PublishWizardCompleted>true</PublishWizardCompleted>
+  </PropertyGroup>
+
   <PropertyGroup>
     <ManifestCertificateThumbprint>AD20453A073A56C7B2CAD36A20F60D892921F294</ManifestCertificateThumbprint>
     <ManifestKeyFile>VerticalSheetTabs_TemporaryKey.pfx</ManifestKeyFile>
