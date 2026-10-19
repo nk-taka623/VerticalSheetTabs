@@ -133,20 +133,31 @@ gitGraph
     commit id: "master 初期コミット"
     branch develop
     checkout develop
-    branch feature/step0-project
+    branch feature/step0-create-project
     commit id: "Step0 開発"
     checkout develop
-    merge feature/step0-project
-    branch feature/step1-taskpane
+    merge feature/step0-create-project
+    branch feature/step1-task-pane
     commit id: "Step1 開発"
     checkout develop
-    merge feature/step1-taskpane
+    merge feature/step1-task-pane
 ```
 
 - `master`: 初期コミットのみ。リリース時などに使う
 - `develop`: 統合ブランチ。各Stepの開発が完了したものだけをマージする
-- `feature/stepN-xxx`: Stepごとに`develop`から作成する
-  - 例: `feature/step0-project`、`feature/step1-taskpane`
+- `feature/stepN-内容`: Stepごとに`develop`から作成する。ステップ番号と内容が一目で分かる名前にする (文字化け防止のため英小文字のkebab-case)
+
+| Step | ブランチ名 |
+|---|---|
+| 0 | `feature/step0-create-project` |
+| 1 | `feature/step1-task-pane` |
+| 2 | `feature/step2-sheet-list` |
+| 3 | `feature/step3-persist-settings` |
+| 4 | `feature/step4-display-mode` |
+| 5 | `feature/step5-tab-operations` |
+| 6 | `feature/step6-visual-fidelity` |
+| 7 | `feature/step7-finishing` |
+
 - 流れ: featureブランチで開発 -> 完了条件を確認 -> `develop`へマージ (`--no-ff`) -> 次のStepのfeatureブランチを`develop`から作成
 - 各Stepの完了時に結果を報告し、マージと次Stepへの着手はその都度確認する
 - コミットメッセージは日本語で書く
