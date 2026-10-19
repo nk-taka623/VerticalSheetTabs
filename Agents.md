@@ -757,5 +757,5 @@ gitGraph
 ### 11.7 配布用インストーラの更新 (バージョン1.0.1.0)
 
 - 見直し (既定の幅を8文字、ペインのタイトルを「縦タブ」) の反映のため、バージョンを、1.0.0.0から1.0.1.0に上げて、ClickOnceのインストーラを、作り直した (`ApplicationVersion`、`AssemblyVersion`、`AssemblyFileVersion`)
-- 成果物: `VerticalSheetTabsin\Releasepp.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_0_1_0\`)。新しいタイトルの文字列が、DLLに含まれ、古いタイトルが無いことを確認した
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_0_1_0\`)。新しいタイトルの文字列が、DLLに含まれ、古いタイトルが無いことを確認した
 - すでに1.0.0.0を入れたPCへの反映: 自動更新は、無効 (`UpdateEnabled=false`) のため、新しい`setup.exe`を、もう一度実行する (上書きされる)。未実機確認 (この開発PCでの、インストールの確認は、1.0.0.0で実施済み)
