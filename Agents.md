@@ -174,3 +174,24 @@ gitGraph
   - 別PCで開発する場合は、VS 2026で「署名」タブから新しい証明書を作成し、`.csproj`の`ManifestCertificateThumbprint`を更新する
 - 読み込み確認: ビルドでHKCUにアドインが登録され、Excelを通常起動すると`COMAddIns`に`VerticalSheetTabs`が`Connect=True`で表示された
   - COM自動化 (`New-Object -ComObject Excel.Application`) で起動したExcelでは、VSTOアドインは読み込まれなかった。動作確認はExcelの通常起動で行う
+
+### Step1 (タスクペイン表示) の結果
+
+実装: `PaneManager.cs` (ウィンドウごとにペインを管理)、`TabPaneControl.cs` (試作用の中身)、`ThisAddIn.cs` (イベント接続)。
+
+| 確認項目 | 結果 |
+|---|---|
+| ウィンドウごとのペイン | OK。複数ブックを開くと、各ウィンドウに独立したペインが表示された |
+| 左右のドッキング | OK。`DockPosition`で左/右の切替ができた。初期表示は左 |
+| 幅変更の検知 | OK。ペインの端をドラッグすると、`UserControl.Resize`で新しい幅を検知できた |
+| ブックを閉じたとき | OK。`WorkbookBeforeClose`でペインを削除し、他のウィンドウのペインは残った |
+| 新規ブック作成 | OK。`WindowActivate`でペインが作られた |
+
+分かったこと・制約:
+
+- Excel 365はブックごとに別のトップレベルウィンドウ (SDI) になる。ペインの管理キーにはウィンドウハンドル (`Window.Hwnd`) を使えた
+- ペインには、タイトルバー (タイトル、メニュー、閉じるボタン) が付く。タブ領域だけの見た目にはできない。「完全同一の見た目」の許容差として、Step6までに相談する
+- ユーザーがペインの閉じるボタンで閉じた場合の扱い (再表示の方法) を、Step3/4で決める
+- `CustomTaskPane.Width`に150を設定したとき、中身のコントロール幅は134pxだった。幅の単位とDPIの関係は、Step3で`VTab.Width`を決めるときに確認する
+- `WorkbookBeforeClose`で保存確認がキャンセルされた場合は、ペインが消えたままになる可能性がある。Step2以降で対策する (`WindowActivate`での再作成など)
+- 動作確認は、Excelを通常起動して、UI Automation (`System.Windows.Automation`) とキー送信で行った
