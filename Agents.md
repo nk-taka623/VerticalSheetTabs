@@ -1017,4 +1017,4 @@ gitGraph
 ### 12.22 インストーラの更新 (バージョン1.1.3.0)
 
 - 12.21 (縦タブにフォーカスがあるときの Ctrl+S) を含めて、バージョンを 1.1.3.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.3` のタグを付けた)
-- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_3_0\`)。インストールの実機確認は、未実施
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_3_0\`)。インストールの実機確認: ユーザーが、配布用zip (証明書と手順つき) から、インストールして確認し、問題なし
