@@ -959,3 +959,8 @@ gitGraph
 - ユーザーの要望により、フォルダの開閉、色、名前の変更、フォルダだけの削除でも、ブックを「変更あり」にする (`PaneManager.MarkChanged`)。保存せずに閉じるときは、Excelの保存確認が出る。保存すると、開閉の状態も、保存される (12.8 の保存先)
 - 実機で確認: 開いた直後は、変更なし、フォルダの開閉のクリックのあとは、変更あり
 - 12.13 の「フォルダの構成は、ブックの保存時に書き込む (保存しないと、残らない)」は、この見直しのあとも、同じ (保存しなければ、残らないことを、確認で知らせる)
+
+### 12.15 リリース (v1.1.0)
+
+- バージョンを 1.1.0.0 に上げ (`ApplicationVersion`、`AssemblyVersion`、`AssemblyFileVersion`)、ClickOnce のインストーラを作り直した。成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_0_0\`)
+- インストールの実機確認は、未実施 (ユーザーの了承のうえ、行う)。すでに1.0.1.0を入れたPCは、新しい `setup.exe` を、もう一度実行する
