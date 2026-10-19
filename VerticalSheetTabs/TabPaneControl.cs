@@ -34,6 +34,8 @@ namespace VerticalSheetTabs
         public event Action<IList<string>, string, bool> MoveRequested;
         // A folder row was clicked (folder id): open or close it.
         public event Action<string> FolderToggleRequested;
+        // An Excel command (idMso) for a key pressed in the pane, e.g. "FileSave" for Ctrl+S.
+        public event Action<string> ExcelCommandRequested;
         public event Action<IList<string>, IList<string>, string, string, string, bool> FolderMoveRequested;
         public event Action<string, string> FolderRenameRequested;
         // (selected sheets) "new folder" from the sheet menu.
@@ -69,6 +71,7 @@ namespace VerticalSheetTabs
             _strip.RenameRequested += (o, n) => { if (RenameRequested != null) RenameRequested(o, n); };
             _strip.MoveRequested += (names, before, copy) => { if (MoveRequested != null) MoveRequested(names, before, copy); };
 
+            _strip.ExcelCommandRequested += command => { if (ExcelCommandRequested != null) ExcelCommandRequested(command); };
             _strip.FolderToggleRequested += id => { if (FolderToggleRequested != null) FolderToggleRequested(id); };
             _strip.FolderMoveRequested += (sheets, folders, into, bs, bf, copy) => { if (FolderMoveRequested != null) FolderMoveRequested(sheets, folders, into, bs, bf, copy); };
             _strip.FolderRenameRequested += (id, name) => { if (FolderRenameRequested != null) FolderRenameRequested(id, name); };
