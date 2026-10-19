@@ -116,7 +116,7 @@ namespace VerticalSheetTabs
             _strip.ContextMenuStrip = _menu;
         }
 
-        // First-open width: 16 half-width characters plus the tab's paddings.
+        // First-open width: 8 half-width characters plus the tab's paddings.
         public int DefaultContentWidth()
         {
             return _strip.DefaultContentWidth();
