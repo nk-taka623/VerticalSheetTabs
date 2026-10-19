@@ -36,7 +36,7 @@ namespace VerticalSheetTabs
         private readonly Timer _timer = new Timer { Interval = 300 };
 
         // The title bar of the task pane (Excel always shows one).
-        public const string PaneTitle = "シートタブ";
+        public const string PaneTitle = "縦タブ";
 
         private readonly Excel.Application _app;
 
