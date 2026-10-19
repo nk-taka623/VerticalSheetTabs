@@ -1003,5 +1003,5 @@ gitGraph
 
 ### 12.20 インストーラの更新 (バージョン1.1.2.0)
 
-- 12.19 (フォルダの選択とフォルダの色の見直し) を含めて、バージョンを 1.1.2.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 12.19 (フォルダの選択とフォルダの色の見直し) を含めて、バージョンを 1.1.2.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.2` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_2_0\`)。インストールの実機確認は、未実施
