@@ -20,9 +20,14 @@ namespace VerticalSheetTabs
             this.Application.WindowActivate += Application_WindowActivate;
             this.Application.WorkbookBeforeClose += Application_WorkbookBeforeClose;
 
-            foreach (Excel.Window w in this.Application.Windows)
+            this.Application.SheetActivate += sh => _panes.SyncAll();
+
+            foreach (Excel.Workbook wb in this.Application.Workbooks)
             {
-                _panes.EnsurePane(w);
+                foreach (Excel.Window w in wb.Windows)
+                {
+                    _panes.EnsurePane(w, wb);
+                }
             }
         }
 
@@ -32,7 +37,7 @@ namespace VerticalSheetTabs
 
         private void Application_WindowActivate(Excel.Workbook wb, Excel.Window wn)
         {
-            _panes.EnsurePane(wn);
+            _panes.EnsurePane(wn, wb);
         }
 
         private void Application_WorkbookBeforeClose(Excel.Workbook wb, ref bool cancel)

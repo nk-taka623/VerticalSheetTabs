@@ -1,25 +1,40 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace VerticalSheetTabs
 {
-    // Step1 prototype: content of the task pane. Shows pane info and has
-    // buttons to dock the pane left/right. Replaced by the real tab list in Step2.
+    // Step2 prototype: content of the task pane. A plain ListBox shows the sheet
+    // names; the owner-drawn tab graphics replace it in Step6. The Dock buttons
+    // are test aids from Step1 and go away when the settings dialog arrives (Step4).
     public class TabPaneControl : UserControl
     {
+        private readonly ListBox _list = new ListBox();
         private readonly Label _info = new Label();
         private readonly Button _left = new Button();
         private readonly Button _right = new Button();
 
+        private List<string> _names = new List<string>();
+        private string _activeName;
+        private bool _updating;
+
         public event EventHandler LeftClicked;
         public event EventHandler RightClicked;
+        // Raised when the user clicks a sheet in the list.
+        public event Action<string> SheetSelected;
 
         public TabPaneControl()
         {
+            _list.Dock = DockStyle.Fill;
+            _list.IntegralHeight = false;
+            _list.BorderStyle = BorderStyle.None;
+            _list.SelectedIndexChanged += List_SelectedIndexChanged;
+
             _info.Dock = DockStyle.Top;
-            _info.Height = 80;
-            _info.Padding = new Padding(4);
+            _info.Height = 36;
+            _info.Padding = new Padding(4, 2, 4, 2);
 
             _left.Text = "Dock Left";
             _left.Dock = DockStyle.Top;
@@ -29,7 +44,8 @@ namespace VerticalSheetTabs
             _right.Dock = DockStyle.Top;
             _right.Click += (s, e) => { if (RightClicked != null) RightClicked(this, EventArgs.Empty); };
 
-            // Dock=Top controls are laid out bottom-up in z-order.
+            // The Fill control must be added first; Top controls then stack in reverse order.
+            Controls.Add(_list);
             Controls.Add(_right);
             Controls.Add(_left);
             Controls.Add(_info);
@@ -37,10 +53,43 @@ namespace VerticalSheetTabs
             BackColor = SystemColors.Window;
         }
 
-        public void SetInfo(string windowCaption, string dock)
+        public void SetInfo(string dock)
         {
-            _info.Text = "Window: " + windowCaption + "\r\nDock: " + dock
-                + "\r\nWidth: " + Width + " px";
+            _info.Text = "Dock: " + dock + " / Width: " + Width + " px";
+        }
+
+        // Updates the list only when something actually changed, so the
+        // polling timer does not cause flicker or lose the scroll position.
+        public void SetSheets(IList<string> names, string activeName)
+        {
+            bool sameNames = _names.SequenceEqual(names);
+            if (sameNames && _activeName == activeName) return;
+
+            _updating = true;
+            try
+            {
+                if (!sameNames)
+                {
+                    _names = new List<string>(names);
+                    _list.BeginUpdate();
+                    _list.Items.Clear();
+                    foreach (string n in _names) _list.Items.Add(n);
+                    _list.EndUpdate();
+                }
+                _activeName = activeName;
+                _list.SelectedIndex = activeName == null ? -1 : _names.IndexOf(activeName);
+            }
+            finally
+            {
+                _updating = false;
+            }
+        }
+
+        private void List_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_updating) return;
+            string name = _list.SelectedItem as string;
+            if (name != null && SheetSelected != null) SheetSelected(name);
         }
     }
 }
