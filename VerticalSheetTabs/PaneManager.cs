@@ -17,6 +17,10 @@ namespace VerticalSheetTabs
             public TabPaneControl Control;
             public Excel.Window Window;
             public Excel.Workbook Workbook;
+            public WorkbookSettings Settings;
+            // Pane width minus content width (title bar border, scrollbar gap); measured once.
+            public int Chrome;
+            public bool Initialized;
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -38,15 +42,30 @@ namespace VerticalSheetTabs
             int hwnd = window.Hwnd;
             if (_entries.ContainsKey(hwnd)) return;
 
+            // First open (no add-in property in the workbook): defaults, i.e. left side.
+            var settings = WorkbookSettings.Load(workbook);
+
             var control = new TabPaneControl();
             var pane = _collection.Add(control, "Sheet Tabs", window);
-            // First open: left side (see Agents.md). Later this comes from the workbook property.
-            pane.DockPosition = Office.MsoCTPDockPosition.msoCTPDockPositionLeft;
-            pane.Width = 150;
+            pane.DockPosition = settings.Side == TabSide.Right
+                ? Office.MsoCTPDockPosition.msoCTPDockPositionRight
+                : Office.MsoCTPDockPosition.msoCTPDockPositionLeft;
+            pane.Width = 150; // temporary; the real width is applied in InitializeWidth
             pane.Visible = true;
 
-            var entry = new Entry { Pane = pane, Control = control, Window = window, Workbook = workbook };
+            var entry = new Entry { Pane = pane, Control = control, Window = window, Workbook = workbook, Settings = settings };
             _entries[hwnd] = entry;
+
+            // The pane is laid out asynchronously, so the content width is only
+            // reliable a moment after it is shown.
+            var init = new Timer { Interval = 250 };
+            init.Tick += (s, e) =>
+            {
+                init.Stop();
+                init.Dispose();
+                InitializeWidth(entry);
+            };
+            init.Start();
 
             pane.DockPositionChanged += (s, e) => RefreshInfo(entry);
             control.Resize += (s, e) => RefreshInfo(entry);
@@ -55,6 +74,49 @@ namespace VerticalSheetTabs
             control.SheetSelected += name => ActivateSheet(entry, name);
             RefreshInfo(entry);
             SyncSheets(entry);
+        }
+
+        // Applies the stored width, or 16 half-width characters on first open.
+        private void InitializeWidth(Entry entry)
+        {
+            try
+            {
+                if (!_entries.ContainsValue(entry)) return;
+                int dpi = entry.Control.DeviceDpi;
+                entry.Chrome = entry.Pane.Width - entry.Control.Width;
+                int contentPx = entry.Settings.WidthDip > 0
+                    ? (int)Math.Round(entry.Settings.WidthDip * dpi / 96.0)
+                    : entry.Control.DefaultContentWidth();
+                entry.Pane.Width = contentPx + entry.Chrome;
+                entry.Initialized = true;
+                RefreshInfo(entry);
+            }
+            catch (Exception)
+            {
+                // The pane may have been closed meanwhile.
+            }
+        }
+
+        // Called before the workbook is saved: stores the current state in its properties.
+        public void SaveSettings(Excel.Workbook workbook)
+        {
+            foreach (Entry entry in new List<Entry>(_entries.Values))
+            {
+                if (!entry.Initialized) continue;
+                if (!entry.Workbook.Equals(workbook)) continue;
+                try
+                {
+                    entry.Settings.Side = entry.Pane.DockPosition == Office.MsoCTPDockPosition.msoCTPDockPositionRight
+                        ? TabSide.Right : TabSide.Left;
+                    entry.Settings.WidthDip = (int)Math.Round(entry.Control.Width * 96.0 / entry.Control.DeviceDpi);
+                    entry.Settings.Save(workbook);
+                }
+                catch (Exception)
+                {
+                    // Window/pane closing: nothing to store.
+                }
+                return; // one window's state represents the workbook
+            }
         }
 
         public void RemovePane(Excel.Window window)
@@ -143,7 +205,7 @@ namespace VerticalSheetTabs
                     ? "Left"
                     : entry.Pane.DockPosition == Office.MsoCTPDockPosition.msoCTPDockPositionRight
                         ? "Right" : entry.Pane.DockPosition.ToString();
-                entry.Control.SetInfo(dock);
+                entry.Control.SetInfo(dock, entry.Pane.Width, entry.Chrome);
             }
             catch (Exception)
             {
