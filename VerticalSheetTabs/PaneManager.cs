@@ -1154,13 +1154,28 @@ namespace VerticalSheetTabs
             {
                 entry.Window.Activate();
                 string activeKey = null;
+                bool selectionHidden = false;
                 if (entry.Folders.HasFolders)
                 {
                     // the folder of the active sheet, looked up before the new sheet exists
                     RefreshKeys(entry);
                     activeKey = KeyOf(entry, CurrentActive(entry));
+                    // every selected sheet is in a closed folder: the list shows no selection at all
+                    List<string> selectedKeys = KeysOf(entry, CurrentSelection(entry));
+                    selectionHidden = selectedKeys.Count > 0 && selectedKeys.All(k =>
+                    {
+                        FolderNode f = entry.Folders.FolderOf(k);
+                        return f != null && !f.Expanded;
+                    });
                 }
                 var before = new HashSet<string>(entry.Keys);
+                if (selectionHidden)
+                {
+                    // the new sheet goes to the bottom of the list, outside any folder
+                    entry.Workbook.Worksheets.Add(Type.Missing, entry.Workbook.Sheets[entry.Workbook.Sheets.Count], Type.Missing, Type.Missing);
+                    entry.KeySignature = null;
+                    return;
+                }
                 entry.Workbook.Worksheets.Add(Type.Missing, entry.Window.ActiveSheet, Type.Missing, Type.Missing);
                 FolderNode folder = activeKey == null ? null : entry.Folders.FolderOf(activeKey);
                 if (folder != null)
