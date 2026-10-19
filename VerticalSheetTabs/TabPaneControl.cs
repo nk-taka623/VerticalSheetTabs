@@ -42,6 +42,12 @@ namespace VerticalSheetTabs
         public event Action<IList<string>, IList<string>> DeleteKeyRequested;
         // (folders, also delete their sheets) from the folder menu.
         public event Action<IList<string>, bool> DeleteFoldersRequested;
+        // (command, folders): "select", "hide", "unhide", "protect", "movecopy" on the sheets of the folders.
+        public event Action<string, IList<string>> FolderCommandRequested;
+        // (folders, color) the color of the folder rows.
+        public event Action<IList<string>, TabColorChoice> FolderColorRequested;
+        // (folders, color) the tab color of all sheets of the folders.
+        public event Action<IList<string>, TabColorChoice> FolderTabColorRequested;
 
         // The "unhide" item is only enabled while the workbook has hidden sheets.
         public bool HasHiddenSheets { get; set; }
@@ -142,17 +148,66 @@ namespace VerticalSheetTabs
             folderDelete.Click += (s, e) => { if (DeleteFoldersRequested != null) DeleteFoldersRequested(_strip.SelectedFolders(), false); };
             var folderDeleteAll = new ToolStripMenuItem("フォルダと中のシートを削除(&X)");
             folderDeleteAll.Click += (s, e) => { if (DeleteFoldersRequested != null) DeleteFoldersRequested(_strip.SelectedFolders(), true); };
+            var fSelect = FolderItem("フォルダ内のシートをすべて選択(&S)", "select");
+            var fHide = FolderItem("フォルダ内のシートをすべて非表示(&H)", "hide");
+            var fUnhide = FolderItem("フォルダ内のシートをすべて再表示(&U)", "unhide");
+            var fProtect = FolderItem("フォルダ内のシートの保護(&P)...", "protect");
+            var fMove = FolderItem("フォルダ内のシートの移動またはコピー(&M)...", "movecopy");
+            var fColor = PaletteItem("フォルダの色(&C)", c => { if (FolderColorRequested != null) FolderColorRequested(_strip.SelectedFolders(), c); });
+            var fTabColor = PaletteItem("シート見出しの色をフォルダ内のシートに適用(&T)", c => { if (FolderTabColorRequested != null) FolderTabColorRequested(_strip.SelectedFolders(), c); });
             _folderMenu.Items.Add(folderRename);
+            _folderMenu.Items.Add(new ToolStripSeparator());
+            _folderMenu.Items.Add(fSelect);
+            _folderMenu.Items.Add(fHide);
+            _folderMenu.Items.Add(fUnhide);
+            _folderMenu.Items.Add(fProtect);
+            _folderMenu.Items.Add(fMove);
+            _folderMenu.Items.Add(new ToolStripSeparator());
+            _folderMenu.Items.Add(fColor);
+            _folderMenu.Items.Add(fTabColor);
+            _folderMenu.Items.Add(new ToolStripSeparator());
             _folderMenu.Items.Add(folderDelete);
             _folderMenu.Items.Add(folderDeleteAll);
             _folderMenu.Opening += (s, e) =>
             {
+                bool free = !StructureProtected;
                 folderRename.Enabled = _strip.SelectedFolders().Count <= 1;
-                folderDeleteAll.Enabled = !StructureProtected;
+                fHide.Enabled = free;
+                fUnhide.Enabled = free;
+                fMove.Enabled = free;
+                folderDeleteAll.Enabled = free;
             };
             _strip.SheetMenu = _menu;
             _strip.FolderMenu = _folderMenu;
             _strip.ContextMenuStrip = _menu;
+        }
+
+        private ToolStripMenuItem FolderItem(string text, string command)
+        {
+            var item = new ToolStripMenuItem(text);
+            item.Click += (s, e) => { if (FolderCommandRequested != null) FolderCommandRequested(command, _strip.SelectedFolders()); };
+            return item;
+        }
+
+        // A menu item that opens the tab color palette (the same one as for sheets).
+        private ToolStripMenuItem PaletteItem(string text, Action<TabColorChoice> chosen)
+        {
+            var item = new ToolStripMenuItem(text);
+            var palette = new TabColorPalette();
+            var host = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
+            item.DropDown = new ToolStripDropDown { Padding = Padding.Empty };
+            item.DropDown.Items.Add(host);
+            palette.ColorChosen += choice =>
+            {
+                _folderMenu.Close();
+                chosen(choice);
+            };
+            item.DropDownOpening += (s, e) =>
+            {
+                palette.SetTheme(ThemeColorProvider != null ? ThemeColorProvider() : null);
+                host.Size = palette.Size;
+            };
+            return item;
         }
 
         // First-open width: 8 half-width characters plus the tab's paddings.

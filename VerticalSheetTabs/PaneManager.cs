@@ -100,6 +100,21 @@ namespace VerticalSheetTabs
             };
             control.FolderRenameRequested += (id, name) => RenameFolder(entry, id, name);
             control.NewFolderRequested += names => CreateFolder(entry, names);
+            control.FolderCommandRequested += (command, folders) => FolderCommand(entry, command, folders);
+            control.FolderColorRequested += (folders, choice) =>
+            {
+                foreach (string id in folders)
+                {
+                    FolderNode f = entry.Folders.FindFolder(id);
+                    if (f != null) f.Color = choice;
+                }
+                SyncSheets(entry);
+            };
+            control.FolderTabColorRequested += (folders, choice) =>
+            {
+                RefreshKeys(entry);
+                ApplyTabColor(entry, MemberNames(entry, folders), choice);
+            };
             control.DeleteKeyRequested += (sheets, folders) => DeleteItems(entry, sheets, folders);
             control.DeleteFoldersRequested += (folders, withSheets) =>
             {
@@ -797,6 +812,65 @@ namespace VerticalSheetTabs
             if (ws != null) { ws.Copy(before, after); return; }
             var ch = sheet as Excel.Chart;
             if (ch != null) ch.Copy(before, after);
+        }
+
+        // The names of all sheets of the folders, hidden ones too.
+        private static List<string> MemberNames(Entry entry, IList<string> folderIds)
+        {
+            var names = new List<string>();
+            foreach (string key in entry.Folders.SheetsOfFolders(folderIds))
+            {
+                int i = entry.Keys.IndexOf(key);
+                if (i >= 0 && i < entry.AllNames.Count) names.Add(entry.AllNames[i]);
+            }
+            return names;
+        }
+
+        // Bulk commands on the sheets of folders (Agents.md 12.4). Excel's own commands work on the
+        // selected sheets, so the visible sheets of the folders are selected first.
+        private void FolderCommand(Entry entry, string command, IList<string> folderIds)
+        {
+            try
+            {
+                RefreshKeys(entry);
+                List<string> all = MemberNames(entry, folderIds);
+                var visible = new List<string>();
+                var hidden = new List<object>();
+                foreach (string name in all)
+                {
+                    object sheet = entry.Workbook.Sheets[name];
+                    string n;
+                    if (IsVisibleSheet(sheet, out n)) visible.Add(name);
+                    else if (SheetVisibility(sheet) == Excel.XlSheetVisibility.xlSheetHidden) hidden.Add(sheet);
+                }
+
+                if (command == "unhide")
+                {
+                    foreach (object sheet in hidden)
+                    {
+                        var ws = sheet as Excel.Worksheet;
+                        if (ws != null) { ws.Visible = Excel.XlSheetVisibility.xlSheetVisible; continue; }
+                        var ch = sheet as Excel.Chart;
+                        if (ch != null) ch.Visible = Excel.XlSheetVisibility.xlSheetVisible;
+                    }
+                    SyncSheets(entry);
+                    return;
+                }
+                if (visible.Count == 0) return;
+                entry.Window.Activate();
+                SelectSheets(entry, visible, visible[0]);
+                switch (command)
+                {
+                    case "hide": RunExcelCommand(entry, "SheetHide"); break;
+                    case "protect": RunExcelCommand(entry, "SheetProtect"); break;
+                    case "movecopy": RunExcelCommand(entry, "SheetMoveOrCopy"); break;
+                }
+            }
+            catch (Exception)
+            {
+                ShowMessage("フォルダ内のシートの操作を完了できませんでした。");
+            }
+            SyncSheets(entry);
         }
 
         private void CreateFolder(Entry entry, IList<string> sheetNames)
