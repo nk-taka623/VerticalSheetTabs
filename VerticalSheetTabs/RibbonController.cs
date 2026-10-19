@@ -5,7 +5,8 @@ using Office = Microsoft.Office.Core;
 
 namespace VerticalSheetTabs
 {
-    // Ribbon button "タブ表示の設定" on the View tab.
+    // Ribbon button "タブ表示の設定" on the View tab, and the same item in the menu of Excel's own
+    // (horizontal) sheet tabs.
     [ComVisible(true)]
     public class RibbonController : Office.IRibbonExtensibility
     {
@@ -32,6 +33,13 @@ namespace VerticalSheetTabs
       </tab>
     </tabs>
   </ribbon>
+  <contextMenus>
+    <contextMenu idMso=""ContextMenuWorkbookPly"">
+      <button id=""VTabSettingsTabMenu"" label=""タブ表示の設定""
+              insertBeforeMso=""SheetDelete""
+              onAction=""OnSettingsClick"" />
+    </contextMenu>
+  </contextMenus>
 </customUI>";
         }
 
