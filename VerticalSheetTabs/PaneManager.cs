@@ -32,6 +32,10 @@ namespace VerticalSheetTabs
             // The sheet names (hidden ones too) the keys below were read for.
             public string KeySignature;
             public List<string> Keys = new List<string>();
+            // The names (all sheets, hidden ones too) in Excel's order that Keys belongs to.
+            public List<string> AllNames = new List<string>();
+            // True while the add-in changes the folders or the sheet order: no sync in between.
+            public bool Busy;
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -89,6 +93,15 @@ namespace VerticalSheetTabs
             control.MoveCopyRequested += () => RunExcelCommand(entry, "SheetMoveOrCopy");
             control.MoveRequested += (names, before, copy) => MoveOrCopySheets(entry, names, before, copy);
             control.FolderToggleRequested += id => ToggleFolder(entry, id);
+            control.FolderMoveRequested += (sheets, folders, into, bs, bf) => MoveItems(entry, sheets, folders, into, bs, bf);
+            control.FolderRenameRequested += (id, name) => RenameFolder(entry, id, name);
+            control.NewFolderRequested += names => CreateFolder(entry, names);
+            control.DeleteKeyRequested += (sheets, folders) => DeleteItems(entry, sheets, folders);
+            control.DeleteFoldersRequested += (folders, withSheets) =>
+            {
+                if (withSheets) DeleteItems(entry, new string[0], folders);
+                else DeleteFoldersOnly(entry, folders);
+            };
 
             ApplyMode(entry);
             SyncSheets(entry);
@@ -368,6 +381,7 @@ namespace VerticalSheetTabs
         // Returns false when Excel could not be asked (busy, or the window/workbook is gone).
         private static bool SyncSheets(Entry entry)
         {
+            if (entry.Busy) return true;
             try
             {
                 var names = new List<string>();
@@ -429,6 +443,7 @@ namespace VerticalSheetTabs
             if (signature != entry.KeySignature || entry.Keys.Count != allNames.Count)
             {
                 entry.Keys = FolderStore.SheetKeys(entry.Workbook, true);
+                entry.AllNames = new List<string>(allNames);
                 entry.KeySignature = signature;
                 entry.Folders.Reconcile(entry.Keys);
             }
@@ -447,17 +462,19 @@ namespace VerticalSheetTabs
                     if (nameOf.TryGetValue(node.SheetCode, out name)) rows.Add(new StripRow { Sheet = name });
                     continue;
                 }
-                rows.Add(new StripRow
+                var folderRow = new StripRow
                 {
                     FolderId = node.FolderId,
                     FolderName = node.Name,
                     Expanded = node.Expanded,
                     ColorBgr = FolderColorBgr(entry, node.Color)
-                });
-                if (!node.Expanded) continue;
+                };
+                rows.Add(folderRow);
                 foreach (string code in node.Sheets)
                 {
-                    if (nameOf.TryGetValue(code, out name)) rows.Add(new StripRow { Sheet = name, Indented = true });
+                    if (!nameOf.TryGetValue(code, out name)) continue;
+                    folderRow.Members.Add(name);
+                    if (node.Expanded) rows.Add(new StripRow { Sheet = name, Indented = true });
                 }
             }
             return rows;
@@ -475,6 +492,279 @@ namespace VerticalSheetTabs
             if (theme == null || pos < 0) return -1;
             System.Drawing.Color c = TabColorPalette.ApplyTint(theme[pos], choice.Tint);
             return c.R | (c.G << 8) | (c.B << 16);
+        }
+
+        // ---- folder commands (Agents.md chapter 12) ----
+
+        // Reads the sheets of the workbook now, gives them ids and brings the model in line with them.
+        private static void RefreshKeys(Entry entry)
+        {
+            var names = new List<string>();
+            foreach (object sheet in entry.Workbook.Sheets) names.Add(SheetName(sheet) ?? "?");
+            entry.Keys = FolderStore.SheetKeys(entry.Workbook, true);
+            entry.AllNames = names;
+            entry.KeySignature = string.Join("|", names);
+            entry.Folders.Reconcile(entry.Keys);
+        }
+
+        private static string KeyOf(Entry entry, string sheetName)
+        {
+            int i = entry.AllNames.IndexOf(sheetName);
+            return i >= 0 && i < entry.Keys.Count ? entry.Keys[i] : null;
+        }
+
+        private static List<string> KeysOf(Entry entry, IEnumerable<string> sheetNames)
+        {
+            var keys = new List<string>();
+            foreach (string n in sheetNames)
+            {
+                string k = KeyOf(entry, n);
+                if (k != null && !keys.Contains(k)) keys.Add(k);
+            }
+            return keys;
+        }
+
+        // Puts the sheets of the workbook in the order of the model (folders are runs of sheets), with
+        // as few moves as possible. A grouped selection would move along, so it is undone first and
+        // restored afterwards.
+        private void ApplyExcelOrder(Entry entry, IList<string> selectedNames, string activeName)
+        {
+            List<string> desired = entry.Folders.Flatten();
+            var current = new List<string>(entry.Keys);
+            if (desired.Count != current.Count || desired.SequenceEqual(current)) return;
+
+            bool screen = true;
+            try
+            {
+                screen = _app.ScreenUpdating;
+                _app.ScreenUpdating = false;
+                entry.Window.Activate();
+                UngroupSheets(entry);
+                for (int i = 0; i < desired.Count; i++)
+                {
+                    if (current[i] == desired[i]) continue;
+                    int j = current.IndexOf(desired[i]);
+                    if (j < 0) break;
+                    object sheet = entry.Workbook.Sheets[j + 1];
+                    object before = entry.Workbook.Sheets[i + 1];
+                    var ws = sheet as Excel.Worksheet;
+                    if (ws != null) ws.Move(before);
+                    else
+                    {
+                        var ch = sheet as Excel.Chart;
+                        if (ch != null) ch.Move(before);
+                    }
+                    current.RemoveAt(j);
+                    current.Insert(i, desired[i]);
+                }
+            }
+            catch (Exception)
+            {
+                ShowMessage("ブックの構造が保護されているため、シートを移動できません。");
+            }
+            finally
+            {
+                try { _app.ScreenUpdating = screen; } catch (Exception) { }
+            }
+            entry.KeySignature = null;
+            if (selectedNames != null && selectedNames.Count > 0 && activeName != null) SelectSheets(entry, selectedNames, activeName);
+        }
+
+        // Runs a change of the folders: the sheets are read, the change is made in the model, the
+        // sheet order of Excel follows, and the list is redrawn.
+        private void ChangeFolders(Entry entry, Func<bool> change, IList<string> selectedNames, string activeName)
+        {
+            if (entry.Busy) return;
+            entry.Busy = true;
+            try
+            {
+                RefreshKeys(entry);
+                if (!change()) return;
+                ApplyExcelOrder(entry, selectedNames, activeName);
+            }
+            catch (Exception)
+            {
+                ShowMessage("フォルダの操作を完了できませんでした。");
+            }
+            finally
+            {
+                entry.Busy = false;
+            }
+            entry.KeySignature = null;
+            SyncSheets(entry);
+        }
+
+        private string CurrentActive(Entry entry)
+        {
+            try
+            {
+                string name;
+                object active = entry.Window.ActiveSheet;
+                return active != null && IsVisibleSheet(active, out name) ? name : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private List<string> CurrentSelection(Entry entry)
+        {
+            var list = new List<string>();
+            try
+            {
+                foreach (object sheet in (System.Collections.IEnumerable)entry.Window.SelectedSheets)
+                {
+                    string n;
+                    if (IsVisibleSheet(sheet, out n)) list.Add(n);
+                }
+            }
+            catch (Exception)
+            {
+            }
+            return list;
+        }
+
+        private void MoveItems(Entry entry, IList<string> sheets, IList<string> folders, string into, string beforeSheet, string beforeFolder)
+        {
+            if (entry.Workbook.ProtectStructure)
+            {
+                ShowMessage("ブックの構造が保護されているため、シートを移動できません。");
+                return;
+            }
+            IList<string> selected = CurrentSelection(entry);
+            string active = CurrentActive(entry);
+            ChangeFolders(entry, () =>
+            {
+                List<string> keys = KeysOf(entry, sheets);
+                string beforeKey = beforeSheet == null ? null : KeyOf(entry, beforeSheet);
+                return entry.Folders.Move(keys, folders, into, beforeKey, beforeFolder);
+            }, selected, active);
+        }
+
+        private void CreateFolder(Entry entry, IList<string> sheetNames)
+        {
+            if (entry.Workbook.ProtectStructure)
+            {
+                ShowMessage("ブックの構造が保護されているため、シートを移動できません。");
+                return;
+            }
+            IList<string> selected = CurrentSelection(entry);
+            string active = CurrentActive(entry);
+            string createdId = null;
+            ChangeFolders(entry, () =>
+            {
+                List<string> keys = KeysOf(entry, sheetNames.Count > 0 ? sheetNames : (IList<string>)selected);
+                if (keys.Count == 0) return false;
+                int n = 1;
+                while (entry.Folders.Nodes.Any(x => x.IsFolder && x.Name == "フォルダ" + n)) n++;
+                createdId = entry.Folders.CreateFolder("フォルダ" + n, keys).FolderId;
+                return true;
+            }, selected, active);
+            if (createdId != null) entry.Control.BeginRenameFolder(createdId);
+        }
+
+        private static readonly char[] InvalidFolderChars = { ':', '\\', '/', '?', '*', '[', ']' };
+
+        private void RenameFolder(Entry entry, string folderId, string newName)
+        {
+            FolderNode folder = entry.Folders.FindFolder(folderId);
+            if (folder == null) return;
+            if (newName.Trim().Length == 0 || newName.Length > FolderModel.MaxNameLength
+                || newName.IndexOfAny(InvalidFolderChars) >= 0 || newName.StartsWith("'") || newName.EndsWith("'"))
+            {
+                ShowMessage("入力した名前は無効です。次の点を確認してください。\r\n"
+                    + "・名前が 31 文字を超えていない\r\n"
+                    + "・名前に次の文字が含まれていない: : \\ / ? * [ ]\r\n"
+                    + "・名前の先頭と末尾が ' (アポストロフィ) でない\r\n"
+                    + "・名前が空白になっていない");
+                return;
+            }
+            if (entry.Folders.Nodes.Any(n => n.IsFolder && n.FolderId != folderId
+                && string.Equals(n.Name, newName, StringComparison.OrdinalIgnoreCase)))
+            {
+                ShowMessage("その名前は既に使われています。別の名前を入力してください。");
+                return;
+            }
+            folder.Name = newName;
+            SyncSheets(entry);
+        }
+
+        // The folders go, their sheets stay where they are (outside any folder).
+        private void DeleteFoldersOnly(Entry entry, IList<string> folderIds)
+        {
+            foreach (string id in folderIds) entry.Folders.RemoveFolder(id);
+            SyncSheets(entry);
+        }
+
+        // Delete key / "delete folder and its sheets". Only sheets: Excel's own delete command (with
+        // its own confirmation). With folders: our confirmation, then the sheets of the folders and
+        // the selected sheets are deleted without Excel's prompts.
+        private void DeleteItems(Entry entry, IList<string> sheetNames, IList<string> folderIds)
+        {
+            if (folderIds.Count == 0)
+            {
+                RunExcelCommand(entry, "SheetDelete");
+                return;
+            }
+            if (entry.Workbook.ProtectStructure)
+            {
+                ShowMessage("ブックの構造が保護されているため、シートを削除できません。");
+                return;
+            }
+            var result = System.Windows.Forms.MessageBox.Show(new ExcelWindowOwner(_app.Hwnd),
+                "フォルダと中のシートを削除しますが、よろしいですか？", "Microsoft Excel",
+                System.Windows.Forms.MessageBoxButtons.YesNo, System.Windows.Forms.MessageBoxIcon.Warning);
+            if (result != System.Windows.Forms.DialogResult.Yes) return;
+
+            if (entry.Busy) return;
+            entry.Busy = true;
+            bool alerts = true;
+            try
+            {
+                RefreshKeys(entry);
+                var doomed = new HashSet<string>(KeysOf(entry, sheetNames));
+                foreach (string k in entry.Folders.SheetsOfFolders(folderIds)) doomed.Add(k);
+
+                // Excel keeps at least one visible sheet
+                bool survivor = false;
+                for (int i = 0; i < entry.Keys.Count && !survivor; i++)
+                {
+                    if (doomed.Contains(entry.Keys[i])) continue;
+                    string n;
+                    if (IsVisibleSheet(entry.Workbook.Sheets[i + 1], out n)) survivor = true;
+                }
+                if (!survivor)
+                {
+                    ShowMessage("ブックには、表示されているシートが少なくとも1つ必要です。");
+                    return;
+                }
+
+                alerts = _app.DisplayAlerts;
+                _app.DisplayAlerts = false;
+                for (int i = entry.Keys.Count - 1; i >= 0; i--)
+                {
+                    if (!doomed.Contains(entry.Keys[i])) continue;
+                    object sheet = entry.Workbook.Sheets[i + 1];
+                    var ws = sheet as Excel.Worksheet;
+                    if (ws != null) { ws.Delete(); continue; }
+                    var ch = sheet as Excel.Chart;
+                    if (ch != null) ch.Delete();
+                }
+                entry.Folders.RemoveSheets(doomed);
+                entry.Folders.Nodes.RemoveAll(n => n.IsFolder && folderIds.Contains(n.FolderId));
+            }
+            catch (Exception)
+            {
+                ShowMessage("シートを削除できませんでした。");
+            }
+            finally
+            {
+                try { _app.DisplayAlerts = alerts; } catch (Exception) { }
+                entry.Busy = false;
+            }
+            entry.KeySignature = null;
+            SyncSheets(entry);
         }
 
         private void ToggleFolder(Entry entry, string folderId)
@@ -748,12 +1038,15 @@ namespace VerticalSheetTabs
         // selection with Select(false) does not change which sheet is active.
         private static void SelectSheets(Entry entry, IList<string> names, string active)
         {
+            bool busyBefore = entry.Busy;
             try
             {
                 // Already the selection in Excel: do not touch it, a click on the active tab must not
                 // move the focus into the grid (that would cancel a double click that renames).
                 if (SameSelection(entry, names, active)) return;
 
+                // Selecting sheet by sheet raises Excel's events; a sync in between would see a half-made selection.
+                entry.Busy = true;
                 var ordered = new List<string> { active };
                 foreach (string n in names) if (n != active) ordered.Add(n);
 
@@ -779,6 +1072,10 @@ namespace VerticalSheetTabs
             catch (Exception)
             {
                 // The sheet may have just been renamed or deleted; the next sync fixes the list.
+            }
+            finally
+            {
+                entry.Busy = busyBefore;
             }
         }
 

@@ -279,6 +279,140 @@ namespace VerticalSheetTabs
             return ToXml() != before;
         }
 
+        // ---- editing (the caller then puts Excel's sheet order in line with Flatten()) ----
+
+        public FolderNode FindFolder(string folderId)
+        {
+            return Nodes.FirstOrDefault(n => n.IsFolder && n.FolderId == folderId);
+        }
+
+        public static FolderNode NewFolder(string name)
+        {
+            return new FolderNode { FolderId = Guid.NewGuid().ToString("N"), Name = name };
+        }
+
+        // A new folder holding these sheets, placed where the first of them is now.
+        public FolderNode CreateFolder(string name, IList<string> sheetKeys)
+        {
+            List<string> order = Flatten();
+            string first = order.FirstOrDefault(k => sheetKeys.Contains(k));
+            FolderNode folder = NewFolder(name);
+            FolderNode top = first == null ? null : Nodes.FirstOrDefault(n => n.IsFolder ? n.Sheets.Contains(first) : n.SheetCode == first);
+            int at = top == null ? Nodes.Count : Nodes.IndexOf(top);
+            Nodes.Insert(at, folder);
+            if (first != null) Move(sheetKeys, new string[0], folder.FolderId, null, null);
+            return folder;
+        }
+
+        // Deletes the folder only: its sheets stay, where they are, outside any folder.
+        public bool RemoveFolder(string folderId)
+        {
+            int i = Nodes.FindIndex(n => n.IsFolder && n.FolderId == folderId);
+            if (i < 0) return false;
+            FolderNode f = Nodes[i];
+            Nodes.RemoveAt(i);
+            Nodes.InsertRange(i, f.Sheets.Select(k => new FolderNode { SheetCode = k }));
+            return true;
+        }
+
+        // Takes sheets out of the model (they were deleted in Excel).
+        public void RemoveSheets(ICollection<string> sheetKeys)
+        {
+            foreach (FolderNode n in Nodes.Where(n => n.IsFolder)) n.Sheets.RemoveAll(sheetKeys.Contains);
+            Nodes.RemoveAll(n => !n.IsFolder && sheetKeys.Contains(n.SheetCode));
+        }
+
+        // The sheets of the given folders, in display order.
+        public List<string> SheetsOfFolders(ICollection<string> folderIds)
+        {
+            var list = new List<string>();
+            foreach (FolderNode n in Nodes)
+            {
+                if (n.IsFolder && folderIds.Contains(n.FolderId)) list.AddRange(n.Sheets);
+            }
+            return list;
+        }
+
+        // Moves sheets and whole folders (with their sheets) to a new place. The moved things keep
+        // the order they have now. Sheets of a moved folder travel with it.
+        //  - intoFolderId != null: the sheets go into that folder, in front of beforeSheet (null = at the end);
+        //    folders cannot go into a folder, so moved folders are ignored then;
+        //  - otherwise everything goes to the top level, in front of the loose sheet beforeSheet, or the
+        //    folder beforeFolderId, or at the end when both are null. Sheets arriving there are outside any folder.
+        // Returns false when nothing was moved.
+        public bool Move(IList<string> sheetKeys, IList<string> folderIds, string intoFolderId, string beforeSheet, string beforeFolderId)
+        {
+            var movedFolders = new HashSet<string>(folderIds);
+            if (intoFolderId != null)
+            {
+                if (movedFolders.Contains(intoFolderId)) return false;
+                movedFolders.Clear();
+            }
+            var want = new HashSet<string>(sheetKeys);
+
+            // what moves, in display order: top-level units (loose sheets, whole folders, sheets out of folders)
+            var old = new List<FolderNode>(Nodes);
+            var units = new List<FolderNode>();
+            var movedSheets = new HashSet<string>();
+            foreach (FolderNode n in old)
+            {
+                if (!n.IsFolder)
+                {
+                    if (want.Contains(n.SheetCode)) { units.Add(n); movedSheets.Add(n.SheetCode); }
+                }
+                else if (movedFolders.Contains(n.FolderId)) units.Add(n);
+                else
+                {
+                    foreach (string key in n.Sheets)
+                    {
+                        if (want.Contains(key)) { units.Add(new FolderNode { SheetCode = key }); movedSheets.Add(key); }
+                    }
+                }
+            }
+            if (units.Count == 0) return false;
+
+            // an anchor that moves itself is replaced by the next top-level entry that stays
+            Func<FolderNode, bool> moves = n => n.IsFolder ? movedFolders.Contains(n.FolderId) : movedSheets.Contains(n.SheetCode);
+            FolderNode anchor = null;
+            if (intoFolderId == null)
+            {
+                if (beforeSheet != null) anchor = old.FirstOrDefault(n => !n.IsFolder && n.SheetCode == beforeSheet);
+                else if (beforeFolderId != null) anchor = old.FirstOrDefault(n => n.IsFolder && n.FolderId == beforeFolderId);
+                if (anchor != null && moves(anchor))
+                {
+                    anchor = old.Skip(old.IndexOf(anchor) + 1).FirstOrDefault(n => !moves(n));
+                }
+            }
+
+            if (intoFolderId != null && beforeSheet != null && movedSheets.Contains(beforeSheet))
+            {
+                FolderNode inFolder = FindFolder(intoFolderId);
+                beforeSheet = inFolder == null ? null
+                    : inFolder.Sheets.Skip(inFolder.Sheets.IndexOf(beforeSheet) + 1).FirstOrDefault(k => !movedSheets.Contains(k));
+            }
+
+            if (intoFolderId != null && FindFolder(intoFolderId) == null) return false;
+
+            // take everything out
+            foreach (FolderNode n in Nodes.Where(n => n.IsFolder)) n.Sheets.RemoveAll(movedSheets.Contains);
+            Nodes.RemoveAll(n => moves(n));
+
+            if (intoFolderId != null)
+            {
+                FolderNode target = FindFolder(intoFolderId);
+                if (target == null) { Nodes = old; return false; }
+                int at = beforeSheet == null ? -1 : target.Sheets.IndexOf(beforeSheet);
+                var keys = units.Select(u => u.SheetCode).ToList();
+                if (at < 0) target.Sheets.AddRange(keys);
+                else target.Sheets.InsertRange(at, keys);
+                return true;
+            }
+
+            int index = anchor == null ? Nodes.Count : Nodes.IndexOf(anchor);
+            Nodes.InsertRange(index < 0 ? Nodes.Count : index, units);
+            return true;
+        }
+
         // A short text form for tests and logs: "[Name: a,b] c [Other:]".
         public string Describe()
         {

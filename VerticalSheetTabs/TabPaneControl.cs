@@ -34,6 +34,14 @@ namespace VerticalSheetTabs
         public event Action<IList<string>, string, bool> MoveRequested;
         // A folder row was clicked (folder id): open or close it.
         public event Action<string> FolderToggleRequested;
+        public event Action<IList<string>, IList<string>, string, string, string> FolderMoveRequested;
+        public event Action<string, string> FolderRenameRequested;
+        // (selected sheets) "new folder" from the sheet menu.
+        public event Action<IList<string>> NewFolderRequested;
+        // (selected folders, selected sheets) the Delete key.
+        public event Action<IList<string>, IList<string>> DeleteKeyRequested;
+        // (folders, also delete their sheets) from the folder menu.
+        public event Action<IList<string>, bool> DeleteFoldersRequested;
 
         // The "unhide" item is only enabled while the workbook has hidden sheets.
         public bool HasHiddenSheets { get; set; }
@@ -46,6 +54,7 @@ namespace VerticalSheetTabs
         public Func<Color[]> ThemeColorProvider { get; set; }
 
         private readonly ContextMenuStrip _menu = new ContextMenuStrip();
+        private readonly ContextMenuStrip _folderMenu = new ContextMenuStrip();
 
         public TabPaneControl()
         {
@@ -55,6 +64,9 @@ namespace VerticalSheetTabs
             _strip.MoveRequested += (names, before, copy) => { if (MoveRequested != null) MoveRequested(names, before, copy); };
 
             _strip.FolderToggleRequested += id => { if (FolderToggleRequested != null) FolderToggleRequested(id); };
+            _strip.FolderMoveRequested += (sheets, folders, into, bs, bf) => { if (FolderMoveRequested != null) FolderMoveRequested(sheets, folders, into, bs, bf); };
+            _strip.FolderRenameRequested += (id, name) => { if (FolderRenameRequested != null) FolderRenameRequested(id, name); };
+            _strip.DeleteKeyRequested += (sheets, folders) => { if (DeleteKeyRequested != null) DeleteKeyRequested(sheets, folders); };
 
             // The "+" (adds a sheet after the active one, like Excel's own) is drawn by the strip.
             _strip.AddRequested += () => { if (AddRequested != null) AddRequested(); };
@@ -105,6 +117,10 @@ namespace VerticalSheetTabs
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(selectAll);
             _menu.Items.Add(ungroup);
+            _menu.Items.Add(new ToolStripSeparator());
+            var newFolder = new ToolStripMenuItem("新しいフォルダ(&F)");
+            newFolder.Click += (s, e) => { if (NewFolderRequested != null) NewFolderRequested(_strip.SelectedInOrder()); };
+            _menu.Items.Add(newFolder);
             _menu.Opening += (s, e) =>
             {
                 bool free = !StructureProtected;
@@ -116,7 +132,26 @@ namespace VerticalSheetTabs
                 unhide.Enabled = free && HasHiddenSheets;
                 protect.Text = ActiveSheetProtected ? "シート保護の解除(&P)" : "シートの保護(&P)...";
                 ungroup.Visible = _strip.SelectedCount > 1;
+                newFolder.Enabled = free;
             };
+
+            // The menu of a folder row (more commands come with step 8-5).
+            var folderRename = new ToolStripMenuItem("フォルダ名の変更(&R)");
+            folderRename.Click += (s, e) => _strip.BeginRenameFolder(_strip.RightClickedFolder);
+            var folderDelete = new ToolStripMenuItem("フォルダの削除(&D)");
+            folderDelete.Click += (s, e) => { if (DeleteFoldersRequested != null) DeleteFoldersRequested(_strip.SelectedFolders(), false); };
+            var folderDeleteAll = new ToolStripMenuItem("フォルダと中のシートを削除(&X)");
+            folderDeleteAll.Click += (s, e) => { if (DeleteFoldersRequested != null) DeleteFoldersRequested(_strip.SelectedFolders(), true); };
+            _folderMenu.Items.Add(folderRename);
+            _folderMenu.Items.Add(folderDelete);
+            _folderMenu.Items.Add(folderDeleteAll);
+            _folderMenu.Opening += (s, e) =>
+            {
+                folderRename.Enabled = _strip.SelectedFolders().Count <= 1;
+                folderDeleteAll.Enabled = !StructureProtected;
+            };
+            _strip.SheetMenu = _menu;
+            _strip.FolderMenu = _folderMenu;
             _strip.ContextMenuStrip = _menu;
         }
 
@@ -131,6 +166,11 @@ namespace VerticalSheetTabs
             var item = new ToolStripMenuItem(text);
             item.Click += (s, e) => { Action a = handler(); if (a != null) a(); };
             return item;
+        }
+
+        public void BeginRenameFolder(string folderId)
+        {
+            _strip.BeginRenameFolder(folderId);
         }
 
         public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors, IList<StripRow> rows)

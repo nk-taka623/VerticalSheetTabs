@@ -21,12 +21,14 @@ namespace VerticalSheetTabs
         public string FolderName;
         public bool Expanded;
         public int ColorBgr = -1;
+        // Folder: its visible sheets (also while it is closed).
+        public List<string> Members = new List<string>();
 
         public bool IsFolder { get { return FolderId != null; } }
 
         public string Signature()
         {
-            return IsFolder ? "F|" + FolderId + "|" + FolderName + "|" + Expanded + "|" + ColorBgr : "S|" + Sheet + "|" + Indented;
+            return IsFolder ? "F|" + FolderId + "|" + FolderName + "|" + Expanded + "|" + ColorBgr + "|" + string.Join("|", Members) : "S|" + Sheet + "|" + Indented;
         }
     }
 
@@ -85,6 +87,16 @@ namespace VerticalSheetTabs
         // Activating a sheet moves the focus into Excel, which would cancel a drag that has just
         // started. So a left click only reaches Excel when the button is released.
         private bool _selectionPending;
+        // Selected folders (a selected folder has all its sheets selected as well) and where Shift+click starts.
+        private HashSet<string> _selFolders = new HashSet<string>();
+        private string _anchorFolder;
+        private List<string> _dragSheets = new List<string>();
+        private List<string> _dragFolders = new List<string>();
+        // Where the dragged things would land: inside a folder, or on the top level.
+        private bool _dropInside;
+        private string _dropInto, _dropBeforeSheet, _dropBeforeFolder;
+        private string _editingFolderId;
+        private string _rightFolder;
         private bool _plusHot, _plusDown;
         // The full name of a tab whose text is cut off is shown as a tool tip (Excel's own tabs
         // grow to fit the name, so they never need one).
@@ -101,7 +113,19 @@ namespace VerticalSheetTabs
         public event Action AddRequested;
         // The mark of a folder row was clicked (folder id).
         public event Action<string> FolderToggleRequested;
+        // (sheets, folders, the folder they are dropped into or null, the loose sheet or the folder
+        // they are dropped in front of; all null = at the end)
+        public event Action<IList<string>, IList<string>, string, string, string> FolderMoveRequested;
+        // (folder id, new name) after the user finishes editing a folder name.
+        public event Action<string, string> FolderRenameRequested;
+        // The Delete key: (selected sheets, selected folders).
+        public event Action<IList<string>, IList<string>> DeleteKeyRequested;
 
+        public ContextMenuStrip SheetMenu { get; set; }
+        public ContextMenuStrip FolderMenu { get; set; }
+        // The folder a right click opened the folder menu on.
+        public string RightClickedFolder { get { return _rightFolder; } }
+        public List<string> SelectedFolders() { return _selFolders.ToList(); }
         // With the workbook structure protected the tabs can be neither dragged nor renamed.
         public bool StructureProtected { get; set; }
 
@@ -205,6 +229,7 @@ namespace VerticalSheetTabs
                 _active = activeName;
                 _selected = new HashSet<string>(selected);
                 if (activeChanged) EnsureVisible(RowIndexOf(_active));
+                PruneFolders();
             }
             Invalidate();
         }
@@ -237,6 +262,29 @@ namespace VerticalSheetTabs
         }
 
         private bool HasFolders { get { return _rows.Any(r => r.IsFolder); } }
+
+        // A folder stays selected only while all its sheets are.
+        private void PruneFolders()
+        {
+            var gone = _selFolders.Where(id =>
+            {
+                StripRow r = _rows.FirstOrDefault(x => x.IsFolder && x.FolderId == id);
+                return r == null || (r.Members.Count > 0 && !r.Members.All(_selected.Contains));
+            }).ToList();
+            foreach (string id in gone) _selFolders.Remove(id);
+            if (_anchorFolder != null && !_rows.Any(x => x.IsFolder && x.FolderId == _anchorFolder)) _anchorFolder = null;
+        }
+
+        private StripRow FolderRow(string id)
+        {
+            return _rows.FirstOrDefault(x => x.IsFolder && x.FolderId == id);
+        }
+
+        // Right of the open/closed mark: a click left of this opens or closes the folder.
+        private int FolderMarkRight()
+        {
+            return Px(InsetLeft + TextPadLeft + FolderMarkWidth + 4);
+        }
 
         public int IndexFromPoint(Point p)
         {
@@ -355,7 +403,7 @@ namespace VerticalSheetTabs
             if (_dropIndex >= 0 && _rows.Count > 0)
             {
                 int y = _dropIndex < _rows.Count ? RowRect(_dropIndex).Top : RowRect(_rows.Count - 1).Bottom;
-                DrawDropMarker(g, y);
+                DrawDropMarker(g, y, _dropInside ? Px(FolderIndent) : 0);
             }
             g.ResetClip();
 
@@ -364,10 +412,10 @@ namespace VerticalSheetTabs
 
         // Excel marks the place a dragged tab will land with a small black triangle; here it points
         // into the stack from the left edge.
-        private void DrawDropMarker(Graphics g, int y)
+        private void DrawDropMarker(Graphics g, int y, int x)
         {
             int w = Px(MarkerWidth), h = Px(MarkerHeight);
-            var points = new[] { new Point(0, y - h / 2), new Point(w, y), new Point(0, y + h / 2) };
+            var points = new[] { new Point(x, y - h / 2), new Point(x + w, y), new Point(x, y + h / 2) };
             using (var brush = new SolidBrush(Theme.DropMarker)) g.FillPolygon(brush, points);
         }
 
@@ -399,6 +447,16 @@ namespace VerticalSheetTabs
         {
             int left = row.Left + Px(InsetLeft);
             int right = row.Right - Px(InsetRight);
+            bool selected = _selFolders.Contains(folder.FolderId);
+            if (selected)
+            {
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                using (GraphicsPath path = RoundedRect(body, Px(CornerRadius)))
+                {
+                    using (var brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
+                    using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
+                }
+            }
             if (folder.ColorBgr >= 0)
             {
                 Color c = Color.FromArgb(folder.ColorBgr & 0xFF, (folder.ColorBgr >> 8) & 0xFF, (folder.ColorBgr >> 16) & 0xFF);
@@ -417,7 +475,7 @@ namespace VerticalSheetTabs
             Point[] chevron = folder.Expanded
                 ? new[] { new Point(cx - h / 2, cy - w / 2), new Point(cx, cy + w / 2), new Point(cx + h / 2, cy - w / 2) }
                 : new[] { new Point(cx - w / 2, cy - h / 2), new Point(cx + w / 2, cy), new Point(cx - w / 2, cy + h / 2) };
-            using (var pen = new Pen(Theme.InactiveText, Math.Max(1.5f, Px(1.4))))
+            using (var pen = new Pen(selected ? TextColor : Theme.InactiveText, Math.Max(1.5f, Px(1.4))))
             {
                 pen.LineJoin = LineJoin.Miter;
                 g.DrawLines(pen, chevron);
@@ -426,15 +484,18 @@ namespace VerticalSheetTabs
             int textLeft = left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
             var textRect = new Rectangle(textLeft, row.Top, Math.Max(1, right - textLeft - Px(TextPadRight)), row.Height);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            using (var bold = new Font(TabFont, FontStyle.Bold))
-            using (var brush = new SolidBrush(Theme.InactiveText))
-            using (var format = new StringFormat(StringFormat.GenericDefault))
+            if (_editor == null || _editingFolderId != folder.FolderId)
             {
-                format.Alignment = StringAlignment.Near;
-                format.LineAlignment = StringAlignment.Center;
-                format.Trimming = StringTrimming.EllipsisCharacter;
-                format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
-                g.DrawString(folder.FolderName, bold, brush, textRect, format);
+                using (var bold = new Font(TabFont, FontStyle.Bold))
+                using (var brush = new SolidBrush(selected ? TextColor : Theme.InactiveText))
+                using (var format = new StringFormat(StringFormat.GenericDefault))
+                {
+                    format.Alignment = StringAlignment.Near;
+                    format.LineAlignment = StringAlignment.Center;
+                    format.Trimming = StringTrimming.EllipsisCharacter;
+                    format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
+                    g.DrawString(folder.FolderName, bold, brush, textRect, format);
+                }
             }
             DrawSeparator(g, row);
         }
@@ -574,21 +635,48 @@ namespace VerticalSheetTabs
             }
             int index = IndexFromPoint(e.Location);
             if (index < 0) return;
-            if (_rows[index].IsFolder)
+            StripRow row = _rows[index];
+            bool ctrl = (ModifierKeys & Keys.Control) != 0;
+            bool shift = (ModifierKeys & Keys.Shift) != 0;
+
+            if (row.IsFolder)
             {
-                // Selecting folders comes with the folder commands; for now a click opens or closes it.
-                if (e.Button == MouseButtons.Left && FolderToggleRequested != null) FolderToggleRequested(_rows[index].FolderId);
+                if (e.Button == MouseButtons.Left && e.X <= FolderMarkRight())
+                {
+                    // the mark opens and closes the folder
+                    if (FolderToggleRequested != null) FolderToggleRequested(row.FolderId);
+                    return;
+                }
+                if (e.Button == MouseButtons.Left)
+                {
+                    _dragIndex = index;
+                    _dragOrigin = e.Location;
+                    SelectFolderByClick(row, index, ctrl, shift);
+                    _selectionPending = row.Members.Count > 0;
+                    Invalidate();
+                    return;
+                }
+                if (e.Button == MouseButtons.Right)
+                {
+                    _rightFolder = row.FolderId;
+                    if (SheetMenu != null || FolderMenu != null) ContextMenuStrip = FolderMenu;
+                    if (!_selFolders.Contains(row.FolderId)) SelectFolderByClick(row, index, false, false);
+                    Invalidate();
+                    if (row.Members.Count > 0) Raise();
+                }
                 return;
             }
-            string name = _rows[index].Sheet;
+            string name = row.Sheet;
+            if (SheetMenu != null) ContextMenuStrip = SheetMenu;
 
             if (e.Button == MouseButtons.Left)
             {
                 _dragIndex = index;
                 _dragOrigin = e.Location;
 
-                if ((ModifierKeys & Keys.Control) != 0)
+                if (ctrl)
                 {
+                    _anchorFolder = null;
                     if (_selected.Contains(name) && _selected.Count > 1)
                     {
                         _selected.Remove(name);
@@ -600,22 +688,24 @@ namespace VerticalSheetTabs
                         _active = name;
                     }
                 }
-                else if ((ModifierKeys & Keys.Shift) != 0 && _names.IndexOf(_active) >= 0)
+                else if (shift && (_anchorFolder != null || _names.IndexOf(_active) >= 0))
                 {
-                    int a = _names.IndexOf(_active);
-                    int lo = Math.Min(a, _names.IndexOf(name)), hi = Math.Max(a, _names.IndexOf(name));
-                    _selected = new HashSet<string>(_names.Skip(lo).Take(hi - lo + 1));
-                    // the anchor stays the active sheet
+                    SelectRange(index);
+                    // the anchor stays
                 }
                 else if (_selected.Contains(name) && _selected.Count > 1 && _selected.Count < _names.Count)
                 {
+                    _anchorFolder = null;
                     _active = name; // inside a group: switch the active sheet, keep the group
                 }
                 else
                 {
+                    _anchorFolder = null;
+                    _selFolders.Clear();
                     _selected = new HashSet<string> { name };
                     _active = name;
                 }
+                PruneFolders();
                 _selectionPending = true;
                 Invalidate();
                 return;
@@ -625,10 +715,70 @@ namespace VerticalSheetTabs
             // Like Excel, a right click on a sheet outside the group ungroups and activates it;
             // inside the group it only makes that sheet the active one. Excel needs to know now,
             // because the menu commands act on the active sheet(s).
-            if (!_selected.Contains(name)) _selected = new HashSet<string> { name };
+            if (!_selected.Contains(name)) { _selected = new HashSet<string> { name }; _selFolders.Clear(); }
             _active = name;
+            PruneFolders();
             Invalidate();
             Raise();
+        }
+
+        // A click on a folder row: the folder and all its sheets become selected (Ctrl adds or removes
+        // it, Shift takes the rows from the anchor to here).
+        private void SelectFolderByClick(StripRow row, int index, bool ctrl, bool shift)
+        {
+            if (shift && (_anchorFolder != null || _names.IndexOf(_active) >= 0))
+            {
+                SelectRange(index);
+                return;
+            }
+            _anchorFolder = row.FolderId;
+            if (ctrl)
+            {
+                if (_selFolders.Contains(row.FolderId))
+                {
+                    _selFolders.Remove(row.FolderId);
+                    foreach (string m in row.Members) _selected.Remove(m);
+                    if (_selected.Count == 0 && _active != null) _selected.Add(_active);
+                    else if (!_selected.Contains(_active)) _active = SelectedInOrder().FirstOrDefault();
+                }
+                else
+                {
+                    _selFolders.Add(row.FolderId);
+                    foreach (string m in row.Members) _selected.Add(m);
+                    if (row.Members.Count > 0) _active = row.Members[0];
+                }
+                return;
+            }
+            if (_selFolders.Contains(row.FolderId) && _selFolders.Count + _selected.Count > 1 && row.Members.All(_selected.Contains))
+            {
+                return; // a click inside a selection keeps it (a drag may follow)
+            }
+            _selFolders = new HashSet<string> { row.FolderId };
+            if (row.Members.Count > 0)
+            {
+                _selected = new HashSet<string>(row.Members);
+                _active = row.Members[0];
+            }
+        }
+
+        // Selects every row from the anchor (the last clicked folder, otherwise the active sheet) to this one.
+        private void SelectRange(int index)
+        {
+            int a = _anchorFolder != null ? _rows.FindIndex(r => r.IsFolder && r.FolderId == _anchorFolder) : RowIndexOf(_active);
+            if (a < 0) a = index;
+            int lo = Math.Min(a, index), hi = Math.Max(a, index);
+            var sheets = new HashSet<string>();
+            var folders = new HashSet<string>();
+            for (int i = lo; i <= hi; i++)
+            {
+                StripRow r = _rows[i];
+                if (r.IsFolder) { folders.Add(r.FolderId); foreach (string m in r.Members) sheets.Add(m); }
+                else sheets.Add(r.Sheet);
+            }
+            if (sheets.Count == 0) return;
+            _selFolders = folders;
+            _selected = sheets;
+            if (!_selected.Contains(_active)) _active = SelectedInOrder().First();
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
@@ -655,7 +805,22 @@ namespace VerticalSheetTabs
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
+            if (e.KeyCode == Keys.Delete)
+            {
+                e.Handled = true;
+                if (!StructureProtected && DeleteKeyRequested != null) DeleteKeyRequested(SelectedInOrder(), _selFolders.ToList());
+                return;
+            }
+            if (e.KeyCode == Keys.F2)
+            {
+                e.Handled = true;
+                if (_selFolders.Count == 1 && _selected.Count <= FolderRow(_selFolders.First()).Members.Count) BeginRenameFolder(_selFolders.First());
+                else BeginRenameActive();
+                return;
+            }
             if (e.KeyCode != Keys.Up && e.KeyCode != Keys.Down) return;
+            _selFolders.Clear();
+            _anchorFolder = null;
             int i = RowIndexOf(_active) + (e.KeyCode == Keys.Down ? 1 : -1);
             while (i >= 0 && i < _rows.Count && _rows[i].IsFolder) i += e.KeyCode == Keys.Down ? 1 : -1;
             if (i < 0 || i >= _rows.Count) return;
@@ -714,23 +879,26 @@ namespace VerticalSheetTabs
             base.OnMouseMove(e);
             SetPlusHot(!StructureProtected && PlusButtonRect().Contains(e.Location));
             UpdateTip(e.Location);
-            // Moving sheets and folders by drag comes with the folder commands (Agents.md 12.3, 8-3).
-            if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected || HasFolders) return;
+            if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected) return;
             Size drag = SystemInformation.DragSize;
             if (Math.Abs(e.X - _dragOrigin.X) < drag.Width && Math.Abs(e.Y - _dragOrigin.Y) < drag.Height) return;
 
             int index = _dragIndex;
             _dragIndex = -1;
             _selectionPending = false; // a drag does not change the selection in Excel by itself
-            if (index >= _rows.Count || _rows[index].IsFolder) return;
+            if (index >= _rows.Count) return;
 
-            // Dragging a sheet of the group takes the whole group along.
-            string name = _rows[index].Sheet;
-            _dragNames = _selected.Contains(name) ? SelectedInOrder() : new List<string> { name };
+            // Dragging something selected takes the whole selection along (sheets and folders).
+            StripRow row = _rows[index];
+            bool inSelection = row.IsFolder || _selected.Contains(row.Sheet);
+            _dragSheets = inSelection ? SelectedInOrder() : new List<string> { row.Sheet };
+            _dragFolders = inSelection ? _selFolders.ToList() : new List<string>();
+            if (row.IsFolder && !_dragFolders.Contains(row.FolderId)) _dragFolders.Add(row.FolderId);
+            _dragNames = _dragSheets;
             _dragging = true;
             try
             {
-                DoDragDrop(name, DragDropEffects.Move | DragDropEffects.Copy);
+                DoDragDrop(row.IsFolder ? row.FolderName : row.Sheet, DragDropEffects.Move | DragDropEffects.Copy);
             }
             finally
             {
@@ -753,11 +921,13 @@ namespace VerticalSheetTabs
                 e.Effect = DragDropEffects.None;
                 return;
             }
-            e.Effect = IsCopy(e) ? DragDropEffects.Copy : DragDropEffects.Move;
+            // With folders only moving is offered (copying comes with step 8-4).
+            e.Effect = !HasFolders && IsCopy(e) ? DragDropEffects.Copy : DragDropEffects.Move;
 
             Point p = PointToClient(new Point(e.X, e.Y));
             ScrollNearEdge(p);
-            SetDropIndex(InsertIndexAt(p));
+            if (HasFolders) ResolveFolderDrop(p);
+            else { _dropInside = false; _dropInto = _dropBeforeSheet = _dropBeforeFolder = null; SetDropIndex(InsertIndexAt(p)); }
         }
 
         protected override void OnDragLeave(EventArgs e)
@@ -770,8 +940,15 @@ namespace VerticalSheetTabs
         {
             base.OnDragDrop(e);
             int target = _dropIndex;
+            string into = _dropInto, beforeSheet = _dropBeforeSheet, beforeFolder = _dropBeforeFolder;
             SetDropIndex(-1);
-            if (!_dragging || target < 0 || _dragNames.Count == 0) return;
+            if (!_dragging || target < 0 || _dragNames.Count + _dragFolders.Count == 0) return;
+
+            if (HasFolders)
+            {
+                if (FolderMoveRequested != null) FolderMoveRequested(_dragSheets, _dragFolders, into, beforeSheet, beforeFolder);
+                return;
+            }
             bool copy = IsCopy(e);
 
             // Dropping the sheets where they already are changes nothing (when they sit together).
@@ -790,6 +967,66 @@ namespace VerticalSheetTabs
             if (_dropIndex == index) return;
             _dropIndex = index;
             Invalidate();
+        }
+
+        // The row that owns an indented row: the folder row above it.
+        private int OwnerRow(int index)
+        {
+            for (int i = index; i >= 0; i--) if (_rows[i].IsFolder) return i;
+            return -1;
+        }
+
+        // Works out where the dragged things would land. Sheets may go into a folder (between its
+        // sheets, or at its end when the pointer is right of the indent), folders only to the top level.
+        private void ResolveFolderDrop(Point p)
+        {
+            bool foldersDragged = _dragFolders.Count > 0;
+            int b = InsertIndexAt(p);
+            StripRow prev = b > 0 ? _rows[b - 1] : null;
+            StripRow next = b < _rows.Count ? _rows[b] : null;
+            bool right = p.X >= Px(InsetLeft + FolderIndent / 2);
+            bool inside = false;
+            string into = null, beforeSheet = null, beforeFolder = null;
+
+            if (next != null && next.Indented)
+            {
+                int owner = OwnerRow(b);
+                if (!foldersDragged)
+                {
+                    inside = true;
+                    into = _rows[owner].FolderId;
+                    beforeSheet = next.Sheet;
+                }
+                else if (prev != null && prev.IsFolder)
+                {
+                    b = owner; // in front of the folder
+                    beforeFolder = _rows[owner].FolderId;
+                }
+                else
+                {
+                    int after = b;
+                    while (after < _rows.Count && _rows[after].Indented) after++;
+                    b = after;
+                    next = after < _rows.Count ? _rows[after] : null;
+                    if (next != null) { if (next.IsFolder) beforeFolder = next.FolderId; else beforeSheet = next.Sheet; }
+                }
+            }
+            else if (!foldersDragged && right && prev != null && (prev.Indented || (prev.IsFolder && prev.Expanded)))
+            {
+                inside = true;
+                into = _rows[prev.Indented ? OwnerRow(b - 1) : b - 1].FolderId;
+            }
+            else if (next != null)
+            {
+                if (next.IsFolder) beforeFolder = next.FolderId; else beforeSheet = next.Sheet;
+            }
+
+            _dropInside = inside;
+            _dropInto = into;
+            _dropBeforeSheet = beforeSheet;
+            _dropBeforeFolder = beforeFolder;
+            if (_dropIndex == b) Invalidate();
+            SetDropIndex(b);
         }
 
         // The position (0..count) whose boundary is nearest: upper half of a row = before it.
@@ -816,7 +1053,13 @@ namespace VerticalSheetTabs
             base.OnMouseDoubleClick(e);
             if (e.Button != MouseButtons.Left) return;
             int index = IndexFromPoint(e.Location);
-            if (index >= 0 && !_rows[index].IsFolder) BeginRename(index);
+            if (index < 0) return;
+            if (_rows[index].IsFolder)
+            {
+                if (e.X > FolderMarkRight()) BeginRenameFolder(_rows[index].FolderId);
+                return;
+            }
+            BeginRename(index);
         }
 
         public void BeginRenameActive()
@@ -824,25 +1067,40 @@ namespace VerticalSheetTabs
             BeginRename(RowIndexOf(_active));
         }
 
+        public void BeginRenameFolder(string folderId)
+        {
+            int index = _rows.FindIndex(r => r.IsFolder && r.FolderId == folderId);
+            if (index < 0) return;
+            EnsureVisible(index);
+            BeginEdit(index, _rows[index].FolderName, folderId);
+        }
+
         // In-place name editing: Enter or leaving the box commits, Esc cancels. The length limit
         // is Excel's 31 characters; the other rules are checked by PaneManager when it renames.
         private void BeginRename(int index)
         {
             if (index < 0 || index >= _rows.Count || _rows[index].IsFolder || StructureProtected) return;
+            BeginEdit(index, _rows[index].Sheet, null);
+        }
+
+        private void BeginEdit(int index, string text, string folderId)
+        {
             EndRename(false);
             Rectangle r = RowRect(index);
-            _editingName = _rows[index].Sheet;
+            _editingName = text;
+            _editingFolderId = folderId;
             int left = r.Left + Px(InsetLeft) + (_rows[index].Indented ? Px(FolderIndent) : 0);
             int right = r.Right - Px(InsetRight);
+            int textLeft = folderId != null ? left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4) - 2 : left + Px(TextPadLeft) - 2;
             _editor = new TextBox
             {
-                Text = _editingName,
+                Text = text,
                 MaxLength = 31,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = TabFont
             };
-            _editor.Bounds = new Rectangle(left + Px(TextPadLeft) - 2, r.Top + (r.Height - _editor.PreferredHeight) / 2,
-                Math.Max(Px(40), right - left - Px(TextPadLeft)), _editor.PreferredHeight);
+            _editor.Bounds = new Rectangle(textLeft, r.Top + (r.Height - _editor.PreferredHeight) / 2,
+                Math.Max(Px(40), right - textLeft), _editor.PreferredHeight);
             _editor.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; EndRename(true); }
@@ -861,11 +1119,15 @@ namespace VerticalSheetTabs
             if (editor == null) return;
             _editor = null; // first, so the LostFocus raised by removing the box does nothing
             string oldName = _editingName;
+            string folderId = _editingFolderId;
+            _editingFolderId = null;
             string newName = editor.Text;
             Controls.Remove(editor);
             editor.Dispose();
             Invalidate();
-            if (commit && newName != oldName && RenameRequested != null) RenameRequested(oldName, newName);
+            if (!commit || newName == oldName) return;
+            if (folderId != null) { if (FolderRenameRequested != null) FolderRenameRequested(folderId, newName); }
+            else if (RenameRequested != null) RenameRequested(oldName, newName);
         }
 
         protected override void Dispose(bool disposing)
