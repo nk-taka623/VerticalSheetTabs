@@ -108,6 +108,7 @@ namespace VerticalSheetTabs
                     FolderNode f = entry.Folders.FindFolder(id);
                     if (f != null) f.Color = choice;
                 }
+                MarkChanged(entry);
                 SyncSheets(entry);
             };
             control.FolderTabColorRequested += (folders, choice) =>
@@ -918,6 +919,7 @@ namespace VerticalSheetTabs
                 return;
             }
             folder.Name = newName;
+            MarkChanged(entry);
             SyncSheets(entry);
         }
 
@@ -925,6 +927,7 @@ namespace VerticalSheetTabs
         private void DeleteFoldersOnly(Entry entry, IList<string> folderIds)
         {
             foreach (string id in folderIds) entry.Folders.RemoveFolder(id);
+            MarkChanged(entry);
             SyncSheets(entry);
         }
 
@@ -998,11 +1001,19 @@ namespace VerticalSheetTabs
             SyncSheets(entry);
         }
 
+        // The folder structure is saved with the workbook, so a change of it (open/close, color,
+        // name) makes the workbook "changed" like any other edit.
+        private static void MarkChanged(Entry entry)
+        {
+            try { entry.Workbook.Saved = false; } catch (Exception) { }
+        }
+
         private void ToggleFolder(Entry entry, string folderId)
         {
             FolderNode node = entry.Folders.Nodes.Find(n => n.IsFolder && n.FolderId == folderId);
             if (node == null) return;
             node.Expanded = !node.Expanded;
+            MarkChanged(entry);
             SyncSheets(entry);
         }
 
