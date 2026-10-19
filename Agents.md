@@ -543,7 +543,7 @@ gitGraph
 
 #### テーマの検出
 
-- `TabTheme.cs`が、レジストリの `HKCU\Software\Microsoft\Office.0\Common` の `UI Theme` (DWORD) を、2秒ごとに読んで、配色を切り替える
+- `TabTheme.cs`が、レジストリの `HKCU\Software\Microsoft\Office\16.0\Common` の `UI Theme` (DWORD) を、2秒ごとに読んで、配色を切り替える
   - 0 = カラフル、3 = ダークグレー、4 = 黒、5 = 白、6 または値なし = システム設定に従う (Windowsのアプリのテーマ `AppsUseLightTheme` が0なら、暗い配色)
 - 重要な制約: この値は、Excelの起動時に、アカウントのローミング設定 (`...\Common\Roaming\Identities\...\Settings	86`) から書き込まれる。Excelの実行中にテーマを切り替えても、値は、次にExcelを起動するまで、更新されない。レジストリの値を直接書き換えても、Excelが、起動時に、ローミング設定で上書きする (実機で確認)
   - そのため、テーマの切り替えは、Excelを再起動したときに、アドインに反映される (実行中の切り替えへの追従は、未対応)
@@ -682,7 +682,7 @@ gitGraph
 方式: ClickOnce (VSTO標準)。ユーザーの選択 (案A)。
 
 - `VerticalSheetTabs.csproj`に、ClickOnceの公開用の設定を追加した (製品名、発行元、表示名「縦並びシートタブ」、説明、バージョン1.0.0.0、ディスクからのインストール、自動更新なし)
-- 公開: `MSBuild.exe VerticalSheetTabs\VerticalSheetTabs.csproj -t:Publish -p:Configuration=Release`。成果物は、`VerticalSheetTabsin\Releasepp.publish\` (約1.2MB): `setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_0_0_0\` (DLL、マニフェスト)。`bin\`は`.gitignore`済みのため、成果物はリポジトリに含めない
+- 公開: `MSBuild.exe VerticalSheetTabs\VerticalSheetTabs.csproj -t:Publish -p:Configuration=Release`。成果物は、`VerticalSheetTabs\bin\Release\app.publish\` (約1.2MB): `setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_0_0_0\` (DLL、マニフェスト)。`bin\`は`.gitignore`済みのため、成果物はリポジトリに含めない
 - マニフェストは、自己署名の証明書 (`CN=VerticalSheetTabs`) で署名されていることを確認した
 - 手順書: `README.md` (インストール、署名の証明書の信頼、アンインストール、既知の制約)
 - 署名: 現在は、自己署名の証明書。他のPCに入れるには、公開部分 (`.cer`) を、そのPCの「信頼された発行元」と「信頼されたルート証明機関」に、登録する (README参照)。正式な配布には、コード署名証明書が必要
