@@ -93,7 +93,11 @@ namespace VerticalSheetTabs
             control.MoveCopyRequested += () => RunExcelCommand(entry, "SheetMoveOrCopy");
             control.MoveRequested += (names, before, copy) => MoveOrCopySheets(entry, names, before, copy);
             control.FolderToggleRequested += id => ToggleFolder(entry, id);
-            control.FolderMoveRequested += (sheets, folders, into, bs, bf) => MoveItems(entry, sheets, folders, into, bs, bf);
+            control.FolderMoveRequested += (sheets, folders, into, bs, bf, copy) =>
+            {
+                if (copy) CopyItems(entry, sheets, folders, into, bs, bf);
+                else MoveItems(entry, sheets, folders, into, bs, bf);
+            };
             control.FolderRenameRequested += (id, name) => RenameFolder(entry, id, name);
             control.NewFolderRequested += names => CreateFolder(entry, names);
             control.DeleteKeyRequested += (sheets, folders) => DeleteItems(entry, sheets, folders);
@@ -642,6 +646,159 @@ namespace VerticalSheetTabs
             }, selected, active);
         }
 
+        // Ctrl+drag: copies the sheets (and the sheets of dragged folders) to the drop position. A
+        // dragged folder is copied as a new folder with copies of its sheets.
+        private void CopyItems(Entry entry, IList<string> sheets, IList<string> folders, string into, string beforeSheet, string beforeFolder)
+        {
+            if (entry.Workbook.ProtectStructure)
+            {
+                ShowMessage("ブックの構造が保護されているため、シートをコピーできません。");
+                return;
+            }
+            if (entry.Busy) return;
+            entry.Busy = true;
+            try
+            {
+                entry.Window.Activate();
+                RefreshKeys(entry);
+                var oldKeys = new List<string>(entry.Keys);
+
+                // the sources in Excel's order
+                var wanted = new HashSet<string>(KeysOf(entry, sheets));
+                foreach (string k in entry.Folders.SheetsOfFolders(folders)) wanted.Add(k);
+                var sources = oldKeys.Where(wanted.Contains).ToList();
+                if (sources.Count == 0) return;
+                var sourceNames = sources.Select(k => entry.AllNames[oldKeys.IndexOf(k)]).ToList();
+
+                // where Excel puts the copies: in front of this sheet (null = after the last one)
+                string anchorKey = null;
+                if (into != null)
+                {
+                    FolderNode target = entry.Folders.FindFolder(into);
+                    if (beforeSheet != null) anchorKey = KeyOf(entry, beforeSheet);
+                    else if (target != null && target.Sheets.Count > 0) anchorKey = KeyAfter(entry, target.Sheets[target.Sheets.Count - 1]);
+                    else if (target != null) anchorKey = KeyAfterNode(entry, target);
+                }
+                else if (beforeSheet != null) anchorKey = KeyOf(entry, beforeSheet);
+                else if (beforeFolder != null)
+                {
+                    FolderNode f = entry.Folders.FindFolder(beforeFolder);
+                    anchorKey = f == null ? null : f.Sheets.Count > 0 ? f.Sheets[0] : KeyAfterNode(entry, f);
+                }
+                CopySheetsTo(entry, sourceNames, anchorKey == null ? null : entry.AllNames[oldKeys.IndexOf(anchorKey)]);
+
+                RefreshKeys(entry);
+                var copies = entry.Keys.Where(k => !oldKeys.Contains(k)).ToList();
+                if (copies.Count != sources.Count) { entry.KeySignature = null; return; }
+
+                // the model: the copies sit where Excel put them; give them their folders
+                entry.Folders.RemoveSheets(copies);
+                string afterKey = null;
+                int last = entry.Keys.IndexOf(copies[copies.Count - 1]);
+                if (last + 1 < entry.Keys.Count) afterKey = entry.Keys[last + 1];
+
+                if (into != null && entry.Folders.FindFolder(into) != null)
+                {
+                    FolderNode target = entry.Folders.FindFolder(into);
+                    int at = afterKey == null ? -1 : target.Sheets.IndexOf(afterKey);
+                    if (at < 0) target.Sheets.AddRange(copies); else target.Sheets.InsertRange(at, copies);
+                }
+                else
+                {
+                    var units = new List<FolderNode>();
+                    for (int i = 0; i < sources.Count; i++)
+                    {
+                        FolderNode src = entry.Folders.FolderOf(sources[i]);
+                        if (src != null && folders.Contains(src.FolderId))
+                        {
+                            FolderNode unit = units.LastOrDefault();
+                            if (unit == null || !unit.IsFolder || unit.FolderId != "copy:" + src.FolderId)
+                            {
+                                unit = FolderModel.NewFolder(UniqueFolderName(entry, src.Name));
+                                unit.Color = src.Color;
+                                unit.Expanded = src.Expanded;
+                                units.Add(unit);
+                                unit.FolderId = "copy:" + src.FolderId; // replaced below
+                            }
+                            unit.Sheets.Add(copies[i]);
+                        }
+                        else units.Add(new FolderNode { SheetCode = copies[i] });
+                    }
+                    foreach (FolderNode u in units) if (u.IsFolder) u.FolderId = Guid.NewGuid().ToString("N");
+
+                    int index = entry.Folders.Nodes.Count;
+                    if (afterKey != null)
+                    {
+                        int i = entry.Folders.Nodes.FindIndex(n => n.IsFolder ? n.Sheets.Contains(afterKey) : n.SheetCode == afterKey);
+                        if (i >= 0) index = i;
+                    }
+                    entry.Folders.Nodes.InsertRange(index, units);
+                }
+                entry.KeySignature = null;
+            }
+            catch (Exception)
+            {
+                ShowMessage("シートをコピーできませんでした。");
+            }
+            finally
+            {
+                entry.Busy = false;
+            }
+            entry.KeySignature = null;
+            SyncSheets(entry);
+        }
+
+        private static string UniqueFolderName(Entry entry, string baseName)
+        {
+            for (int n = 2; ; n++)
+            {
+                string suffix = " (" + n + ")";
+                string name = (baseName.Length + suffix.Length > FolderModel.MaxNameLength
+                    ? baseName.Substring(0, FolderModel.MaxNameLength - suffix.Length) : baseName) + suffix;
+                if (!entry.Folders.Nodes.Any(x => x.IsFolder && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))) return name;
+            }
+        }
+
+        // The key of the sheet that follows the given one in Excel's order, null at the end.
+        private static string KeyAfter(Entry entry, string key)
+        {
+            int i = entry.Keys.IndexOf(key);
+            return i >= 0 && i + 1 < entry.Keys.Count ? entry.Keys[i + 1] : null;
+        }
+
+        // For an empty folder: the first sheet of the next entries.
+        private static string KeyAfterNode(Entry entry, FolderNode node)
+        {
+            List<FolderNode> nodes = entry.Folders.Nodes;
+            for (int i = nodes.IndexOf(node) + 1; i < nodes.Count; i++)
+            {
+                if (!nodes[i].IsFolder) return nodes[i].SheetCode;
+                if (nodes[i].Sheets.Count > 0) return nodes[i].Sheets[0];
+            }
+            return null;
+        }
+
+        // Copies sheets (by name, in order) in front of the sheet beforeName, or after the last sheet.
+        private static void CopySheetsTo(Entry entry, IList<string> names, string beforeName)
+        {
+            object before = Type.Missing;
+            object after = Type.Missing;
+            if (beforeName != null) before = entry.Workbook.Sheets[beforeName];
+            else after = entry.Workbook.Sheets[entry.Workbook.Sheets.Count];
+
+            if (names.Count > 1)
+            {
+                var group = entry.Workbook.Sheets[names.Cast<object>().ToArray()] as Excel.Sheets;
+                if (group != null) group.Copy(before, after);
+                return;
+            }
+            object sheet = entry.Workbook.Sheets[names[0]];
+            var ws = sheet as Excel.Worksheet;
+            if (ws != null) { ws.Copy(before, after); return; }
+            var ch = sheet as Excel.Chart;
+            if (ch != null) ch.Copy(before, after);
+        }
+
         private void CreateFolder(Entry entry, IList<string> sheetNames)
         {
             if (entry.Workbook.ProtectStructure)
@@ -911,7 +1068,31 @@ namespace VerticalSheetTabs
             try
             {
                 entry.Window.Activate();
+                string activeKey = null;
+                if (entry.Folders.HasFolders)
+                {
+                    // the folder of the active sheet, looked up before the new sheet exists
+                    RefreshKeys(entry);
+                    activeKey = KeyOf(entry, CurrentActive(entry));
+                }
+                var before = new HashSet<string>(entry.Keys);
                 entry.Workbook.Worksheets.Add(Type.Missing, entry.Window.ActiveSheet, Type.Missing, Type.Missing);
+                FolderNode folder = activeKey == null ? null : entry.Folders.FolderOf(activeKey);
+                if (folder != null)
+                {
+                    // Excel puts the sheet after the active one; behind the last sheet of a folder the
+                    // sheet would be outside it, so it is taken into the folder here
+                    RefreshKeys(entry);
+                    string added = entry.Keys.FirstOrDefault(k => !before.Contains(k));
+                    if (added != null && entry.Folders.FolderOf(added) == null)
+                    {
+                        string anchor = null;
+                        int at = folder.Sheets.IndexOf(activeKey);
+                        if (at >= 0 && at + 1 < folder.Sheets.Count) anchor = folder.Sheets[at + 1];
+                        entry.Folders.Move(new[] { added }, new string[0], folder.FolderId, anchor, null);
+                    }
+                    entry.KeySignature = null;
+                }
             }
             catch (Exception)
             {

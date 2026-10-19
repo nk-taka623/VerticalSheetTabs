@@ -114,8 +114,8 @@ namespace VerticalSheetTabs
         // The mark of a folder row was clicked (folder id).
         public event Action<string> FolderToggleRequested;
         // (sheets, folders, the folder they are dropped into or null, the loose sheet or the folder
-        // they are dropped in front of; all null = at the end)
-        public event Action<IList<string>, IList<string>, string, string, string> FolderMoveRequested;
+        // they are dropped in front of; all null = at the end, copy instead of move)
+        public event Action<IList<string>, IList<string>, string, string, string, bool> FolderMoveRequested;
         // (folder id, new name) after the user finishes editing a folder name.
         public event Action<string, string> FolderRenameRequested;
         // The Delete key: (selected sheets, selected folders).
@@ -921,8 +921,7 @@ namespace VerticalSheetTabs
                 e.Effect = DragDropEffects.None;
                 return;
             }
-            // With folders only moving is offered (copying comes with step 8-4).
-            e.Effect = !HasFolders && IsCopy(e) ? DragDropEffects.Copy : DragDropEffects.Move;
+            e.Effect = IsCopy(e) ? DragDropEffects.Copy : DragDropEffects.Move;
 
             Point p = PointToClient(new Point(e.X, e.Y));
             ScrollNearEdge(p);
@@ -946,7 +945,7 @@ namespace VerticalSheetTabs
 
             if (HasFolders)
             {
-                if (FolderMoveRequested != null) FolderMoveRequested(_dragSheets, _dragFolders, into, beforeSheet, beforeFolder);
+                if (FolderMoveRequested != null) FolderMoveRequested(_dragSheets, _dragFolders, into, beforeSheet, beforeFolder, IsCopy(e));
                 return;
             }
             bool copy = IsCopy(e);
