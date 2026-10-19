@@ -62,6 +62,12 @@ namespace VerticalSheetTabs
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
             control.SheetSelected += name => ActivateSheet(entry, name);
             control.SettingsRequested += () => ShowSettings(entry);
+            control.AddRequested += () => AddSheet(entry);
+            control.InsertRequested += () => RunExcelCommand(entry, "SheetInsert");
+            control.DeleteRequested += () => RunExcelCommand(entry, "SheetDelete");
+            control.HideRequested += () => RunExcelCommand(entry, "SheetHide");
+            control.UnhideRequested += () => RunExcelCommand(entry, "SheetUnhide");
+            control.RenameRequested += (oldName, newName) => RenameSheet(entry, oldName, newName);
 
             ApplyMode(entry);
             SyncSheets(entry);
@@ -225,11 +231,14 @@ namespace VerticalSheetTabs
             try
             {
                 var names = new List<string>();
+                bool anyHidden = false;
                 foreach (object sheet in entry.Workbook.Sheets)
                 {
                     string name;
                     if (IsVisibleSheet(sheet, out name)) names.Add(name);
+                    else if (SheetVisibility(sheet) == Excel.XlSheetVisibility.xlSheetHidden) anyHidden = true;
                 }
+                entry.Control.HasHiddenSheets = anyHidden;
 
                 string active = null;
                 object activeSheet = entry.Window.ActiveSheet;
@@ -243,6 +252,15 @@ namespace VerticalSheetTabs
                 // Excel is busy (e.g. a cell is being edited) or the window is closing.
                 // The next timer tick will retry.
             }
+        }
+
+        // Only "hidden" counts for the unhide command; very hidden sheets cannot be unhidden from the UI.
+        private static Excel.XlSheetVisibility SheetVisibility(object sheet)
+        {
+            var ws = sheet as Excel.Worksheet;
+            if (ws != null) return ws.Visible;
+            var ch = sheet as Excel.Chart;
+            return ch != null ? ch.Visible : Excel.XlSheetVisibility.xlSheetVisible;
         }
 
         // Worksheets and chart sheets are shown; hidden and very hidden sheets are not.
@@ -262,6 +280,99 @@ namespace VerticalSheetTabs
             }
             name = null;
             return false;
+        }
+
+        // Runs one of Excel's own sheet commands on the active sheet (the right-clicked one), so
+        // dialogs, confirmations and error messages are exactly Excel's.
+        private void RunExcelCommand(Entry entry, string idMso)
+        {
+            try
+            {
+                entry.Window.Activate();
+                _app.CommandBars.ExecuteMso(idMso);
+            }
+            catch (Exception)
+            {
+                // The command is not available now (e.g. structure protection); Excel greys it out
+                // in its own menu, so there is nothing more to report.
+            }
+        }
+
+        // The "+" button: a new worksheet after the active sheet, as Excel's own button does.
+        private void AddSheet(Entry entry)
+        {
+            try
+            {
+                entry.Window.Activate();
+                entry.Workbook.Worksheets.Add(Type.Missing, entry.Window.ActiveSheet, Type.Missing, Type.Missing);
+            }
+            catch (Exception)
+            {
+                ShowMessage("ブックの構造が保護されているため、シートを追加できません。");
+            }
+        }
+
+        private void RenameSheet(Entry entry, string oldName, string newName)
+        {
+            string problem = CheckSheetName(entry, oldName, newName);
+            if (problem != null)
+            {
+                ShowMessage(problem);
+                return;
+            }
+            try
+            {
+                object sheet = entry.Workbook.Sheets[oldName];
+                var ws = sheet as Excel.Worksheet;
+                if (ws != null) { ws.Name = newName; return; }
+                var ch = sheet as Excel.Chart;
+                if (ch != null) ch.Name = newName;
+            }
+            catch (Exception)
+            {
+                ShowMessage("シートの名前を変更できませんでした。ブックの構造が保護されている可能性があります。");
+            }
+        }
+
+        private static readonly char[] InvalidNameChars = { ':', '\\', '/', '?', '*', '[', ']' };
+
+        // The same rules as Excel's own sheet-name check.
+        private static string CheckSheetName(Entry entry, string oldName, string newName)
+        {
+            if (newName.Trim().Length == 0 || newName.Length > 31 || newName.IndexOfAny(InvalidNameChars) >= 0
+                || newName.StartsWith("'") || newName.EndsWith("'"))
+            {
+                return "入力した名前は無効です。次の点を確認してください。\r\n"
+                    + "・名前が 31 文字を超えていない\r\n"
+                    + "・名前に次の文字が含まれていない: : \\ / ? * [ ]\r\n"
+                    + "・名前の先頭と末尾が ' (アポストロフィ) でない\r\n"
+                    + "・名前が空白になっていない";
+            }
+            foreach (object sheet in entry.Workbook.Sheets)
+            {
+                // Hidden sheets count for the duplicate check as well.
+                string name = SheetName(sheet);
+                if (name != null && !string.Equals(name, oldName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(name, newName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return "その名前は既に使われています。別の名前を入力してください。";
+                }
+            }
+            return null;
+        }
+
+        private static string SheetName(object sheet)
+        {
+            var ws = sheet as Excel.Worksheet;
+            if (ws != null) return ws.Name;
+            var ch = sheet as Excel.Chart;
+            return ch != null ? ch.Name : null;
+        }
+
+        private void ShowMessage(string text)
+        {
+            System.Windows.Forms.MessageBox.Show(new ExcelWindowOwner(_app.Hwnd), text, "Microsoft Excel",
+                System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
         }
 
         private static void ActivateSheet(Entry entry, string name)
