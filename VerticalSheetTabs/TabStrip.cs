@@ -97,6 +97,7 @@ namespace VerticalSheetTabs
         private string _dropInto, _dropBeforeSheet, _dropBeforeFolder;
         private string _editingFolderId;
         private string _rightFolder;
+        private string _toggleOffFolder;
         private bool _plusHot, _plusDown;
         // The full name of a tab whose text is cut off is shown as a tool tip (Excel's own tabs
         // grow to fit the name, so they never need one).
@@ -651,6 +652,13 @@ namespace VerticalSheetTabs
                 {
                     _dragIndex = index;
                     _dragOrigin = e.Location;
+                    if (_selFolders.Contains(row.FolderId) && !ctrl && !shift)
+                    {
+                        // a click on a selected folder deselects it, when the button is released
+                        // without a drag (dragging a selected folder must keep the selection)
+                        _toggleOffFolder = row.FolderId;
+                        return;
+                    }
                     SelectFolderByClick(row, index, ctrl, shift);
                     _selectionPending = row.Members.Count > 0;
                     Invalidate();
@@ -761,6 +769,23 @@ namespace VerticalSheetTabs
             }
         }
 
+        // Takes a folder and its sheets out of the selection; Excel always keeps one sheet selected,
+        // so when nothing else is left the active sheet stays.
+        private void DeselectFolder(string folderId)
+        {
+            StripRow row = FolderRow(folderId);
+            _selFolders.Remove(folderId);
+            if (row == null) return;
+            string active = _active;
+            foreach (string m in row.Members) _selected.Remove(m);
+            if (_selected.Count == 0 && active != null)
+            {
+                _selected.Add(active);
+                _active = active;
+            }
+            else if (!_selected.Contains(_active)) _active = SelectedInOrder().FirstOrDefault();
+        }
+
         // Selects every row from the anchor (the last clicked folder, otherwise the active sheet) to this one.
         private void SelectRange(int index)
         {
@@ -784,7 +809,17 @@ namespace VerticalSheetTabs
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
+            bool noDrag = _dragIndex >= 0;
             _dragIndex = -1;
+            string toggleOff = _toggleOffFolder;
+            _toggleOffFolder = null;
+            if (toggleOff != null && noDrag && e.Button == MouseButtons.Left)
+            {
+                DeselectFolder(toggleOff);
+                Invalidate();
+                Raise();
+                return;
+            }
             if (_plusDown)
             {
                 _plusDown = false;
