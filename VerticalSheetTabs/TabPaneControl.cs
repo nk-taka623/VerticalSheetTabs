@@ -32,6 +32,22 @@ namespace VerticalSheetTabs
         public event Action MoveCopyRequested;
         // (sheets, the sheet they are dropped in front of or null for the end, copy instead of move)
         public event Action<IList<string>, string, bool> MoveRequested;
+        // A folder row was clicked (folder id): open or close it.
+        public event Action<string> FolderToggleRequested;
+        public event Action<IList<string>, IList<string>, string, string, string, bool> FolderMoveRequested;
+        public event Action<string, string> FolderRenameRequested;
+        // (selected sheets) "new folder" from the sheet menu.
+        public event Action<IList<string>> NewFolderRequested;
+        // (selected folders, selected sheets) the Delete key.
+        public event Action<IList<string>, IList<string>> DeleteKeyRequested;
+        // (folders, also delete their sheets) from the folder menu.
+        public event Action<IList<string>, bool> DeleteFoldersRequested;
+        // (command, folders): "select", "hide", "unhide", "protect", "movecopy" on the sheets of the folders.
+        public event Action<string, IList<string>> FolderCommandRequested;
+        // (folders, color) the color of the folder rows.
+        public event Action<IList<string>, TabColorChoice> FolderColorRequested;
+        // (folders, color) the tab color of all sheets of the folders.
+        public event Action<IList<string>, TabColorChoice> FolderTabColorRequested;
 
         // The "unhide" item is only enabled while the workbook has hidden sheets.
         public bool HasHiddenSheets { get; set; }
@@ -44,6 +60,7 @@ namespace VerticalSheetTabs
         public Func<Color[]> ThemeColorProvider { get; set; }
 
         private readonly ContextMenuStrip _menu = new ContextMenuStrip();
+        private readonly ContextMenuStrip _folderMenu = new ContextMenuStrip();
 
         public TabPaneControl()
         {
@@ -51,6 +68,11 @@ namespace VerticalSheetTabs
             _strip.SelectionRequested += (names, active) => { if (SelectionRequested != null) SelectionRequested(names, active); };
             _strip.RenameRequested += (o, n) => { if (RenameRequested != null) RenameRequested(o, n); };
             _strip.MoveRequested += (names, before, copy) => { if (MoveRequested != null) MoveRequested(names, before, copy); };
+
+            _strip.FolderToggleRequested += id => { if (FolderToggleRequested != null) FolderToggleRequested(id); };
+            _strip.FolderMoveRequested += (sheets, folders, into, bs, bf, copy) => { if (FolderMoveRequested != null) FolderMoveRequested(sheets, folders, into, bs, bf, copy); };
+            _strip.FolderRenameRequested += (id, name) => { if (FolderRenameRequested != null) FolderRenameRequested(id, name); };
+            _strip.DeleteKeyRequested += (sheets, folders) => { if (DeleteKeyRequested != null) DeleteKeyRequested(sheets, folders); };
 
             // The "+" (adds a sheet after the active one, like Excel's own) is drawn by the strip.
             _strip.AddRequested += () => { if (AddRequested != null) AddRequested(); };
@@ -101,6 +123,10 @@ namespace VerticalSheetTabs
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(selectAll);
             _menu.Items.Add(ungroup);
+            _menu.Items.Add(new ToolStripSeparator());
+            var newFolder = new ToolStripMenuItem("新しいフォルダ(&F)");
+            newFolder.Click += (s, e) => { if (NewFolderRequested != null) NewFolderRequested(_strip.SelectedInOrder()); };
+            _menu.Items.Add(newFolder);
             _menu.Opening += (s, e) =>
             {
                 bool free = !StructureProtected;
@@ -112,8 +138,76 @@ namespace VerticalSheetTabs
                 unhide.Enabled = free && HasHiddenSheets;
                 protect.Text = ActiveSheetProtected ? "シート保護の解除(&P)" : "シートの保護(&P)...";
                 ungroup.Visible = _strip.SelectedCount > 1;
+                newFolder.Enabled = free;
             };
+
+            // The menu of a folder row (more commands come with step 8-5).
+            var folderRename = new ToolStripMenuItem("フォルダ名の変更(&R)");
+            folderRename.Click += (s, e) => _strip.BeginRenameFolder(_strip.RightClickedFolder);
+            var folderDelete = new ToolStripMenuItem("フォルダの削除(&D)");
+            folderDelete.Click += (s, e) => { if (DeleteFoldersRequested != null) DeleteFoldersRequested(_strip.SelectedFolders(), false); };
+            var folderDeleteAll = new ToolStripMenuItem("フォルダと中のシートを削除(&X)");
+            folderDeleteAll.Click += (s, e) => { if (DeleteFoldersRequested != null) DeleteFoldersRequested(_strip.SelectedFolders(), true); };
+            var fSelect = FolderItem("フォルダ内のシートをすべて選択(&S)", "select");
+            var fHide = FolderItem("フォルダ内のシートをすべて非表示(&H)", "hide");
+            var fUnhide = FolderItem("フォルダ内のシートをすべて再表示(&U)", "unhide");
+            var fProtect = FolderItem("フォルダ内のシートの保護(&P)...", "protect");
+            var fMove = FolderItem("フォルダ内のシートの移動またはコピー(&M)...", "movecopy");
+            var fColor = PaletteItem("フォルダの色(&C)", c => { if (FolderColorRequested != null) FolderColorRequested(_strip.SelectedFolders(), c); });
+            var fTabColor = PaletteItem("シート見出しの色をフォルダ内のシートに適用(&T)", c => { if (FolderTabColorRequested != null) FolderTabColorRequested(_strip.SelectedFolders(), c); });
+            _folderMenu.Items.Add(folderRename);
+            _folderMenu.Items.Add(new ToolStripSeparator());
+            _folderMenu.Items.Add(fSelect);
+            _folderMenu.Items.Add(fHide);
+            _folderMenu.Items.Add(fUnhide);
+            _folderMenu.Items.Add(fProtect);
+            _folderMenu.Items.Add(fMove);
+            _folderMenu.Items.Add(new ToolStripSeparator());
+            _folderMenu.Items.Add(fColor);
+            _folderMenu.Items.Add(fTabColor);
+            _folderMenu.Items.Add(new ToolStripSeparator());
+            _folderMenu.Items.Add(folderDelete);
+            _folderMenu.Items.Add(folderDeleteAll);
+            _folderMenu.Opening += (s, e) =>
+            {
+                bool free = !StructureProtected;
+                folderRename.Enabled = _strip.SelectedFolders().Count <= 1;
+                fHide.Enabled = free;
+                fUnhide.Enabled = free;
+                fMove.Enabled = free;
+                folderDeleteAll.Enabled = free;
+            };
+            _strip.SheetMenu = _menu;
+            _strip.FolderMenu = _folderMenu;
             _strip.ContextMenuStrip = _menu;
+        }
+
+        private ToolStripMenuItem FolderItem(string text, string command)
+        {
+            var item = new ToolStripMenuItem(text);
+            item.Click += (s, e) => { if (FolderCommandRequested != null) FolderCommandRequested(command, _strip.SelectedFolders()); };
+            return item;
+        }
+
+        // A menu item that opens the tab color palette (the same one as for sheets).
+        private ToolStripMenuItem PaletteItem(string text, Action<TabColorChoice> chosen)
+        {
+            var item = new ToolStripMenuItem(text);
+            var palette = new TabColorPalette();
+            var host = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
+            item.DropDown = new ToolStripDropDown { Padding = Padding.Empty };
+            item.DropDown.Items.Add(host);
+            palette.ColorChosen += choice =>
+            {
+                _folderMenu.Close();
+                chosen(choice);
+            };
+            item.DropDownOpening += (s, e) =>
+            {
+                palette.SetTheme(ThemeColorProvider != null ? ThemeColorProvider() : null);
+                host.Size = palette.Size;
+            };
+            return item;
         }
 
         // First-open width: 8 half-width characters plus the tab's paddings.
@@ -129,10 +223,15 @@ namespace VerticalSheetTabs
             return item;
         }
 
-        public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors)
+        public void BeginRenameFolder(string folderId)
+        {
+            _strip.BeginRenameFolder(folderId);
+        }
+
+        public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors, IList<StripRow> rows)
         {
             _strip.StructureProtected = StructureProtected;
-            _strip.SetSheets(names, activeName, selected, colors);
+            _strip.SetSheets(names, activeName, selected, colors, rows);
         }
     }
 }
