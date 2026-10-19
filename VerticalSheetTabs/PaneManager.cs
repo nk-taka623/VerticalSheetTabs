@@ -668,6 +668,18 @@ namespace VerticalSheetTabs
                 var ordered = new List<string> { active };
                 foreach (string n in names) if (n != active) ordered.Add(n);
 
+                // Selecting one sheet at a time costs about 12 ms each (3.5 s for 300 sheets), so a
+                // big group is selected with one call.
+                if (ordered.Count > 12)
+                {
+                    var group = entry.Workbook.Sheets[ordered.Cast<object>().ToArray()] as Excel.Sheets;
+                    if (group != null)
+                    {
+                        group.Select(true);
+                        return;
+                    }
+                }
+
                 bool first = true;
                 foreach (string n in ordered)
                 {
@@ -711,27 +723,10 @@ namespace VerticalSheetTabs
             if (ch != null) ch.Select(replace);
         }
 
-        // "Select all sheets": every visible sheet joins the group; the active sheet stays active.
-        private static void SelectAllSheets(Entry entry)
+        // "Select all sheets": Excel's own command (fast, and the active sheet stays active).
+        private void SelectAllSheets(Entry entry)
         {
-            try
-            {
-                var names = new List<string>();
-                foreach (object sheet in entry.Workbook.Sheets)
-                {
-                    string name;
-                    if (IsVisibleSheet(sheet, out name)) names.Add(name);
-                }
-                string active = null;
-                string activeName;
-                object activeSheet = entry.Window.ActiveSheet;
-                if (activeSheet != null && IsVisibleSheet(activeSheet, out activeName)) active = activeName;
-                if (active != null) SelectSheets(entry, names, active);
-            }
-            catch (Exception)
-            {
-                // Busy or closing.
-            }
+            RunExcelCommand(entry, "SelectAllSheets");
         }
 
         // "Ungroup sheets": only the active sheet stays selected.
