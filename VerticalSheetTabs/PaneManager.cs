@@ -35,6 +35,9 @@ namespace VerticalSheetTabs
         // are re-read on a short timer (cheap: only names are compared).
         private readonly Timer _timer = new Timer { Interval = 300 };
 
+        // The title bar of the task pane (Excel always shows one).
+        public const string PaneTitle = "シートタブ";
+
         private readonly Excel.Application _app;
 
         public PaneManager(CustomTaskPaneCollection collection, Excel.Application app)
@@ -55,7 +58,7 @@ namespace VerticalSheetTabs
             var settings = WorkbookSettings.Load(workbook);
 
             var control = new TabPaneControl();
-            var pane = _collection.Add(control, "Sheet Tabs", window);
+            var pane = _collection.Add(control, PaneTitle, window);
             pane.DockPosition = ToDock(settings.Side);
             pane.Width = 150; // temporary; the real width is applied in InitializeWidth
 

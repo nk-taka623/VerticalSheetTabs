@@ -13,7 +13,7 @@ namespace VerticalSheetTabs
         private readonly RadioButton _modeBoth = new RadioButton();
         private readonly RadioButton _sideLeft = new RadioButton();
         private readonly RadioButton _sideRight = new RadioButton();
-        private readonly GroupBox _sideGroup = new GroupBox();
+        private GroupBox _sideGroup;
 
         public SettingsForm(TabMode mode, TabSide side)
         {
@@ -27,7 +27,7 @@ namespace VerticalSheetTabs
             StartPosition = FormStartPosition.CenterParent;
             AutoSize = true;
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            Padding = new Padding(8);
+            Padding = new Padding(12);
 
             _modeHorizontal.Text = "横タブのみ表示 (縦タブは表示しない)";
             _modeVertical.Text = "縦タブのみ表示 (横タブは表示しない)";
@@ -36,45 +36,32 @@ namespace VerticalSheetTabs
             _sideRight.Text = "右";
 
             var modeGroup = CreateGroup("表示モード", _modeHorizontal, _modeVertical, _modeBoth);
-            _sideGroup.Text = "縦タブの位置";
-            _sideGroup.AutoSize = true;
-            _sideGroup.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            var sidePanel = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.TopDown,
-                AutoSize = true,
-                WrapContents = false
-            };
-            sidePanel.Controls.Add(_sideLeft);
-            sidePanel.Controls.Add(_sideRight);
-            _sideGroup.Controls.Add(sidePanel);
-            sidePanel.Location = _sideGroup.DisplayRectangle.Location;
+            _sideGroup = CreateGroup("縦タブの位置", _sideLeft, _sideRight);
 
-            var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(80, 0) };
-            var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new Size(80, 0) };
+            var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(88, 0) };
+            var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new Size(88, 0) };
             var buttons = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.RightToLeft,
                 AutoSize = true,
-                Padding = new Padding(0, 8, 0, 0)
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 10, 0, 0)
             };
             buttons.Controls.Add(cancel);
             buttons.Controls.Add(ok);
             AcceptButton = ok;
             CancelButton = cancel;
 
-            var layout = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.TopDown,
-                AutoSize = true,
-                WrapContents = false
-            };
+            // One column: both group boxes and the button row get the width of the widest one.
+            var layout = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Fill };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            modeGroup.Dock = DockStyle.Fill;
+            _sideGroup.Dock = DockStyle.Fill;
+            _sideGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(modeGroup);
             layout.Controls.Add(_sideGroup);
             layout.Controls.Add(buttons);
             Controls.Add(layout);
-            // Right-align the buttons under the groups once the layout is sized.
-            layout.Layout += (s, e) => buttons.Width = Math.Max(buttons.Width, modeGroup.Width);
 
             _modeHorizontal.Checked = mode == TabMode.HorizontalOnly;
             _modeVertical.Checked = mode == TabMode.VerticalOnly;
@@ -106,19 +93,23 @@ namespace VerticalSheetTabs
             _sideGroup.Enabled = !_modeHorizontal.Checked;
         }
 
+        // A group box sized to its content (AutoSize leaves a wide empty margin on the right and bottom).
         private static GroupBox CreateGroup(string title, params RadioButton[] radios)
         {
             var group = new GroupBox
             {
                 Text = title,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink
+                Font = SystemFonts.MessageBoxFont,
+                AutoSize = false,
+                Padding = new Padding(8, 4, 8, 6)
             };
             var panel = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.TopDown,
                 AutoSize = true,
-                WrapContents = false
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = false,
+                Margin = Padding.Empty
             };
             foreach (RadioButton r in radios)
             {
@@ -127,6 +118,10 @@ namespace VerticalSheetTabs
             }
             group.Controls.Add(panel);
             panel.Location = group.DisplayRectangle.Location;
+            Size content = panel.PreferredSize;
+            group.Size = new Size(
+                content.Width + group.Padding.Horizontal + 8,
+                panel.Top + content.Height + group.Padding.Bottom + 2);
             return group;
         }
     }
