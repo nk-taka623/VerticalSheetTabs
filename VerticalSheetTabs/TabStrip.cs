@@ -27,7 +27,7 @@ namespace VerticalSheetTabs
         private const double InsetLeft = 3, InsetRight = 4;
         private const double PlainTop = 1, ColoredTop = 4, BottomInset = 4;
         private const double CornerRadius = 4;
-        private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 1.6;
+        private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 3.2;
         private const double ActiveTextLift = 3.2;
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
@@ -62,6 +62,10 @@ namespace VerticalSheetTabs
         // started. So a left click only reaches Excel when the button is released.
         private bool _selectionPending;
         private bool _plusHot, _plusDown;
+        // The full name of a tab whose text is cut off is shown as a tool tip (Excel's own tabs
+        // grow to fit the name, so they never need one).
+        private readonly ToolTip _tip = new ToolTip { ShowAlways = true, InitialDelay = 500, ReshowDelay = 100 };
+        private int _hoverIndex = -1;
 
         // (selected sheets in tab order, the active one) after the user changed the selection.
         public event Action<IList<string>, string> SelectionRequested;
@@ -569,6 +573,31 @@ namespace VerticalSheetTabs
         {
             base.OnMouseLeave(e);
             SetPlusHot(false);
+            _hoverIndex = -1;
+            _tip.Hide(this);
+        }
+
+        private void UpdateTip(Point p)
+        {
+            int index = IndexFromPoint(p);
+            if (index == _hoverIndex) return;
+            _hoverIndex = index;
+            _tip.Hide(this);
+            if (index < 0 || Control.MouseButtons != MouseButtons.None || !IsTextCut(_names[index])) return;
+            Rectangle row = RowRect(index);
+            _tip.Show(_names[index], this, row.Left + Px(InsetLeft + TextPadLeft), row.Bottom, 4000);
+        }
+
+        // Whether the name does not fit the tab (it is then drawn with a trailing "…").
+        private bool IsTextCut(string name)
+        {
+            int available = ContentWidth - Px(InsetLeft + InsetRight + TextPadLeft + TextPadRight);
+            using (Graphics g = CreateGraphics())
+            using (var format = new StringFormat(StringFormat.GenericDefault))
+            {
+                format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
+                return g.MeasureString(name, TabFont, int.MaxValue, format).Width > available;
+            }
         }
 
         private void SetPlusHot(bool hot)
@@ -584,6 +613,7 @@ namespace VerticalSheetTabs
         {
             base.OnMouseMove(e);
             SetPlusHot(!StructureProtected && PlusButtonRect().Contains(e.Location));
+            UpdateTip(e.Location);
             if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected) return;
             Size drag = SystemInformation.DragSize;
             if (Math.Abs(e.X - _dragOrigin.X) < drag.Width && Math.Abs(e.Y - _dragOrigin.Y) < drag.Height) return;
@@ -739,7 +769,11 @@ namespace VerticalSheetTabs
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && _font != null) _font.Dispose();
+            if (disposing)
+            {
+                if (_font != null) _font.Dispose();
+                _tip.Dispose();
+            }
             base.Dispose(disposing);
         }
     }
