@@ -1,0 +1,97 @@
+# Visual Studio 2026 / .NET (VSTO Excel add-in)
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio cache/options
+.vs/
+*.vsidx
+*.VC.db
+*.VC.VC.opendb
+.vscode/
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# VSTO / ClickOnce publish output
+publish/
+[Pp]ublish/
+*.vsto
+*.application
+*.manifest
+*.pfx
+*.publishsettings
+PublishScripts/
+*_TemporaryKey.pfx
+
+# Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+coverage*.json
+coverage*.xml
+*.coverage
+*.coveragexml
+
+# Build/diagnostic logs
+*.log
+*.tlog
+*.binlog
+*.vspscc
+*.vssscc
+*.pdb
+*.ilk
+*.obj
+*.pch
+*.idb
+*.tmp
+*.cache
+*.bak
+*.orig
+
+# ReSharper / Rider
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+.idea/
+
+# Excel temporary files (test workbooks)
+~$*
+*.tmp.xlsx
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json
