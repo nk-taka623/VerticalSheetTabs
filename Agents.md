@@ -1013,3 +1013,8 @@ gitGraph
 - 修正: 縦タブで、Ctrl+S を押したときは、Excel標準の「上書き保存」(`FileSave`) を実行し、F12 は、「名前を付けて保存」(`FileSaveAs`) を実行する (`TabStrip.ProcessCmdKey`)。名前の編集中は、編集ボックスの通常の動作のまま
 - 実機で確認: フォルダの開閉のあと、縦タブにフォーカスがある状態で、Ctrl+S を押すと、ファイルが保存され (更新日時が変わる)、ブックが、変更なしに戻る
 - 未対応: 縦タブにフォーカスがあるときの、ほかのExcelのショートカット (Ctrl+Z、Ctrl+P など)。必要になったときに、対応する
+
+### 12.22 インストーラの更新 (バージョン1.1.3.0)
+
+- 12.21 (縦タブにフォーカスがあるときの Ctrl+S) を含めて、バージョンを 1.1.3.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_3_0\`)。インストールの実機確認は、未実施
