@@ -21,6 +21,7 @@ namespace VerticalSheetTabs
             this.Application.WorkbookBeforeClose += Application_WorkbookBeforeClose;
 
             this.Application.SheetActivate += sh => _panes.SyncAll();
+            this.Application.WorkbookBeforeSave += (Excel.Workbook wb, bool saveAsUi, ref bool cancel) => _panes.SaveSettings(wb);
 
             foreach (Excel.Workbook wb in this.Application.Workbooks)
             {

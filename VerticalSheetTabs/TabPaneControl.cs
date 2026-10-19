@@ -33,7 +33,7 @@ namespace VerticalSheetTabs
             _list.SelectedIndexChanged += List_SelectedIndexChanged;
 
             _info.Dock = DockStyle.Top;
-            _info.Height = 36;
+            _info.Height = 48;
             _info.Padding = new Padding(4, 2, 4, 2);
 
             _left.Text = "Dock Left";
@@ -53,9 +53,18 @@ namespace VerticalSheetTabs
             BackColor = SystemColors.Window;
         }
 
-        public void SetInfo(string dock)
+        // Test aid: shows the pane geometry while the width handling is verified.
+        public void SetInfo(string dock, int paneWidth, int chrome)
         {
-            _info.Text = "Dock: " + dock + " / Width: " + Width + " px";
+            _info.Text = dock + " pane=" + paneWidth + " ctl=" + Width + " chrome=" + chrome + " dpi=" + DeviceDpi;
+        }
+
+        // First-open width: 16 half-width characters plus the list's side padding.
+        public int DefaultContentWidth()
+        {
+            Size text = TextRenderer.MeasureText(new string('0', 16), _list.Font, new Size(int.MaxValue, int.MaxValue),
+                TextFormatFlags.NoPadding);
+            return text.Width + 2 * (int)Math.Round(4 * DeviceDpi / 96.0);
         }
 
         // Updates the list only when something actually changed, so the
