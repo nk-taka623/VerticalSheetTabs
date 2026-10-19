@@ -68,6 +68,8 @@ namespace VerticalSheetTabs
             control.HideRequested += () => RunExcelCommand(entry, "SheetHide");
             control.UnhideRequested += () => RunExcelCommand(entry, "SheetUnhide");
             control.RenameRequested += (oldName, newName) => RenameSheet(entry, oldName, newName);
+            control.MoveCopyRequested += () => RunExcelCommand(entry, "SheetMoveOrCopy");
+            control.MoveRequested += (name, before, copy) => MoveOrCopySheet(entry, name, before, copy);
 
             ApplyMode(entry);
             SyncSheets(entry);
@@ -310,6 +312,48 @@ namespace VerticalSheetTabs
             {
                 ShowMessage("ブックの構造が保護されているため、シートを追加できません。");
             }
+        }
+
+        // Drag and drop: move (or Ctrl+drag copy) a sheet in front of another visible sheet, or to
+        // the end of the visible ones. Hidden sheets stay where they are relative to their neighbours.
+        private void MoveOrCopySheet(Entry entry, string name, string beforeName, bool copy)
+        {
+            try
+            {
+                entry.Window.Activate();
+                object sheet = entry.Workbook.Sheets[name];
+                object before = Type.Missing;
+                object after = Type.Missing;
+                if (beforeName != null) before = entry.Workbook.Sheets[beforeName];
+                else after = LastVisibleSheet(entry.Workbook);
+
+                var ws = sheet as Excel.Worksheet;
+                if (ws != null)
+                {
+                    if (copy) ws.Copy(before, after); else ws.Move(before, after);
+                    return;
+                }
+                var ch = sheet as Excel.Chart;
+                if (ch != null)
+                {
+                    if (copy) ch.Copy(before, after); else ch.Move(before, after);
+                }
+            }
+            catch (Exception)
+            {
+                ShowMessage("ブックの構造が保護されているため、シートを移動またはコピーできません。");
+            }
+        }
+
+        private static object LastVisibleSheet(Excel.Workbook workbook)
+        {
+            object last = Type.Missing;
+            foreach (object sheet in workbook.Sheets)
+            {
+                string name;
+                if (IsVisibleSheet(sheet, out name)) last = sheet;
+            }
+            return last;
         }
 
         private void RenameSheet(Entry entry, string oldName, string newName)
