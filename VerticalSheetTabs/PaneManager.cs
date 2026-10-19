@@ -545,6 +545,10 @@ namespace VerticalSheetTabs
         {
             try
             {
+                // Already the selection in Excel: do not touch it, a click on the active tab must not
+                // move the focus into the grid (that would cancel a double click that renames).
+                if (SameSelection(entry, names, active)) return;
+
                 var ordered = new List<string> { active };
                 foreach (string n in names) if (n != active) ordered.Add(n);
 
@@ -558,6 +562,28 @@ namespace VerticalSheetTabs
             catch (Exception)
             {
                 // The sheet may have just been renamed or deleted; the next sync fixes the list.
+            }
+        }
+
+        private static bool SameSelection(Entry entry, IList<string> names, string active)
+        {
+            try
+            {
+                string current;
+                object activeSheet = entry.Window.ActiveSheet;
+                if (activeSheet == null || !IsVisibleSheet(activeSheet, out current) || current != active) return false;
+
+                var selected = new HashSet<string>();
+                foreach (object sheet in (System.Collections.IEnumerable)entry.Window.SelectedSheets)
+                {
+                    string name;
+                    if (IsVisibleSheet(sheet, out name)) selected.Add(name);
+                }
+                return selected.SetEquals(names);
+            }
+            catch (Exception)
+            {
+                return false;
             }
         }
 
