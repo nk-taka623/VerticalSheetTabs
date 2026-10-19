@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows.Forms;
 using Microsoft.Office.Tools;
 using Excel = Microsoft.Office.Interop.Excel;
@@ -60,7 +61,9 @@ namespace VerticalSheetTabs
             _entries[hwnd] = entry;
 
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
-            control.SheetSelected += name => ActivateSheet(entry, name);
+            control.SelectionRequested += (names, active) => SelectSheets(entry, names, active);
+            control.SelectAllRequested += () => SelectAllSheets(entry);
+            control.UngroupRequested += () => UngroupSheets(entry);
             control.SettingsRequested += () => ShowSettings(entry);
             control.AddRequested += () => AddSheet(entry);
             control.InsertRequested += () => RunExcelCommand(entry, "SheetInsert");
@@ -69,7 +72,7 @@ namespace VerticalSheetTabs
             control.UnhideRequested += () => RunExcelCommand(entry, "SheetUnhide");
             control.RenameRequested += (oldName, newName) => RenameSheet(entry, oldName, newName);
             control.MoveCopyRequested += () => RunExcelCommand(entry, "SheetMoveOrCopy");
-            control.MoveRequested += (name, before, copy) => MoveOrCopySheet(entry, name, before, copy);
+            control.MoveRequested += (names, before, copy) => MoveOrCopySheets(entry, names, before, copy);
 
             ApplyMode(entry);
             SyncSheets(entry);
@@ -247,7 +250,16 @@ namespace VerticalSheetTabs
                 string activeName;
                 if (activeSheet != null && IsVisibleSheet(activeSheet, out activeName)) active = activeName;
 
-                entry.Control.SetSheets(names, active);
+                // The selected sheets form Excel's group (a single entry when nothing is grouped).
+                var selected = new List<string>();
+                foreach (object sheet in (System.Collections.IEnumerable)entry.Window.SelectedSheets)
+                {
+                    string selName;
+                    if (IsVisibleSheet(sheet, out selName)) selected.Add(selName);
+                }
+                if (selected.Count == 0 && active != null) selected.Add(active);
+
+                entry.Control.SetSheets(names, active, selected);
             }
             catch (Exception)
             {
@@ -314,19 +326,28 @@ namespace VerticalSheetTabs
             }
         }
 
-        // Drag and drop: move (or Ctrl+drag copy) a sheet in front of another visible sheet, or to
-        // the end of the visible ones. Hidden sheets stay where they are relative to their neighbours.
-        private void MoveOrCopySheet(Entry entry, string name, string beforeName, bool copy)
+        // Drag and drop: move (or Ctrl+drag copy) sheets in front of another visible sheet, or to
+        // the end of the visible ones. Several sheets (a group) keep their order. Hidden sheets stay
+        // where they are relative to their neighbours.
+        private void MoveOrCopySheets(Entry entry, IList<string> names, string beforeName, bool copy)
         {
             try
             {
                 entry.Window.Activate();
-                object sheet = entry.Workbook.Sheets[name];
                 object before = Type.Missing;
                 object after = Type.Missing;
                 if (beforeName != null) before = entry.Workbook.Sheets[beforeName];
                 else after = LastVisibleSheet(entry.Workbook);
 
+                if (names.Count > 1)
+                {
+                    var group = entry.Workbook.Sheets[names.Cast<object>().ToArray()] as Excel.Sheets;
+                    if (group == null) return;
+                    if (copy) group.Copy(before, after); else group.Move(before, after);
+                    return;
+                }
+
+                object sheet = entry.Workbook.Sheets[names[0]];
                 var ws = sheet as Excel.Worksheet;
                 if (ws != null)
                 {
@@ -419,19 +440,72 @@ namespace VerticalSheetTabs
                 System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
         }
 
-        private static void ActivateSheet(Entry entry, string name)
+        // Makes these sheets the window's selection (Excel's sheet group) with one of them active.
+        // The active sheet is selected first (replacing the old selection): adding sheets to a
+        // selection with Select(false) does not change which sheet is active.
+        private static void SelectSheets(Entry entry, IList<string> names, string active)
         {
             try
             {
-                object sheet = entry.Workbook.Sheets[name];
-                var ws = sheet as Excel.Worksheet;
-                if (ws != null) { ws.Activate(); return; }
-                var ch = sheet as Excel.Chart;
-                if (ch != null) ch.Activate();
+                var ordered = new List<string> { active };
+                foreach (string n in names) if (n != active) ordered.Add(n);
+
+                bool first = true;
+                foreach (string n in ordered)
+                {
+                    SelectSheet(entry.Workbook.Sheets[n], first);
+                    first = false;
+                }
             }
             catch (Exception)
             {
                 // The sheet may have just been renamed or deleted; the next sync fixes the list.
+            }
+        }
+
+        private static void SelectSheet(object sheet, bool replace)
+        {
+            var ws = sheet as Excel.Worksheet;
+            if (ws != null) { ws.Select(replace); return; }
+            var ch = sheet as Excel.Chart;
+            if (ch != null) ch.Select(replace);
+        }
+
+        // "Select all sheets": every visible sheet joins the group; the active sheet stays active.
+        private static void SelectAllSheets(Entry entry)
+        {
+            try
+            {
+                var names = new List<string>();
+                foreach (object sheet in entry.Workbook.Sheets)
+                {
+                    string name;
+                    if (IsVisibleSheet(sheet, out name)) names.Add(name);
+                }
+                string active = null;
+                string activeName;
+                object activeSheet = entry.Window.ActiveSheet;
+                if (activeSheet != null && IsVisibleSheet(activeSheet, out activeName)) active = activeName;
+                if (active != null) SelectSheets(entry, names, active);
+            }
+            catch (Exception)
+            {
+                // Busy or closing.
+            }
+        }
+
+        // "Ungroup sheets": only the active sheet stays selected.
+        private static void UngroupSheets(Entry entry)
+        {
+            try
+            {
+                string name;
+                object activeSheet = entry.Window.ActiveSheet;
+                if (activeSheet != null && IsVisibleSheet(activeSheet, out name)) SelectSheet(activeSheet, true);
+            }
+            catch (Exception)
+            {
+                // Busy or closing.
             }
         }
     }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -6,18 +6,20 @@ using System.Windows.Forms;
 
 namespace VerticalSheetTabs
 {
-    // Step4 prototype: content of the task pane. A plain ListBox shows the sheet
-    // names; the owner-drawn tab graphics replace it in Step6.
+    // Content of the task pane. A ListBox (owner-drawn, with its own selection handling) shows
+    // the sheet names; the graphics that match Excel's tabs replace the drawing in Step6.
+    // Selection follows Excel's tabs: click = one sheet, Ctrl+click = add/remove a sheet to the
+    // group, Shift+click = range from the active sheet. The active sheet is drawn in bold.
     public class TabPaneControl : UserControl
     {
         private readonly ListBox _list = new ListBox();
 
         private List<string> _names = new List<string>();
+        private HashSet<string> _selected = new HashSet<string>();
         private string _activeName;
-        private bool _updating;
 
-        // Raised when the user clicks a sheet in the list.
-        public event Action<string> SheetSelected;
+        // (selected sheets in tab order, the active one) after the user changed the selection.
+        public event Action<IList<string>, string> SelectionRequested;
         // Raised by the "Tab display settings" item at the top of the context menu.
         public event Action SettingsRequested;
         // Sheet commands: the pane only reports the request, PaneManager runs it in Excel.
@@ -26,11 +28,13 @@ namespace VerticalSheetTabs
         public event Action DeleteRequested;
         public event Action HideRequested;
         public event Action UnhideRequested;
+        public event Action SelectAllRequested;
+        public event Action UngroupRequested;
         // (old name, new name) after the user finishes in-place editing.
         public event Action<string, string> RenameRequested;
         public event Action MoveCopyRequested;
-        // (sheet, the sheet it is dropped in front of or null for the end, copy instead of move)
-        public event Action<string, string, bool> MoveRequested;
+        // (sheets, the sheet they are dropped in front of or null for the end, copy instead of move)
+        public event Action<IList<string>, string, bool> MoveRequested;
 
         // The "unhide" item is only enabled while the workbook has hidden sheets.
         public bool HasHiddenSheets { get; set; }
@@ -40,26 +44,30 @@ namespace VerticalSheetTabs
         private TextBox _editor;
         private string _editingName;
 
-        // Drag and drop of tabs. The line shows where the dragged sheet will land.
+        // Drag and drop of tabs. The line shows where the dragged sheets will land.
         private readonly Panel _dropLine = new Panel { Height = 2, BackColor = SystemColors.Highlight, Visible = false };
         private Point _dragOrigin;
         private int _dragIndex = -1;
         private bool _dragging;
+        private List<string> _dragNames = new List<string>();
         private int _dropIndex = -1;
         // Activating a sheet moves the focus into Excel, which would cancel a drag that has just
-        // started. So a left click only activates the sheet when the button is released.
-        private string _pendingSelect;
+        // started. So a left click only reaches Excel when the button is released.
+        private bool _selectionPending;
 
         public TabPaneControl()
         {
             _list.Dock = DockStyle.Fill;
             _list.IntegralHeight = false;
             _list.BorderStyle = BorderStyle.None;
-            _list.SelectedIndexChanged += List_SelectedIndexChanged;
+            _list.SelectionMode = SelectionMode.None;
+            _list.DrawMode = DrawMode.OwnerDrawFixed;
+            _list.DrawItem += List_DrawItem;
             _list.MouseDown += List_MouseDown;
             _list.MouseDoubleClick += List_MouseDoubleClick;
             _list.MouseMove += List_MouseMove;
             _list.MouseUp += List_MouseUp;
+            _list.KeyDown += List_KeyDown;
             _list.AllowDrop = true;
             _list.DragOver += List_DragOver;
             _list.DragLeave += (s, e) => HideDropLine();
@@ -83,14 +91,23 @@ namespace VerticalSheetTabs
             _menu.Items.Add(MenuItem("挿入(&I)...", () => InsertRequested));
             _menu.Items.Add(MenuItem("削除(&D)", () => DeleteRequested));
             var rename = new ToolStripMenuItem("名前の変更(&R)");
-            rename.Click += (s, e) => BeginRename(_list.SelectedIndex);
+            rename.Click += (s, e) => BeginRename(_names.IndexOf(_activeName));
             _menu.Items.Add(rename);
             _menu.Items.Add(MenuItem("移動またはコピー(&M)...", () => MoveCopyRequested));
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(MenuItem("非表示(&H)", () => HideRequested));
             var unhide = MenuItem("再表示(&U)...", () => UnhideRequested);
             _menu.Items.Add(unhide);
-            _menu.Opening += (s, e) => unhide.Enabled = HasHiddenSheets;
+            _menu.Items.Add(new ToolStripSeparator());
+            _menu.Items.Add(MenuItem("すべてのシートを選択(&S)", () => SelectAllRequested));
+            var ungroup = MenuItem("シートのグループ解除(&N)", () => UngroupRequested);
+            _menu.Items.Add(ungroup);
+            _menu.Opening += (s, e) =>
+            {
+                unhide.Enabled = HasHiddenSheets;
+                rename.Enabled = _selected.Count <= 1;
+                ungroup.Visible = _selected.Count > 1;
+            };
             _list.ContextMenuStrip = _menu;
 
             BackColor = SystemColors.Window;
@@ -113,53 +130,141 @@ namespace VerticalSheetTabs
 
         // Updates the list only when something actually changed, so the
         // polling timer does not cause flicker or lose the scroll position.
-        public void SetSheets(IList<string> names, string activeName)
+        public void SetSheets(IList<string> names, string activeName, ICollection<string> selected)
         {
             bool sameNames = _names.SequenceEqual(names);
-            if (sameNames && _activeName == activeName) return;
+            // While a mouse button is down the user is changing the selection; do not fight them.
+            bool userBusy = Control.MouseButtons != MouseButtons.None;
+            bool sameSelection = userBusy
+                || (_activeName == activeName && _selected.SetEquals(selected));
+            if (sameNames && sameSelection) return;
 
-            _updating = true;
+            if (!sameNames)
+            {
+                EndRename(false);
+                _names = new List<string>(names);
+                _list.BeginUpdate();
+                _list.Items.Clear();
+                foreach (string n in _names) _list.Items.Add(n);
+                _list.EndUpdate();
+            }
+            if (!userBusy)
+            {
+                _activeName = activeName;
+                _selected = new HashSet<string>(selected);
+            }
+            _list.Invalidate();
+        }
+
+        private void List_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0 || e.Index >= _names.Count) return;
+            string name = _names[e.Index];
+            bool selected = _selected.Contains(name);
+            bool activeInGroup = selected && _selected.Count > 1 && name == _activeName;
+
+            Color back = selected ? SystemColors.Highlight : SystemColors.Window;
+            Color fore = selected ? SystemColors.HighlightText : SystemColors.WindowText;
+            using (var brush = new SolidBrush(back)) e.Graphics.FillRectangle(brush, e.Bounds);
+            Font font = activeInGroup ? new Font(e.Font, FontStyle.Bold) : e.Font;
             try
             {
-                if (!sameNames)
-                {
-                    EndRename(false);
-                    _names = new List<string>(names);
-                    _list.BeginUpdate();
-                    _list.Items.Clear();
-                    foreach (string n in _names) _list.Items.Add(n);
-                    _list.EndUpdate();
-                }
-                _activeName = activeName;
-                _list.SelectedIndex = activeName == null ? -1 : _names.IndexOf(activeName);
+                TextRenderer.DrawText(e.Graphics, name, font, Rectangle.Inflate(e.Bounds, -2, 0), fore,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             }
             finally
             {
-                _updating = false;
+                if (activeInGroup) font.Dispose();
             }
         }
 
-        // Like Excel's own tabs, a right click first makes the sheet under the pointer the active one.
+        private List<string> SelectedInOrder()
+        {
+            return _names.Where(n => _selected.Contains(n)).ToList();
+        }
+
+        private void RaiseSelection()
+        {
+            if (_activeName == null || SelectionRequested == null) return;
+            SelectionRequested(SelectedInOrder(), _activeName);
+        }
+
+        // Left button down: update the selection on screen, remember where a drag could start.
+        // Excel is told when the button is released, unless a drag starts first.
         private void List_MouseDown(object sender, MouseEventArgs e)
         {
             int index = _list.IndexFromPoint(e.Location);
+            if (index < 0 || index >= _names.Count) return;
+            string name = _names[index];
+
             if (e.Button == MouseButtons.Left)
             {
-                // Remember where a drag could start; it begins once the pointer moves far enough.
                 _dragIndex = index;
                 _dragOrigin = e.Location;
+
+                if ((ModifierKeys & Keys.Control) != 0)
+                {
+                    if (_selected.Contains(name) && _selected.Count > 1)
+                    {
+                        _selected.Remove(name);
+                        if (_activeName == name) _activeName = SelectedInOrder().First();
+                    }
+                    else
+                    {
+                        _selected.Add(name);
+                        _activeName = name;
+                    }
+                }
+                else if ((ModifierKeys & Keys.Shift) != 0 && _names.IndexOf(_activeName) >= 0)
+                {
+                    int a = _names.IndexOf(_activeName);
+                    int lo = Math.Min(a, index), hi = Math.Max(a, index);
+                    _selected = new HashSet<string>(_names.Skip(lo).Take(hi - lo + 1));
+                    // the anchor stays the active sheet
+                }
+                else if (_selected.Contains(name) && _selected.Count > 1 && _selected.Count < _names.Count)
+                {
+                    _activeName = name; // inside a group: switch the active sheet, keep the group
+                }
+                else
+                {
+                    _selected = new HashSet<string> { name };
+                    _activeName = name;
+                }
+                _selectionPending = true;
+                _list.Invalidate();
                 return;
             }
+
             if (e.Button != MouseButtons.Right) return;
-            if (index >= 0 && index != _list.SelectedIndex) _list.SelectedIndex = index;
+            // Like Excel, a right click on a sheet outside the group ungroups and activates it;
+            // inside the group it only makes that sheet the active one. Excel needs to know now,
+            // because the menu commands act on the active sheet(s).
+            if (!_selected.Contains(name)) _selected = new HashSet<string> { name };
+            _activeName = name;
+            _list.Invalidate();
+            RaiseSelection();
         }
 
         private void List_MouseUp(object sender, MouseEventArgs e)
         {
             _dragIndex = -1;
-            string name = _pendingSelect;
-            _pendingSelect = null;
-            if (name != null && e.Button == MouseButtons.Left && SheetSelected != null) SheetSelected(name);
+            if (e.Button != MouseButtons.Left || !_selectionPending) return;
+            _selectionPending = false;
+            RaiseSelection();
+        }
+
+        // Up/Down arrow keys move the active sheet (a single selection).
+        private void List_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode != Keys.Up && e.KeyCode != Keys.Down) return;
+            int i = _names.IndexOf(_activeName) + (e.KeyCode == Keys.Down ? 1 : -1);
+            if (i < 0 || i >= _names.Count) return;
+            e.Handled = true;
+            _selected = new HashSet<string> { _names[i] };
+            _activeName = _names[i];
+            _list.Invalidate();
+            RaiseSelection();
         }
 
         private void List_MouseMove(object sender, MouseEventArgs e)
@@ -170,12 +275,16 @@ namespace VerticalSheetTabs
 
             int index = _dragIndex;
             _dragIndex = -1;
-            _pendingSelect = null; // a drag does not change the active sheet by itself
+            _selectionPending = false; // a drag does not change the selection in Excel by itself
             if (index >= _names.Count) return;
+
+            // Dragging a sheet of the group takes the whole group along.
+            string name = _names[index];
+            _dragNames = _selected.Contains(name) ? SelectedInOrder() : new List<string> { name };
             _dragging = true;
             try
             {
-                _list.DoDragDrop(_names[index], DragDropEffects.Move | DragDropEffects.Copy);
+                _list.DoDragDrop(name, DragDropEffects.Move | DragDropEffects.Copy);
             }
             finally
             {
@@ -209,15 +318,18 @@ namespace VerticalSheetTabs
         {
             int target = _dropIndex;
             HideDropLine();
-            if (!_dragging || target < 0 || !e.Data.GetDataPresent(typeof(string))) return;
-
-            string name = (string)e.Data.GetData(typeof(string));
-            int source = _names.IndexOf(name);
+            if (!_dragging || target < 0 || _dragNames.Count == 0) return;
             bool copy = IsCopy(e);
-            if (source < 0) return;
-            // Dropping a sheet where it already is changes nothing.
-            if (!copy && (target == source || target == source + 1)) return;
-            if (MoveRequested != null) MoveRequested(name, target < _names.Count ? _names[target] : null, copy);
+
+            // Dropping the sheets where they already are changes nothing (when they sit together).
+            List<int> at = _dragNames.Select(n => _names.IndexOf(n)).OrderBy(i => i).ToList();
+            if (at[0] < 0) return;
+            bool together = at[at.Count - 1] - at[0] + 1 == at.Count;
+            if (!copy && together && target >= at[0] && target <= at[at.Count - 1] + 1) return;
+
+            // The sheets cannot be dropped in front of one of themselves: take the next other one.
+            while (target < _names.Count && _dragNames.Contains(_names[target])) target++;
+            if (MoveRequested != null) MoveRequested(_dragNames, target < _names.Count ? _names[target] : null, copy);
         }
 
         // The position (0..count) whose boundary is nearest: upper half of a row = before it.
@@ -297,19 +409,6 @@ namespace VerticalSheetTabs
             _list.Controls.Remove(editor);
             editor.Dispose();
             if (commit && newName != oldName && RenameRequested != null) RenameRequested(oldName, newName);
-        }
-
-        private void List_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (_updating) return;
-            string name = _list.SelectedItem as string;
-            if (name == null) return;
-            if (Control.MouseButtons == MouseButtons.Left)
-            {
-                _pendingSelect = name;
-                return;
-            }
-            if (SheetSelected != null) SheetSelected(name);
         }
     }
 }
