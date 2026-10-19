@@ -963,4 +963,10 @@ gitGraph
 ### 12.15 リリース (v1.1.0)
 
 - バージョンを 1.1.0.0 に上げ (`ApplicationVersion`、`AssemblyVersion`、`AssemblyFileVersion`)、ClickOnce のインストーラを作り直した。成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_0_0\`)
-- インストールの実機確認は、未実施 (ユーザーの了承のうえ、行う)。すでに1.0.1.0を入れたPCは、新しい `setup.exe` を、もう一度実行する
+- すでに1.0.1.0を入れたPCは、新しい `setup.exe` を、もう一度実行する (自動更新は無効)
+
+#### 12.15.1 インストールの実機確認 (1.1.0.0、ユーザーの了承のうえ実施)
+
+- `setup.exe`: 終了コード0。Windowsの「アプリ」の一覧に、「VerticalSheetTabs 1.1.0.0」が追加され、Excelのアドインの登録が、ClickOnceのものになった
+- Excelの起動: アドインが接続され (表示名「縦並びシートタブ」)、縦タブのペインが、表示された。フォルダのあるテスト用ブックで、フォルダの表示、ドラッグでのフォルダへの移動 (Excelのシート順も反映)、フォルダの開閉が、動作した
+- アンインストール (`VSTOInstaller.exe /Uninstall <.vsto> /S`): 終了コード0。登録と「アプリ」の項目が、削除された。この開発PCは、アドインのない、通常のExcelの状態
