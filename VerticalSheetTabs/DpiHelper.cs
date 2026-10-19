@@ -4,8 +4,8 @@ using System.Runtime.InteropServices;
 namespace VerticalSheetTabs
 {
     // Excel runs at the real display scaling, but WinForms controls inside a task pane see 96 dpi
-    // (GetDpiForWindow of the pane and Control.DeviceDpi both say 96). The drawing in the pane is
-    // scaled by hand, using the DPI of Excel's own main window.
+    // (Control.DeviceDpi always says 96). The drawing in the pane is scaled by hand, using the DPI
+    // of Excel's own main window.
     public static class DpiHelper
     {
         // Excel's main window, set when the add-in starts.

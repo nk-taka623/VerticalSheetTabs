@@ -174,7 +174,7 @@ namespace VerticalSheetTabs
             try
             {
                 if (!_entries.ContainsValue(entry)) return;
-                int dpi = entry.Control.DeviceDpi;
+                int dpi = DpiHelper.GetDpi(entry.Control.Handle); // the real DPI (Control.DeviceDpi says 96 in a task pane)
                 entry.Chrome = entry.Pane.Width - entry.Control.Width;
                 int contentPx = entry.Settings.WidthDip > 0
                     ? (int)Math.Round(entry.Settings.WidthDip * dpi / 96.0)
@@ -205,7 +205,7 @@ namespace VerticalSheetTabs
                     // While the pane has never been shown (horizontal-only mode) the stored width stays as is.
                     if (entry.Initialized)
                     {
-                        entry.Settings.WidthDip = (int)Math.Round(entry.Control.Width * 96.0 / entry.Control.DeviceDpi);
+                        entry.Settings.WidthDip = (int)Math.Round(entry.Control.Width * 96.0 / DpiHelper.GetDpi(entry.Control.Handle));
                     }
                     entry.Settings.Save(workbook);
                 }

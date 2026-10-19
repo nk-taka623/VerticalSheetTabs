@@ -15,13 +15,12 @@ namespace VerticalSheetTabs
     public class TabStrip : Control
     {
         // ---- Excel's colors (measured, Officeテーマ: カラフル) ----
-        private static readonly Color BarBack = Color.FromArgb(237, 235, 237);
-        private static readonly Color TabBorder = Color.FromArgb(224, 224, 224);
+        // The same in every Office theme: the underline, the text on a white tab and on a colored tab.
         private static readonly Color Underline = Color.FromArgb(16, 124, 65);
         private static readonly Color TextColor = Color.FromArgb(36, 36, 36);
-        private static readonly Color Separator = Color.FromArgb(209, 209, 209);
-        private static readonly Color PlusColor = Color.FromArgb(57, 57, 56);
-        private static readonly Color PlusHoverBack = Color.FromArgb(250, 250, 250);
+
+        private TabTheme _theme = TabTheme.Current;
+        private TabTheme Theme { get { return _theme; } }
 
         // ---- Excel's metrics in DIP (physical px at 125% / 1.25) ----
         private const double RowHeight = 32;
@@ -86,7 +85,7 @@ namespace VerticalSheetTabs
                 | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
             TabStop = true;
             AllowDrop = true;
-            BackColor = BarBack;
+            BackColor = _theme.BarBack;
             _scroll.Dock = DockStyle.None;
             _scroll.Scroll += (s, e) => { _scrollY = _scroll.Value; Invalidate(); };
             Controls.Add(_scroll);
@@ -144,6 +143,7 @@ namespace VerticalSheetTabs
         // Updates what changed only, so the polling timer does not cause flicker.
         public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors)
         {
+            RefreshTheme();
             bool sameColors = _colors.Count == colors.Count && _colors.All(kv => { int v; return colors.TryGetValue(kv.Key, out v) && v == kv.Value; });
             bool sameNames = _names.SequenceEqual(names);
             // While a mouse button is down the user is changing the selection; do not fight them.
@@ -169,6 +169,16 @@ namespace VerticalSheetTabs
                 _selected = new HashSet<string>(selected);
                 if (activeChanged) EnsureVisible(_names.IndexOf(_active));
             }
+            Invalidate();
+        }
+
+        // The Office theme can be changed while Excel runs.
+        private void RefreshTheme()
+        {
+            TabTheme current = TabTheme.Current;
+            if (ReferenceEquals(current, _theme)) return;
+            _theme = current;
+            BackColor = _theme.BarBack;
             Invalidate();
         }
 
@@ -282,7 +292,7 @@ namespace VerticalSheetTabs
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
-            g.Clear(BarBack);
+            g.Clear(Theme.BarBack);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.Half;
 
@@ -313,7 +323,7 @@ namespace VerticalSheetTabs
         {
             int w = Px(MarkerWidth), h = Px(MarkerHeight);
             var points = new[] { new Point(0, y - h / 2), new Point(w, y), new Point(0, y + h / 2) };
-            using (var brush = new SolidBrush(Color.Black)) g.FillPolygon(brush, points);
+            using (var brush = new SolidBrush(Theme.DropMarker)) g.FillPolygon(brush, points);
         }
 
         private void DrawPlus(Graphics g)
@@ -323,7 +333,7 @@ namespace VerticalSheetTabs
             if (_plusHot && enabled)
             {
                 using (GraphicsPath path = RoundedRect(box, Px(PlusHoverRadius)))
-                using (var brush = new SolidBrush(PlusHoverBack))
+                using (var brush = new SolidBrush(Theme.PlusHoverBack))
                 {
                     g.FillPath(brush, path);
                 }
@@ -331,7 +341,7 @@ namespace VerticalSheetTabs
             int arm = Px(PlusArm), thick = Math.Max(1, Px(PlusThickness));
             int cx = box.Left + box.Width / 2, cy = box.Top + box.Height / 2;
             g.SmoothingMode = SmoothingMode.None;
-            using (var brush = new SolidBrush(enabled ? PlusColor : Color.FromArgb(166, 166, 166)))
+            using (var brush = new SolidBrush(enabled ? Theme.PlusColor : Color.FromArgb(166, 166, 166)))
             {
                 g.FillRectangle(brush, cx - arm / 2, cy - thick / 2, arm, thick);
                 g.FillRectangle(brush, cx - thick / 2, cy - arm / 2, thick, arm);
@@ -351,7 +361,7 @@ namespace VerticalSheetTabs
             int left = row.Left + Px(InsetLeft);
             int right = row.Right - Px(InsetRight);
             int radius = Px(CornerRadius);
-            Color textColor = TextColor;
+            Color textColor = selected ? TextColor : Theme.InactiveText;
 
             // A colored tab that is not selected is a filled, rounded box; every other tab is white
             // when selected and has no background otherwise.
@@ -372,7 +382,7 @@ namespace VerticalSheetTabs
                             g.FillPath(brush, innerPath);
                         }
                     }
-                    using (var pen = new Pen(TabBorder, 1)) g.DrawPath(pen, path);
+                    using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
                 if (active)
                 {
@@ -399,7 +409,7 @@ namespace VerticalSheetTabs
             // the separator between tabs: Excel's thin line, turned to lie across the stack
             int sepHalf = Px(SeparatorLength) / 2;
             int cx = row.Left + row.Width / 2;
-            using (var pen = new Pen(Separator, 1))
+            using (var pen = new Pen(Theme.Separator, 1))
             {
                 g.SmoothingMode = SmoothingMode.None;
                 g.DrawLine(pen, cx - sepHalf, row.Bottom - 1, cx + sepHalf, row.Bottom - 1);

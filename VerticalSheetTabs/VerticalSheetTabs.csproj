@@ -209,6 +209,7 @@
     <Compile Include="RibbonController.cs" />
     <Compile Include="SettingsForm.cs" />
     <Compile Include="TabColorPalette.cs" />
+    <Compile Include="TabTheme.cs" />
     <Compile Include="TabStrip.cs">
       <SubType>Component</SubType>
     </Compile>
