@@ -184,7 +184,7 @@ namespace VerticalSheetTabs
                 : Office.MsoCTPDockPosition.msoCTPDockPositionLeft;
         }
 
-        // Applies the stored width, or 16 half-width characters on first open.
+        // Applies the stored width, or 8 half-width characters on first open.
         private void InitializeWidth(Entry entry)
         {
             try
