@@ -18,6 +18,10 @@ namespace VerticalSheetTabs
 
         // Raised when the user clicks a sheet in the list.
         public event Action<string> SheetSelected;
+        // Raised by the "Tab display settings" item at the top of the context menu.
+        public event Action SettingsRequested;
+
+        private readonly ContextMenuStrip _menu = new ContextMenuStrip();
 
         public TabPaneControl()
         {
@@ -25,7 +29,14 @@ namespace VerticalSheetTabs
             _list.IntegralHeight = false;
             _list.BorderStyle = BorderStyle.None;
             _list.SelectedIndexChanged += List_SelectedIndexChanged;
+            _list.MouseDown += List_MouseDown;
             Controls.Add(_list);
+
+            // The first item is ours; the standard sheet-tab items follow in later steps.
+            var settings = new ToolStripMenuItem("タブ表示の設定");
+            settings.Click += (s, e) => { if (SettingsRequested != null) SettingsRequested(); };
+            _menu.Items.Add(settings);
+            _list.ContextMenuStrip = _menu;
 
             BackColor = SystemColors.Window;
         }
@@ -63,6 +74,14 @@ namespace VerticalSheetTabs
             {
                 _updating = false;
             }
+        }
+
+        // Like Excel's own tabs, a right click first makes the sheet under the pointer the active one.
+        private void List_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right) return;
+            int index = _list.IndexFromPoint(e.Location);
+            if (index >= 0 && index != _list.SelectedIndex) _list.SelectedIndex = index;
         }
 
         private void List_SelectedIndexChanged(object sender, EventArgs e)

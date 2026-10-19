@@ -61,6 +61,7 @@ namespace VerticalSheetTabs
 
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
             control.SheetSelected += name => ActivateSheet(entry, name);
+            control.SettingsRequested += () => ShowSettings(entry);
 
             ApplyMode(entry);
             SyncSheets(entry);
@@ -116,13 +117,18 @@ namespace VerticalSheetTabs
             }
         }
 
-        // Opens the settings dialog for the active window's workbook (ribbon button).
+        // Opens the settings dialog for the active window's workbook.
         public void ShowSettings()
         {
             Entry entry;
             Excel.Window active = _app.ActiveWindow;
             if (active == null || !_entries.TryGetValue(active.Hwnd, out entry)) return;
+            ShowSettings(entry);
+        }
 
+        // Opens the settings dialog for one window's workbook (ribbon button and tab context menu).
+        private void ShowSettings(Entry entry)
+        {
             using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
