@@ -36,7 +36,7 @@ namespace VerticalSheetTabs
   <contextMenus>
     <contextMenu idMso=""ContextMenuWorkbookPly"">
       <button id=""VTabSettingsTabMenu"" label=""タブ表示の設定""
-              insertBeforeMso=""SheetDelete""
+              insertBeforeMso=""SheetInsertPage""
               onAction=""OnSettingsClick"" />
     </contextMenu>
   </contextMenus>
