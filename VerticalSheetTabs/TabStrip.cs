@@ -119,6 +119,8 @@ namespace VerticalSheetTabs
         public event Action<IList<string>, IList<string>, string, string, string, bool> FolderMoveRequested;
         // (folder id, new name) after the user finishes editing a folder name.
         public event Action<string, string> FolderRenameRequested;
+        // Ctrl+S / F12 pressed while the pane has the focus: Excel does not get these keys then.
+        public event Action<string> ExcelCommandRequested;
         // The Delete key: (selected sheets, selected folders).
         public event Action<IList<string>, IList<string>> DeleteKeyRequested;
 
@@ -811,6 +813,18 @@ namespace VerticalSheetTabs
             if (e.Button != MouseButtons.Left || !_selectionPending) return;
             _selectionPending = false;
             Raise();
+        }
+
+        // Keys that Excel would handle if the pane did not have the focus (save, save as).
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            string command = keyData == (Keys.Control | Keys.S) ? "FileSave" : keyData == Keys.F12 ? "FileSaveAs" : null;
+            if (command != null && _editor == null && ExcelCommandRequested != null)
+            {
+                ExcelCommandRequested(command);
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         // Up/Down arrow keys move the active sheet (a single selection).

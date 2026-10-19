@@ -92,6 +92,7 @@ namespace VerticalSheetTabs
             control.RenameRequested += (oldName, newName) => RenameSheet(entry, oldName, newName);
             control.MoveCopyRequested += () => RunExcelCommand(entry, "SheetMoveOrCopy");
             control.MoveRequested += (names, before, copy) => MoveOrCopySheets(entry, names, before, copy);
+            control.ExcelCommandRequested += command => RunExcelCommand(entry, command);
             control.FolderToggleRequested += id => ToggleFolder(entry, id);
             control.FolderMoveRequested += (sheets, folders, into, bs, bf, copy) =>
             {
