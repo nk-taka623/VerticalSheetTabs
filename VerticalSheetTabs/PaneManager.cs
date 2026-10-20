@@ -943,8 +943,6 @@ namespace VerticalSheetTabs
                 switch (command)
                 {
                     case "hide": RunExcelCommand(entry, "SheetHide"); break;
-                    case "protect": RunExcelCommand(entry, "SheetProtect"); break;
-                    case "movecopy": RunExcelCommand(entry, "SheetMoveOrCopy"); break;
                 }
             }
             catch (Exception)
