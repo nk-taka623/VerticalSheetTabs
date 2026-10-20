@@ -946,15 +946,29 @@ namespace VerticalSheetTabs
             SyncSheets(entry);
         }
 
-        // "Deselect all sheets of the folder": of the sheets of a folder that are selected in Excel, the
-        // first one (in the folder's order) stays selected, the others are taken out of the selection.
-        // Sheets outside the folder keep their state. With several folders, each one keeps its first.
+        // "Deselect all sheets of the folder": when sheets outside the folders are selected, all sheets of
+        // the folders are taken out of the selection. Otherwise (nothing outside is selected, Excel needs
+        // one selected sheet) the first selected sheet of each folder, in the folder's order, stays and the
+        // others are taken out.
         private void DeselectFolderSheets(Entry entry, IList<string> folderIds)
         {
             IList<string> selection = CurrentSelection(entry);
             string active = CurrentActive(entry);
             if (selection.Count == 0 || active == null) return;
             var selected = new HashSet<string>(selection);
+
+            // Sheets outside the folders are selected: they are what stays selected, all sheets of the
+            // folders are taken out.
+            var members = new HashSet<string>(MemberNames(entry, folderIds));
+            List<string> outside = selection.Where(n => !members.Contains(n)).ToList();
+            if (outside.Count > 0)
+            {
+                if (outside.Count == selection.Count) return; // no sheet of the folders is selected
+                entry.Window.Activate();
+                SelectSheets(entry, outside, members.Contains(active) ? outside[0] : active);
+                return;
+            }
+
             var keptFor = new Dictionary<string, string>(); // removed sheet -> the sheet of its folder that stays
             foreach (string id in folderIds)
             {
