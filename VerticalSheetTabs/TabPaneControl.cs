@@ -86,7 +86,11 @@ namespace VerticalSheetTabs
             settings.Click += (s, e) => { if (SettingsRequested != null) SettingsRequested(); };
             _menu.Items.Add(settings);
             _menu.Items.Add(new ToolStripSeparator());
-            var insert = MenuItem("挿入(&I)...", () => InsertRequested);
+            var newFolder = new ToolStripMenuItem("新しいフォルダ(&F)");
+            newFolder.Click += (s, e) => { if (NewFolderRequested != null) NewFolderRequested(_strip.SelectedInOrder()); };
+            _menu.Items.Add(newFolder);
+            _menu.Items.Add(new ToolStripSeparator());
+            var insert =MenuItem("挿入(&I)...", () => InsertRequested);
             var delete = MenuItem("削除(&D)", () => DeleteRequested);
             var rename = new ToolStripMenuItem("名前の変更(&R)");
             rename.Click += (s, e) => _strip.BeginRenameActive();
@@ -126,10 +130,6 @@ namespace VerticalSheetTabs
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(selectAll);
             _menu.Items.Add(ungroup);
-            _menu.Items.Add(new ToolStripSeparator());
-            var newFolder = new ToolStripMenuItem("新しいフォルダ(&F)");
-            newFolder.Click += (s, e) => { if (NewFolderRequested != null) NewFolderRequested(_strip.SelectedInOrder()); };
-            _menu.Items.Add(newFolder);
             _menu.Opening += (s, e) =>
             {
                 bool free = !StructureProtected;
