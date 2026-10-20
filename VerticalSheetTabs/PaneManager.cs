@@ -124,8 +124,16 @@ namespace VerticalSheetTabs
             };
             control.FolderTabColorRequested += (folders, choice) =>
             {
+                // "Color of the folder and its sheets": the folder rows and all their sheets get the color
                 RefreshKeys(entry);
+                foreach (string id in folders)
+                {
+                    FolderNode f = entry.Folders.FindFolder(id);
+                    if (f != null) f.Color = choice;
+                }
+                MarkChanged(entry);
                 ApplyTabColor(entry, MemberNames(entry, folders), choice);
+                SyncSheets(entry);
             };
             control.DeleteKeyRequested += (sheets, folders) => DeleteItems(entry, sheets, folders);
             control.DeleteFoldersRequested += (folders, withSheets) =>
