@@ -1147,5 +1147,5 @@ gitGraph
 
 ### 12.41 インストーラの更新 (バージョン1.1.10.0)
 
-- 12.39 (フォルダの一括操作から「保護」と「移動またはコピー」を削除)、12.40 (初回の表示幅を、半角12文字に変更) を含めて、バージョンを 1.1.10.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 12.39 (フォルダの一括操作から「保護」と「移動またはコピー」を削除)、12.40 (初回の表示幅を、半角12文字に変更) を含めて、バージョンを 1.1.10.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.10` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_10_0\`)。インストールの実機確認は、未実施
