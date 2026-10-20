@@ -301,6 +301,9 @@ namespace VerticalSheetTabs
                 if (!entry.Workbook.Equals(workbook)) continue;
                 try
                 {
+                    // sheets added without the sync having seen them get their id now, so that the file
+                    // has the ids and opening it does not have to give them (and change the workbook)
+                    if (entry.Folders.HasFolders) RefreshKeys(entry);
                     FolderStore.Save(entry.Workbook, entry.Folders);
                 }
                 catch (Exception)
@@ -447,6 +450,24 @@ namespace VerticalSheetTabs
         private static bool SyncSheets(Entry entry)
         {
             if (entry.Busy) return true;
+            // The sync only reads. Should anything in it still change the workbook (an id given to a new
+            // sheet, Excel's own reaction to a read), a workbook that was unchanged stays unchanged: opening
+            // a workbook must never make Excel ask "save changes?". The sync runs to its end on the UI
+            // thread, so a change of the flag within it is never the user's.
+            bool wasSaved = false;
+            try { wasSaved = entry.Workbook.Saved; } catch (Exception) { }
+            try
+            {
+                return SyncSheetsCore(entry);
+            }
+            finally
+            {
+                try { if (wasSaved && !entry.Workbook.Saved) entry.Workbook.Saved = true; } catch (Exception) { }
+            }
+        }
+
+        private static bool SyncSheetsCore(Entry entry)
+        {
             try
             {
                 var names = new List<string>();
@@ -507,7 +528,7 @@ namespace VerticalSheetTabs
             string signature = string.Join("|", allNames);
             if (signature != entry.KeySignature || entry.Keys.Count != allNames.Count)
             {
-                entry.Keys = FolderStore.SheetKeys(entry.Workbook, true);
+                entry.Keys = FolderStore.SheetKeys(entry.Workbook, true, true);
                 entry.AllNames = new List<string>(allNames);
                 entry.KeySignature = signature;
                 entry.Folders.Reconcile(entry.Keys);
@@ -646,6 +667,7 @@ namespace VerticalSheetTabs
                 RefreshKeys(entry);
                 if (!change()) return;
                 ApplyExcelOrder(entry, selectedNames, activeName);
+                MarkChanged(entry);
             }
             catch (Exception)
             {
