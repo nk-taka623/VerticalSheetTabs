@@ -901,6 +901,11 @@ namespace VerticalSheetTabs
             try
             {
                 RefreshKeys(entry);
+                if (command == "deselect")
+                {
+                    DeselectFolderSheets(entry, folderIds);
+                    return;
+                }
                 List<string> all = MemberNames(entry, folderIds);
                 var visible = new List<string>();
                 var hidden = new List<object>();
@@ -939,6 +944,34 @@ namespace VerticalSheetTabs
                 ShowMessage("フォルダ内のシートの操作を完了できませんでした。");
             }
             SyncSheets(entry);
+        }
+
+        // "Deselect all sheets of the folder": of the sheets of a folder that are selected in Excel, the
+        // first one (in the folder's order) stays selected, the others are taken out of the selection.
+        // Sheets outside the folder keep their state. With several folders, each one keeps its first.
+        private void DeselectFolderSheets(Entry entry, IList<string> folderIds)
+        {
+            IList<string> selection = CurrentSelection(entry);
+            string active = CurrentActive(entry);
+            if (selection.Count == 0 || active == null) return;
+            var selected = new HashSet<string>(selection);
+            var keptFor = new Dictionary<string, string>(); // removed sheet -> the sheet of its folder that stays
+            foreach (string id in folderIds)
+            {
+                string kept = null;
+                foreach (string name in MemberNames(entry, new[] { id }))
+                {
+                    if (!selected.Contains(name)) continue;
+                    if (kept == null) kept = name;
+                    else keptFor[name] = kept;
+                }
+            }
+            if (keptFor.Count == 0) return;
+            var remaining = selection.Where(n => !keptFor.ContainsKey(n)).ToList();
+            string newActive;
+            if (!keptFor.TryGetValue(active, out newActive)) newActive = active;
+            entry.Window.Activate();
+            SelectSheets(entry, remaining, newActive);
         }
 
         private void CreateFolder(Entry entry, IList<string> sheetNames)
