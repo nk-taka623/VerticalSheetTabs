@@ -1117,5 +1117,5 @@ gitGraph
 
 ### 12.36 インストーラの更新 (バージョン1.1.8.0)
 
-- 12.35 (フォルダ名とシート名の文字の、上下の位置の調整) を含めて、バージョンを 1.1.8.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 12.35 (フォルダ名とシート名の文字の、上下の位置の調整) を含めて、バージョンを 1.1.8.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.8` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_8_0\`)。インストールの実機確認は、未実施
