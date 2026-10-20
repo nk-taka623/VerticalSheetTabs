@@ -62,10 +62,15 @@ namespace VerticalSheetTabs
         // custom property of the worksheet (VTab.Id); CodeName cannot be used, because Excel returns
         // it empty for workbooks without a VBA project. Chart sheets have no custom properties,
         // so their key is their name ("n:" + name). With assign, worksheets without an id get one.
-        public static List<string> SheetKeys(Excel.Workbook wb, bool assign)
+        // Giving an id changes the workbook; with keepSaved a workbook that was unchanged stays unchanged
+        // (for the background sync: opening a workbook must not make Excel ask "save changes?").
+        public static List<string> SheetKeys(Excel.Workbook wb, bool assign, bool keepSaved = false)
         {
             var list = new List<string>();
             int index = 0;
+            bool wasSaved = false;
+            bool assigned = false;
+            try { wasSaved = wb.Saved; } catch (Exception) { }
             foreach (object o in wb.Sheets)
             {
                 index++;
@@ -80,6 +85,7 @@ namespace VerticalSheetTabs
                         {
                             id = Guid.NewGuid().ToString("N");
                             ws.CustomProperties.Add(IdProperty, id);
+                            assigned = true;
                         }
                         if (id != null) key = id;
                     }
@@ -93,6 +99,10 @@ namespace VerticalSheetTabs
                 {
                 }
                 list.Add(key);
+            }
+            if (assigned && keepSaved && wasSaved)
+            {
+                try { wb.Saved = true; } catch (Exception) { }
             }
             return list;
         }

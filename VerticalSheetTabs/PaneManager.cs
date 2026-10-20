@@ -61,7 +61,17 @@ namespace VerticalSheetTabs
         {
             if (window == null) return;
             int hwnd = window.Hwnd;
-            if (_entries.ContainsKey(hwnd)) return;
+            Entry existing;
+            if (_entries.TryGetValue(hwnd, out existing))
+            {
+                // Excel can give a new workbook the window handle of one that was closed; the old entry
+                // (and its pane) is then stale and must not stop the new workbook from getting a pane.
+                bool sameWorkbook;
+                try { sameWorkbook = existing.Workbook.Equals(workbook); }
+                catch (Exception) { sameWorkbook = false; }
+                if (sameWorkbook) return;
+                PurgeEntry(existing);
+            }
 
             // First open (no add-in property in the workbook): defaults, i.e. left side.
             var settings = WorkbookSettings.Load(workbook);
@@ -233,11 +243,14 @@ namespace VerticalSheetTabs
                 if (!_entries.ContainsValue(entry)) return;
                 int dpi = DpiHelper.GetDpi(entry.Control.Handle); // the real DPI (Control.DeviceDpi says 96 in a task pane)
                 entry.Chrome = entry.Pane.Width - entry.Control.Width;
+                // A frame width that is not plausible means the pane was not laid out yet.
+                if (entry.Chrome < 0 || entry.Chrome > (int)Math.Round(60 * dpi / 96.0)) entry.Chrome = (int)Math.Round(16 * dpi / 96.0);
                 int contentPx = entry.Settings.WidthDip > 0
                     ? (int)Math.Round(entry.Settings.WidthDip * dpi / 96.0)
                     : entry.Control.DefaultContentWidth();
                 entry.Pane.Width = contentPx + entry.Chrome;
                 entry.Initialized = true;
+                VerifyWidth(entry, contentPx, 0);
             }
             catch (Exception)
             {
@@ -249,6 +262,37 @@ namespace VerticalSheetTabs
             }
         }
 
+        // The pane is laid out by Excel after the width was set, so the frame width measured at that moment
+        // can be wrong (a busy Excel, another DPI). The content width is read back a little later and
+        // corrected by the difference, a few times; this way the stored width comes back exactly.
+        private void VerifyWidth(Entry entry, int contentPx, int attempt)
+        {
+            if (attempt >= 4) return;
+            var timer = new Timer { Interval = 300 };
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+                timer.Dispose();
+                try
+                {
+                    if (!_entries.ContainsValue(entry) || !entry.Pane.Visible) return;
+                    // the user is dragging the splitter: leave it alone
+                    if (System.Windows.Forms.Control.MouseButtons != System.Windows.Forms.MouseButtons.None) return;
+                    int actual = entry.Control.Width;
+                    if (actual > 0 && Math.Abs(actual - contentPx) > 1)
+                    {
+                        entry.Pane.Width += contentPx - actual;
+                        VerifyWidth(entry, contentPx, attempt + 1);
+                    }
+                }
+                catch (Exception)
+                {
+                    // The pane was closed meanwhile.
+                }
+            };
+            timer.Start();
+        }
+
         // Called before the workbook is saved: stores the current state in its properties.
         public void SaveSettings(Excel.Workbook workbook)
         {
@@ -257,6 +301,9 @@ namespace VerticalSheetTabs
                 if (!entry.Workbook.Equals(workbook)) continue;
                 try
                 {
+                    // sheets added without the sync having seen them get their id now, so that the file
+                    // has the ids and opening it does not have to give them (and change the workbook)
+                    if (entry.Folders.HasFolders) RefreshKeys(entry);
                     FolderStore.Save(entry.Workbook, entry.Folders);
                 }
                 catch (Exception)
@@ -267,7 +314,7 @@ namespace VerticalSheetTabs
                     entry.Settings.Side = entry.Pane.DockPosition == Office.MsoCTPDockPosition.msoCTPDockPositionRight
                         ? TabSide.Right : TabSide.Left;
                     // While the pane has never been shown (horizontal-only mode) the stored width stays as is.
-                    if (entry.Initialized)
+                    if (entry.Initialized && entry.Control.Width >= 40)
                     {
                         entry.Settings.WidthDip = (int)Math.Round(entry.Control.Width * 96.0 / DpiHelper.GetDpi(entry.Control.Handle));
                     }
@@ -403,6 +450,24 @@ namespace VerticalSheetTabs
         private static bool SyncSheets(Entry entry)
         {
             if (entry.Busy) return true;
+            // The sync only reads. Should anything in it still change the workbook (an id given to a new
+            // sheet, Excel's own reaction to a read), a workbook that was unchanged stays unchanged: opening
+            // a workbook must never make Excel ask "save changes?". The sync runs to its end on the UI
+            // thread, so a change of the flag within it is never the user's.
+            bool wasSaved = false;
+            try { wasSaved = entry.Workbook.Saved; } catch (Exception) { }
+            try
+            {
+                return SyncSheetsCore(entry);
+            }
+            finally
+            {
+                try { if (wasSaved && !entry.Workbook.Saved) entry.Workbook.Saved = true; } catch (Exception) { }
+            }
+        }
+
+        private static bool SyncSheetsCore(Entry entry)
+        {
             try
             {
                 var names = new List<string>();
@@ -463,7 +528,7 @@ namespace VerticalSheetTabs
             string signature = string.Join("|", allNames);
             if (signature != entry.KeySignature || entry.Keys.Count != allNames.Count)
             {
-                entry.Keys = FolderStore.SheetKeys(entry.Workbook, true);
+                entry.Keys = FolderStore.SheetKeys(entry.Workbook, true, true);
                 entry.AllNames = new List<string>(allNames);
                 entry.KeySignature = signature;
                 entry.Folders.Reconcile(entry.Keys);
@@ -602,6 +667,7 @@ namespace VerticalSheetTabs
                 RefreshKeys(entry);
                 if (!change()) return;
                 ApplyExcelOrder(entry, selectedNames, activeName);
+                MarkChanged(entry);
             }
             catch (Exception)
             {

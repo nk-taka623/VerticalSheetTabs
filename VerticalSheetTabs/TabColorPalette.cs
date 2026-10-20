@@ -38,10 +38,25 @@ namespace VerticalSheetTabs
             Color.FromArgb(146, 208, 80), Color.FromArgb(0, 176, 80), Color.FromArgb(0, 176, 240), Color.FromArgb(0, 112, 192),
             Color.FromArgb(0, 32, 96), Color.FromArgb(112, 48, 160)
         };
-        // Tints of the rows below the base color; white and black columns use their own, as in Excel.
+        // Tints of the five rows below the base color, as Excel's palette shows them (measured in Excel):
+        // the white and black columns have their own; the other columns use one of three sets, chosen
+        // by the lightness of the theme color (very light: darker shades, very dark: lighter tints).
         private static readonly double[] NormalTints = { 0, 0.8, 0.6, 0.4, -0.25, -0.5 };
-        private static readonly double[] LightTints = { 0, -0.05, -0.15, -0.25, -0.35, -0.5 };
-        private static readonly double[] DarkTints = { 0, 0.5, 0.35, 0.25, 0.15, 0.05 };
+        private static readonly double[] WhiteTints = { 0, -0.05, -0.15, -0.25, -0.35, -0.5 };
+        private static readonly double[] BlackTints = { 0, 0.5, 0.35, 0.25, 0.15, 0.05 };
+        private static readonly double[] VeryLightTints = { 0, -0.1, -0.25, -0.5, -0.75, -0.9 };
+        private static readonly double[] VeryDarkTints = { 0, 0.9, 0.75, 0.5, 0.25, 0.1 };
+
+        private static double[] TintsFor(int col, Color themeColor)
+        {
+            if (col == 0) return WhiteTints;
+            if (col == 1) return BlackTints;
+            double h, l, sat;
+            RgbToHls(themeColor, out h, out l, out sat);
+            if (l > 0.8) return VeryLightTints;
+            if (l < 0.2) return VeryDarkTints;
+            return NormalTints;
+        }
 
         private class Cell
         {
@@ -55,6 +70,8 @@ namespace VerticalSheetTabs
         private readonly List<Cell> _cells = new List<Cell>();
         private readonly List<KeyValuePair<string, Point>> _titles = new List<KeyValuePair<string, Point>>();
         private int _hot = -1;
+        private Font _bold;
+        private readonly List<int> _dividers = new List<int>();
         private Color[] _theme = OfficeTheme;
 
         public event Action<TabColorChoice> ColorChosen;
@@ -62,8 +79,11 @@ namespace VerticalSheetTabs
         public TabColorPalette()
         {
             DoubleBuffered = true;
-            BackColor = SystemColors.Window;
-            Font = SystemFonts.MenuFont;
+            BackColor = Color.White;
+            Font font = SystemFonts.MenuFont;
+            // the pane's WinForms scaling is 96 dpi, Excel's menus use the real one
+            Font = new Font(font.FontFamily, font.SizeInPoints * 0.92f * Dpi / 96f, FontStyle.Regular, GraphicsUnit.Point);
+            _bold = new Font(Font, FontStyle.Bold);
             Rebuild();
         }
 
@@ -75,64 +95,76 @@ namespace VerticalSheetTabs
             Invalidate();
         }
 
-        private int S(int v)
+        private int Dpi
         {
-            return (int)Math.Round(v * DeviceDpi / 96.0);
+            get { return DpiHelper.GetDpi(IsHandleCreated ? Handle : IntPtr.Zero); }
         }
 
+        // DIP to pixels at the real DPI.
+        private int D(double dip)
+        {
+            return (int)Math.Round(dip * Dpi / 96.0);
+        }
+
+        // The layout is Excel's own, measured at 125% and given here in DIP: swatches 24 x 24 with 3.2
+        // between columns, the five shades touch each other, a header band of 34 above every group.
         private void Rebuild()
         {
             _cells.Clear();
             _titles.Clear();
-            int pad = S(6), size = S(18), gap = S(3), x0 = pad, y = pad;
-            int titleH = Font.Height + S(4);
+            _dividers.Clear();
+            int x0 = D(2.4), pitch = D(27.2), size = D(24), headerH = D(34), itemH = D(26);
+            int width = 9 * pitch + size;
+            int y = 0;
 
-            _titles.Add(new KeyValuePair<string, Point>("テーマの色", new Point(x0, y)));
-            y += titleH;
+            _titles.Add(new KeyValuePair<string, Point>("テーマの色", new Point(x0 + D(2), y + headerH / 2)));
+            y += headerH;
             for (int row = 0; row < 6; row++)
             {
                 for (int col = 0; col < 10; col++)
                 {
-                    double[] tints = col == 0 ? LightTints : col == 1 ? DarkTints : NormalTints;
-                    double tint = tints[row];
+                    double tint = TintsFor(col, _theme[col])[row];
                     var choice = new TabColorChoice { Kind = TabColorKind.Theme, ThemeIndex = ThemeIndexes[col], Tint = tint };
                     _cells.Add(new Cell
                     {
-                        Bounds = new Rectangle(x0 + col * (size + gap), y, size, size),
+                        Bounds = new Rectangle(x0 + col * pitch, y, size, size),
                         Color = ApplyTint(_theme[col], tint),
                         Choice = choice
                     });
                 }
-                y += size + (row == 0 ? gap + S(3) : gap);
+                y += size;
+                if (row == 0) y += D(12.8);
             }
 
-            y += S(4);
-            _titles.Add(new KeyValuePair<string, Point>("標準の色", new Point(x0, y)));
-            y += titleH;
+            y += D(12.8);
+            _dividers.Add(y);
+            _titles.Add(new KeyValuePair<string, Point>("標準の色", new Point(x0 + D(2), y + headerH / 2)));
+            y += headerH;
             for (int col = 0; col < StandardColors.Length; col++)
             {
                 Color c = StandardColors[col];
                 _cells.Add(new Cell
                 {
-                    Bounds = new Rectangle(x0 + col * (size + gap), y, size, size),
+                    Bounds = new Rectangle(x0 + col * pitch, y, size, size),
                     Color = c,
                     Choice = new TabColorChoice { Kind = TabColorKind.Rgb, Bgr = c.R | (c.G << 8) | (c.B << 16) }
                 });
             }
-            y += size + S(8);
+            y += size + D(11.2);
 
-            int width = 10 * (size + gap) - gap;
+            _dividers.Add(y);
+            y += D(3);
             _cells.Add(new Cell
             {
-                Bounds = new Rectangle(x0, y, width, titleH + S(2)),
+                Bounds = new Rectangle(0, y, width + 2 * x0, itemH),
                 Text = "色なし(&N)",
                 Choice = new TabColorChoice { Kind = TabColorKind.None }
             });
-            y += titleH + S(2);
-            _cells.Add(new Cell { Bounds = new Rectangle(x0, y, width, titleH + S(2)), Text = "その他の色(&M)...", More = true });
-            y += titleH + S(2);
+            y += itemH;
+            _cells.Add(new Cell { Bounds = new Rectangle(0, y, width + 2 * x0, itemH), Text = "その他の色(&M)...", More = true });
+            y += itemH + D(3);
 
-            Size = new Size(x0 + width + pad, y + pad);
+            Size = new Size(width + 2 * x0, y);
         }
 
         // Excel's tint: lighten (tint > 0) or darken (tint < 0) the luminance in HLS space.
@@ -183,7 +215,11 @@ namespace VerticalSheetTabs
             base.OnPaint(e);
             foreach (var t in _titles)
             {
-                TextRenderer.DrawText(e.Graphics, t.Key, Font, t.Value, SystemColors.ControlText, TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(e.Graphics, t.Key, _bold, new Point(t.Value.X, t.Value.Y - _bold.Height / 2), Color.Black, TextFormatFlags.NoPadding);
+            }
+            using (var line = new Pen(Color.FromArgb(225, 225, 225), 1))
+            {
+                foreach (int y in _dividers) e.Graphics.DrawLine(line, 0, y, Width, y);
             }
             for (int i = 0; i < _cells.Count; i++)
             {
@@ -191,18 +227,30 @@ namespace VerticalSheetTabs
                 bool hot = i == _hot;
                 if (c.Text != null)
                 {
-                    if (hot) using (var b = new SolidBrush(SystemColors.Highlight)) e.Graphics.FillRectangle(b, c.Bounds);
+                    if (hot) using (var b = new SolidBrush(Color.FromArgb(240, 240, 240))) e.Graphics.FillRectangle(b, c.Bounds);
                     TextRenderer.DrawText(e.Graphics, c.Text.Replace("&", ""), Font,
-                        Rectangle.Inflate(c.Bounds, -S(4), 0), hot ? SystemColors.HighlightText : SystemColors.ControlText,
+                        new Rectangle(c.Bounds.X + D(16), c.Bounds.Y, c.Bounds.Width - D(16), c.Bounds.Height), Color.Black,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
                     continue;
                 }
                 using (var b = new SolidBrush(c.Color)) e.Graphics.FillRectangle(b, c.Bounds);
-                using (var pen = new Pen(hot ? Color.FromArgb(255, 170, 0) : Color.FromArgb(170, 170, 170), hot ? 2 : 1))
+                Rectangle r = c.Bounds;
+                if (hot)
                 {
-                    Rectangle r = c.Bounds;
-                    r.Width -= 1; r.Height -= 1;
-                    e.Graphics.DrawRectangle(pen, r);
+                    using (var pen = new Pen(Color.FromArgb(60, 60, 60), 2))
+                    {
+                        r.Inflate(-1, -1);
+                        e.Graphics.DrawRectangle(pen, r);
+                    }
+                }
+                else if (c.Color.GetBrightness() > 0.97f)
+                {
+                    // a white swatch needs an outline, the others have none (like Excel's)
+                    using (var pen = new Pen(Color.FromArgb(190, 190, 190), 1))
+                    {
+                        r.Width -= 1; r.Height -= 1;
+                        e.Graphics.DrawRectangle(pen, r);
+                    }
                 }
             }
         }
