@@ -1134,6 +1134,22 @@ namespace VerticalSheetTabs
             }
         }
 
+        // Excel's tab (and cell) colors number the theme colors differently from the XlThemeColor names:
+        // 1 is white (Background 1), 2 is black (Text 1), 3 is Background 2 and 4 is Text 2 (measured in
+        // Excel; the names say the opposite). The palette and the folder colors use the names' numbering
+        // (2 = light 1 ...); this turns it into the number Excel's Tab.ThemeColor wants.
+        private static int TabThemeColorIndex(int themeIndex)
+        {
+            switch (themeIndex)
+            {
+                case 1: return 2;
+                case 2: return 1;
+                case 3: return 4;
+                case 4: return 3;
+                default: return themeIndex;
+            }
+        }
+
         // Applies a tab color to every selected sheet, as Excel does for a group.
         private void ApplyTabColor(Entry entry, IList<string> names, TabColorChoice choice)
         {
@@ -1158,7 +1174,7 @@ namespace VerticalSheetTabs
                             tab.Color = choice.Bgr;
                             break;
                         default:
-                            tab.ThemeColor = (Excel.XlThemeColor)choice.ThemeIndex;
+                            tab.ThemeColor = (Excel.XlThemeColor)TabThemeColorIndex(choice.ThemeIndex);
                             tab.TintAndShade = choice.Tint;
                             break;
                     }
