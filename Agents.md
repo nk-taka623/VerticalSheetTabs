@@ -1129,5 +1129,5 @@ gitGraph
 
 ### 12.38 インストーラの更新 (バージョン1.1.9.0)
 
-- 12.37 (フォルダ内のシートを、最後のシートの下にドラッグすると、フォルダの外に出る変更) を含めて、バージョンを 1.1.9.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 12.37 (フォルダ内のシートを、最後のシートの下にドラッグすると、フォルダの外に出る変更) を含めて、バージョンを 1.1.9.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.9` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_9_0\`)。インストールの実機確認は、未実施
