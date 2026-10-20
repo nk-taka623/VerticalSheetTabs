@@ -1092,6 +1092,6 @@ gitGraph
 
 ### 12.32 インストーラの更新 (バージョン1.1.6.0)
 
-- 12.31 (「フォルダと中のシートの色」で、フォルダの色も変わる修正) を含めて、バージョンを 1.1.6.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 12.31 (「フォルダと中のシートの色」で、フォルダの色も変わる修正) を含めて、バージョンを 1.1.6.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.6` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_6_0\`)。インストールの実機確認は、未実施
 - 12.30 に書いた、出力先 (`bin\Release\app.publish\`) が使えない状態は、解消していた (原因は、特定できないまま)。今回は、標準の出力先で、公開できた。`bin\Release115\` は、不要になった
