@@ -187,10 +187,10 @@ namespace VerticalSheetTabs
             }
         }
 
-        // First-open width: 8 half-width characters plus the tab's own paddings.
+        // First-open width: 12 half-width characters plus the tab's own paddings.
         public int DefaultContentWidth()
         {
-            Size text = TextRenderer.MeasureText(new string('0', 8), TabFont, new Size(int.MaxValue, int.MaxValue),
+            Size text = TextRenderer.MeasureText(new string('0', 12), TabFont, new Size(int.MaxValue, int.MaxValue),
                 TextFormatFlags.NoPadding);
             return text.Width + Px(InsetLeft + InsetRight + TextPadLeft + TextPadRight);
         }

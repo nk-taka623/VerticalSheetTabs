@@ -215,7 +215,7 @@ namespace VerticalSheetTabs
             return item;
         }
 
-        // First-open width: 8 half-width characters plus the tab's paddings.
+        // First-open width: 12 half-width characters plus the tab's paddings.
         public int DefaultContentWidth()
         {
             return _strip.DefaultContentWidth();
