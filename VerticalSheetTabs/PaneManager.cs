@@ -243,7 +243,7 @@ namespace VerticalSheetTabs
                 : Office.MsoCTPDockPosition.msoCTPDockPositionLeft;
         }
 
-        // Applies the stored width, or 8 half-width characters on first open.
+        // Applies the stored width, or 12 half-width characters on first open.
         private void InitializeWidth(Entry entry)
         {
             try
@@ -943,8 +943,6 @@ namespace VerticalSheetTabs
                 switch (command)
                 {
                     case "hide": RunExcelCommand(entry, "SheetHide"); break;
-                    case "protect": RunExcelCommand(entry, "SheetProtect"); break;
-                    case "movecopy": RunExcelCommand(entry, "SheetMoveOrCopy"); break;
                 }
             }
             catch (Exception)

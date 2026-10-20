@@ -44,7 +44,7 @@ namespace VerticalSheetTabs
         public event Action<IList<string>, IList<string>> DeleteKeyRequested;
         // (folders, also delete their sheets) from the folder menu.
         public event Action<IList<string>, bool> DeleteFoldersRequested;
-        // (command, folders): "select", "hide", "unhide", "protect", "movecopy" on the sheets of the folders.
+        // (command, folders): "select", "deselect", "hide", "unhide" on the sheets of the folders.
         public event Action<string, IList<string>> FolderCommandRequested;
         // (folders, color) the color of the folder rows.
         public event Action<IList<string>, TabColorChoice> FolderColorRequested;
@@ -155,8 +155,6 @@ namespace VerticalSheetTabs
             var fSelect = FolderItem("フォルダ内のシートをすべて選択(&S)", "select");
             var fHide = FolderItem("フォルダ内のシートをすべて非表示(&H)", "hide");
             var fUnhide = FolderItem("フォルダ内のシートをすべて再表示(&U)", "unhide");
-            var fProtect = FolderItem("フォルダ内のシートの保護(&P)...", "protect");
-            var fMove = FolderItem("フォルダ内のシートの移動またはコピー(&M)...", "movecopy");
             var fColor = PaletteItem("フォルダの色(&C)", c => { if (FolderColorRequested != null) FolderColorRequested(_strip.SelectedFolders(), c); });
             var fTabColor = PaletteItem("フォルダと中のシートの色(&T)", c => { if (FolderTabColorRequested != null) FolderTabColorRequested(_strip.SelectedFolders(), c); });
             _folderMenu.Items.Add(folderRename);
@@ -165,8 +163,6 @@ namespace VerticalSheetTabs
             _folderMenu.Items.Add(fSelect);
             _folderMenu.Items.Add(fHide);
             _folderMenu.Items.Add(fUnhide);
-            _folderMenu.Items.Add(fProtect);
-            _folderMenu.Items.Add(fMove);
             _folderMenu.Items.Add(new ToolStripSeparator());
             _folderMenu.Items.Add(fColor);
             _folderMenu.Items.Add(fTabColor);
@@ -179,7 +175,6 @@ namespace VerticalSheetTabs
                 folderRename.Enabled = _strip.SelectedFolders().Count <= 1;
                 fHide.Enabled = free;
                 fUnhide.Enabled = free;
-                fMove.Enabled = free;
                 folderDeleteAll.Enabled = free;
             };
             _strip.SheetMenu = _menu;
@@ -215,7 +210,7 @@ namespace VerticalSheetTabs
             return item;
         }
 
-        // First-open width: 8 half-width characters plus the tab's paddings.
+        // First-open width: 12 half-width characters plus the tab's paddings.
         public int DefaultContentWidth()
         {
             return _strip.DefaultContentWidth();

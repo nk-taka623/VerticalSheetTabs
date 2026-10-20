@@ -36,7 +36,7 @@ namespace VerticalSheetTabs
         // Until Step4 lets the user choose, new workbooks show both tab bars (non-destructive).
         public TabMode Mode { get; set; }
         public TabSide Side { get; set; }
-        // 0 means "not stored": the caller uses the default (8 half-width characters).
+        // 0 means "not stored": the caller uses the default (12 half-width characters).
         public int WidthDip { get; set; }
 
         public WorkbookSettings()
