@@ -151,15 +151,17 @@ namespace VerticalSheetTabs
             folderDelete.Click += (s, e) => { if (DeleteFoldersRequested != null) DeleteFoldersRequested(_strip.SelectedFolders(), false); };
             var folderDeleteAll = new ToolStripMenuItem("フォルダと中のシートを削除(&X)");
             folderDeleteAll.Click += (s, e) => { if (DeleteFoldersRequested != null) DeleteFoldersRequested(_strip.SelectedFolders(), true); };
+            var fDeselect = FolderItem("フォルダ内のシートをすべて非選択(&N)", "deselect");
             var fSelect = FolderItem("フォルダ内のシートをすべて選択(&S)", "select");
             var fHide = FolderItem("フォルダ内のシートをすべて非表示(&H)", "hide");
             var fUnhide = FolderItem("フォルダ内のシートをすべて再表示(&U)", "unhide");
             var fProtect = FolderItem("フォルダ内のシートの保護(&P)...", "protect");
             var fMove = FolderItem("フォルダ内のシートの移動またはコピー(&M)...", "movecopy");
             var fColor = PaletteItem("フォルダの色(&C)", c => { if (FolderColorRequested != null) FolderColorRequested(_strip.SelectedFolders(), c); });
-            var fTabColor = PaletteItem("シート見出しの色をフォルダ内のシートに適用(&T)", c => { if (FolderTabColorRequested != null) FolderTabColorRequested(_strip.SelectedFolders(), c); });
+            var fTabColor = PaletteItem("フォルダと中のシートの色(&T)", c => { if (FolderTabColorRequested != null) FolderTabColorRequested(_strip.SelectedFolders(), c); });
             _folderMenu.Items.Add(folderRename);
             _folderMenu.Items.Add(new ToolStripSeparator());
+            _folderMenu.Items.Add(fDeselect);
             _folderMenu.Items.Add(fSelect);
             _folderMenu.Items.Add(fHide);
             _folderMenu.Items.Add(fUnhide);

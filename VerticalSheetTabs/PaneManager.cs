@@ -901,6 +901,11 @@ namespace VerticalSheetTabs
             try
             {
                 RefreshKeys(entry);
+                if (command == "deselect")
+                {
+                    DeselectFolderSheets(entry, folderIds);
+                    return;
+                }
                 List<string> all = MemberNames(entry, folderIds);
                 var visible = new List<string>();
                 var hidden = new List<object>();
@@ -939,6 +944,48 @@ namespace VerticalSheetTabs
                 ShowMessage("フォルダ内のシートの操作を完了できませんでした。");
             }
             SyncSheets(entry);
+        }
+
+        // "Deselect all sheets of the folder": when sheets outside the folders are selected, all sheets of
+        // the folders are taken out of the selection. Otherwise (nothing outside is selected, Excel needs
+        // one selected sheet) the first selected sheet of each folder, in the folder's order, stays and the
+        // others are taken out.
+        private void DeselectFolderSheets(Entry entry, IList<string> folderIds)
+        {
+            IList<string> selection = CurrentSelection(entry);
+            string active = CurrentActive(entry);
+            if (selection.Count == 0 || active == null) return;
+            var selected = new HashSet<string>(selection);
+
+            // Sheets outside the folders are selected: they are what stays selected, all sheets of the
+            // folders are taken out.
+            var members = new HashSet<string>(MemberNames(entry, folderIds));
+            List<string> outside = selection.Where(n => !members.Contains(n)).ToList();
+            if (outside.Count > 0)
+            {
+                if (outside.Count == selection.Count) return; // no sheet of the folders is selected
+                entry.Window.Activate();
+                SelectSheets(entry, outside, members.Contains(active) ? outside[0] : active);
+                return;
+            }
+
+            var keptFor = new Dictionary<string, string>(); // removed sheet -> the sheet of its folder that stays
+            foreach (string id in folderIds)
+            {
+                string kept = null;
+                foreach (string name in MemberNames(entry, new[] { id }))
+                {
+                    if (!selected.Contains(name)) continue;
+                    if (kept == null) kept = name;
+                    else keptFor[name] = kept;
+                }
+            }
+            if (keptFor.Count == 0) return;
+            var remaining = selection.Where(n => !keptFor.ContainsKey(n)).ToList();
+            string newActive;
+            if (!keptFor.TryGetValue(active, out newActive)) newActive = active;
+            entry.Window.Activate();
+            SelectSheets(entry, remaining, newActive);
         }
 
         private void CreateFolder(Entry entry, IList<string> sheetNames)
