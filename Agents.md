@@ -1103,5 +1103,5 @@ gitGraph
 
 ### 12.34 インストーラの更新 (バージョン1.1.7.0)
 
-- 12.33 (シートのメニューの「新しいフォルダ」の位置の変更) を含めて、バージョンを 1.1.7.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 12.33 (シートのメニューの「新しいフォルダ」の位置の変更) を含めて、バージョンを 1.1.7.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.7` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_7_0\`)。インストールの実機確認は、未実施
