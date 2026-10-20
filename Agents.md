@@ -1080,6 +1080,6 @@ gitGraph
 
 ### 12.30 インストーラの更新 (バージョン1.1.5.0)
 
-- 12.27 (パレットのテーマ色の番号の入れ替わりの修正)、12.28 と 12.29 (フォルダの一括操作の変更) を含めて、バージョンを 1.1.5.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 12.27 (パレットのテーマ色の番号の入れ替わりの修正)、12.28 と 12.29 (フォルダの一括操作の変更) を含めて、バージョンを 1.1.5.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.5` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release115\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_5_0\`)。インストールの実機確認は、未実施
 - 公開の出力先について: 通常の出力先 `bin\Release\app.publish\` が、ほかのプロセスに使われていて (どのプロセスかは、特定できていない)、削除できなかったため、出力先を `bin\Release115\` に変えて、公開した (`-p:OutputPath=bin\Release115\`)。`bin\Release\app.publish\` が、使えるようになったら、通常の出力先で、公開し直せる
