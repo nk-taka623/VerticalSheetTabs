@@ -1022,6 +1022,15 @@ namespace VerticalSheetTabs
             Invalidate();
         }
 
+        // Whether a dragged sheet comes from the folder of this folder row. Dropped below the last sheet
+        // of its own folder a sheet leaves the folder (to put a sheet at the end of a folder, drag it
+        // from outside the folder, or drop it between the sheets and move it).
+        private bool FromFolderOfRow(int folderRow)
+        {
+            if (folderRow < 0 || folderRow >= _rows.Count || !_rows[folderRow].IsFolder) return false;
+            return _dragSheets.Any(s => _rows[folderRow].Members.Contains(s));
+        }
+
         // The row that owns an indented row: the folder row above it.
         private int OwnerRow(int index)
         {
@@ -1064,7 +1073,8 @@ namespace VerticalSheetTabs
                     if (next != null) { if (next.IsFolder) beforeFolder = next.FolderId; else beforeSheet = next.Sheet; }
                 }
             }
-            else if (!foldersDragged && right && prev != null && (prev.Indented || (prev.IsFolder && prev.Expanded)))
+            else if (!foldersDragged && right && prev != null && (prev.Indented || (prev.IsFolder && prev.Expanded))
+                && !FromFolderOfRow(prev.Indented ? OwnerRow(b - 1) : -1))
             {
                 inside = true;
                 into = _rows[prev.Indented ? OwnerRow(b - 1) : b - 1].FolderId;
