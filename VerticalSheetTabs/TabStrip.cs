@@ -505,7 +505,7 @@ namespace VerticalSheetTabs
             }
 
             int textLeft = left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
-            var textRect = new Rectangle(textLeft, row.Top, Math.Max(1, right - textLeft - Px(TextPadRight)), row.Height);
+            var textRect = new Rectangle(textLeft, row.Top + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight)), row.Height);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             if (_editor == null || _editingFolderId != folder.FolderId)
             {
@@ -521,6 +521,20 @@ namespace VerticalSheetTabs
                 }
             }
             DrawSeparator(g, row);
+        }
+
+        // The text of a row is centered with the line box of its font, whose glyphs sit above the middle
+        // of the box (Yu Gothic has a tall descent; Japanese characters sit higher than Latin ones). The
+        // text is moved down so that its glyphs are centered in the tab body (measured: Latin 1.2 DIP,
+        // text with Japanese characters 3.2 DIP at the font size used here).
+        private int TextShift(string text)
+        {
+            bool wide = false;
+            if (text != null)
+            {
+                foreach (char c in text) if (c >= '⺀') { wide = true; break; }
+            }
+            return Px(wide ? 3.2 : 1.2);
         }
 
         private void DrawSeparator(Graphics g, Rectangle row)
@@ -597,7 +611,7 @@ namespace VerticalSheetTabs
 
             // text: left aligned, the active tab's text sits higher (the underline needs room)
             int lift = active ? Px(ActiveTextLift) : 0;
-            var textRect = new Rectangle(left + Px(TextPadLeft), row.Top - lift, Math.Max(1, right - left - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
+            var textRect = new Rectangle(left + Px(TextPadLeft), row.Top - lift + TextShift(name),Math.Max(1, right - left - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingName)
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
