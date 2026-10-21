@@ -60,8 +60,8 @@ namespace VerticalSheetTabs
         private const double PlainTop = 1, ColoredTop = 4, BottomInset = 4;
         private const double CornerRadius = 4;
         private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 3.2;
-        private const double ActiveTextLift = 3.2;
-        private const double GlowFraction = 2.0 / 3.0; // the glow reaches this fraction of the row from each edge
+        private const double ActiveTextLift = 1.6;
+        private const double GlowFraction = 1.0 / 3.0; // the glow reaches this fraction of the row from each edge
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -509,6 +509,12 @@ namespace VerticalSheetTabs
             h = (h + 180) % 360;
             s = Math.Max(s, 0.85);
             l = l > 0.5 ? 0.35 : 0.65;
+            return FromHsl(h, s, l);
+        }
+
+        // A color from hue (degrees), saturation and lightness (0..1).
+        private static Color FromHsl(double h, double s, double l)
+        {
             double q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
             Func<double, int> ch = t =>
             {
@@ -517,6 +523,27 @@ namespace VerticalSheetTabs
                 return (int)Math.Round(v * 255);
             };
             return Color.FromArgb(ch(h / 360 + 1.0 / 3), ch(h / 360), ch(h / 360 - 1.0 / 3));
+        }
+
+        // The colors of a selected row's lines and glow come from the color of the row: the opposite on the hue
+        // circle (hue + 180 degrees), which differs from it the most. A row without a color (white) or a gray one has
+        // no hue to turn: Excel's green is used then, as before.
+        private static bool HasHue(Color c, bool colored)
+        {
+            return colored && c.GetSaturation() >= 0.12;
+        }
+
+        // The lines: dark on a light color, light on a dark one (OppositeColor).
+        private static Color LineColorFor(Color rowColor, bool colored)
+        {
+            return HasHue(rowColor, colored) ? OppositeColor(rowColor) : Underline;
+        }
+
+        // The glow: the same hue as the lines, but a medium lightness, so that it shines and does not darken the row.
+        private static Color GlowColorFor(Color rowColor, bool colored)
+        {
+            Color basis = LineColorFor(rowColor, colored);
+            return FromHsl(basis.GetHue(), Math.Max(basis.GetSaturation(), 0.85), 0.6);
         }
 
         // An open folder and its sheets are enclosed by a dashed line, in the opposite color of the bar
@@ -609,8 +636,10 @@ namespace VerticalSheetTabs
                     using (var brush = new SolidBrush(colored ? color : Color.White)) g.FillPath(brush, path);
                     using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
-                DrawEdgeGlow(g, body, radius, 1.0);
-                if (colored) textColor = GlowedText(color);
+                Color glowColor = GlowColorFor(color, colored);
+                DrawEdgeGlow(g, body, radius, 1.0, glowColor);
+                DrawSelectionLines(g, body, LineColorFor(color, colored));
+                if (colored) textColor = GlowedText(color, glowColor);
             }
             else if (colored)
             {
@@ -746,16 +775,10 @@ namespace VerticalSheetTabs
                     using (var brush = new SolidBrush(colored ? tabColor : Color.White)) g.FillPath(brush, path);
                     using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
-                DrawEdgeGlow(g, body, radius, active ? 1.0 : 0.6);
-                if (colored) textColor = GlowedText(tabColor);
-                if (active)
-                {
-                    int thick = Math.Max(1, Px(UnderlineThickness));
-                    int ux = body.Left + Px(UnderlineInset);
-                    int uw = body.Width - 2 * Px(UnderlineInset);
-                    int uy = body.Bottom - 1 - Px(UnderlineGap) - thick;
-                    using (var brush = new SolidBrush(Underline)) g.FillRectangle(brush, ux, uy, Math.Max(1, uw), thick);
-                }
+                Color glowColor = GlowColorFor(tabColor, colored);
+                DrawEdgeGlow(g, body, radius, active ? 1.0 : 0.6, glowColor);
+                DrawSelectionLines(g, body, LineColorFor(tabColor, colored));
+                if (colored) textColor = GlowedText(tabColor, glowColor);
             }
             else if (colored)
             {
@@ -773,8 +796,8 @@ namespace VerticalSheetTabs
             // the separator between tabs: Excel's thin line, turned to lie across the stack
             DrawSeparator(g, row);
 
-            // text: left aligned, the active tab's text sits higher (the underline needs room)
-            int lift = active ? Px(ActiveTextLift) : 0;
+            // text: left aligned; the text of a selected tab sits a little higher (the lines above and below)
+            int lift = selected ? Px(ActiveTextLift) : 0;
             var textRect = new Rectangle(left + Px(TextPadLeft), row.Top - lift + TextShift(text),Math.Max(1, right - left - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
@@ -808,16 +831,16 @@ namespace VerticalSheetTabs
             }
         }
 
-        // A selected row glows at its left and right edge: a white light that is strongest at the edge and fades
-        // out toward the middle, over GlowFraction of the row from each side (two thirds: the two glows meet in the
-        // middle, where little of them is left). The text lies in the glow, so its color is chosen for the color
-        // lightened by it (TextOn of the lightened color, see GlowedText).
-        private void DrawEdgeGlow(Graphics g, Rectangle body, int radius, double strength)
+        // A selected row glows at its left and right edge: a light (GlowColorFor) that is strongest at the edge and
+        // fades out toward the middle, over GlowFraction of the row from each side (a third, so the two glows do
+        // not meet and the middle keeps the color of the row). The text lies in the glow, so its color is chosen
+        // for the color as the glow tints it (GlowedText).
+        private void DrawEdgeGlow(Graphics g, Rectangle body, int radius, double strength, Color glow)
         {
             Rectangle inner = Rectangle.Inflate(body, -1, -1);
             if (inner.Width < Px(30) || inner.Height < 4) return;
             int reach = Math.Max(2, (int)Math.Round(inner.Width * GlowFraction));
-            Color Light(double a) { return Color.FromArgb((int)Math.Round(255 * a * strength), 255, 255, 255); }
+            Color Light(double a) { return Color.FromArgb((int)Math.Round(255 * a * strength), glow.R, glow.G, glow.B); }
             GraphicsState state = g.Save();
             try
             {
@@ -852,10 +875,26 @@ namespace VerticalSheetTabs
             }
         }
 
-        // The text color of a selected row in a color: chosen for the color as the glow lightens it.
-        private static Color GlowedText(Color c)
+        // The text color of a selected row in a color: chosen for the color as the glow tints it.
+        private static Color GlowedText(Color c, Color glow)
         {
-            return TextOn(Mix(c, Color.White, 0.5));
+            return TextOn(Mix(c, glow, 0.45));
+        }
+
+        // The lines of a selected row, inside its top and its bottom edge (the green underline of Excel's
+        // selected tab, and the same above).
+        private void DrawSelectionLines(Graphics g, Rectangle body, Color color)
+        {
+            int thick = Math.Max(1, Px(UnderlineThickness));
+            int ux = body.Left + Px(UnderlineInset);
+            int uw = Math.Max(1, body.Width - 2 * Px(UnderlineInset));
+            int upper = body.Top + 1 + Px(UnderlineGap);
+            int lower = body.Bottom - 1 - Px(UnderlineGap) - thick;
+            using (var brush = new SolidBrush(color))
+            {
+                g.FillRectangle(brush, ux, upper, uw, thick);
+                g.FillRectangle(brush, ux, lower, uw, thick);
+            }
         }
 
         // The text color on a sheet or folder color: dark on light colors, white on dark ones.
