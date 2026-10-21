@@ -441,8 +441,28 @@ namespace VerticalSheetTabs
             DrawPlus(g);
         }
 
-        // An open folder and its sheets are enclosed by a dashed line, white like a selected tab, with the
-        // upper right and the lower left corners cut off. The line goes when the folder is closed.
+        // The outline color is the opposite of the bar background on the hue circle (hue + 180 degrees).
+        // A gray background has no hue to turn, so the saturation is raised and the lightness is pushed
+        // away from the background's, to keep the line visible.
+        private Color OutlineColor()
+        {
+            Color bg = Theme.BarBack;
+            double h = bg.GetHue(), s = bg.GetSaturation(), l = bg.GetBrightness();
+            h = (h + 180) % 360;
+            s = Math.Max(s, 0.85);
+            l = l > 0.5 ? 0.35 : 0.65;
+            double q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+            Func<double, int> ch = t =>
+            {
+                t = ((t % 1) + 1) % 1;
+                double v = t < 1.0 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2.0 / 3 ? p + (q - p) * (2.0 / 3 - t) * 6 : p;
+                return (int)Math.Round(v * 255);
+            };
+            return Color.FromArgb(ch(h / 360 + 1.0 / 3), ch(h / 360), ch(h / 360 - 1.0 / 3));
+        }
+
+        // An open folder and its sheets are enclosed by a dashed line, in the opposite color of the bar
+        // background, with the upper right and the lower left corners cut off. The line goes when the folder is closed.
         private void DrawFolderOutlines(Graphics g)
         {
             for (int i = 0; i < _rows.Count; i++)
@@ -462,20 +482,10 @@ namespace VerticalSheetTabs
                     new Point(l, t), new Point(r - cut, t), new Point(r, t + cut), new Point(r, b),
                     new Point(l + cut, b), new Point(l, b - cut)
                 };
-                // The dashes are edged with a dark line: the bar color, 75% darker. The edge is a wider pen
-                // whose dashes are one pixel longer at both ends; both pens use the same dash pattern in pixels.
-                int w = Math.Max(2, Px(1.2)), edge = 1, on = Px(5), off = Px(4);
-                Color dark = Color.FromArgb(Theme.BarBack.R / 4, Theme.BarBack.G / 4, Theme.BarBack.B / 4);
-                float wide = w + 2 * edge;
-                using (var edgePen = new Pen(dark, wide))
-                using (var pen = new Pen(Color.White, w))
+                using (var pen = new Pen(OutlineColor(), Math.Max(1f, Px(1.2))))
                 {
-                    edgePen.LineJoin = LineJoin.Miter;
-                    edgePen.DashPattern = new[] { (on + 2 * edge) / wide, Math.Max(0.5f, (off - 2 * edge) / wide) };
-                    edgePen.DashOffset = edge / wide;
+                    pen.DashStyle = DashStyle.Dash;
                     pen.LineJoin = LineJoin.Miter;
-                    pen.DashPattern = new[] { on / (float)w, off / (float)w };
-                    g.DrawPolygon(edgePen, points);
                     g.DrawPolygon(pen, points);
                 }
                 i = last;
