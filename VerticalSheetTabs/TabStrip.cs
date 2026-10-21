@@ -61,7 +61,7 @@ namespace VerticalSheetTabs
         private const double CornerRadius = 4;
         private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 3.2;
         private const double ActiveTextLift = 3.2;
-        private const double GlowWidth = 14;
+        private const float GlowFraction = 1f / 3f; // the glow reaches this fraction of the row from each edge
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -610,7 +610,7 @@ namespace VerticalSheetTabs
                     using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
                 DrawEdgeGlow(g, body, radius, 1.0);
-                if (colored) textColor = TextOn(color);
+                if (colored) textColor = TextOn(Mix(color, Color.White, 0.4));
             }
             else if (colored)
             {
@@ -747,7 +747,7 @@ namespace VerticalSheetTabs
                     using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
                 DrawEdgeGlow(g, body, radius, active ? 1.0 : 0.6);
-                if (colored) textColor = TextOn(tabColor);
+                if (colored) textColor = TextOn(Mix(tabColor, Color.White, 0.4));
                 if (active)
                 {
                     int thick = Math.Max(1, Px(UnderlineThickness));
@@ -808,22 +808,22 @@ namespace VerticalSheetTabs
             }
         }
 
-        // A selected row glows at its left and right edge: a white light at the edge that fades out toward the
-        // middle within a few DIP (the text starts behind it, so it stays readable). The color of the row is
-        // unchanged except for this edge.
+        // A selected row glows at its left and right edge: a white light that is strongest at the edge and fades
+        // out toward the middle, over a third of the row from each side. The text lies in the glow, so its color is
+        // chosen for the color lightened by it (TextOn of the lightened color).
         private void DrawEdgeGlow(Graphics g, Rectangle body, int radius, double strength)
         {
             Rectangle inner = Rectangle.Inflate(body, -1, -1);
             if (inner.Width < Px(30) || inner.Height < 4) return;
-            float f = (float)Math.Min(0.4, Px(GlowWidth) / (double)inner.Width);
+            const float f = GlowFraction;
             Color Light(double a) { return Color.FromArgb((int)Math.Round(255 * a * strength), 255, 255, 255); }
             using (var brush = new LinearGradientBrush(inner, Color.White, Color.White, LinearGradientMode.Horizontal))
             using (GraphicsPath path = RoundedRect(inner, Math.Max(1, radius - 1)))
             {
                 brush.InterpolationColors = new ColorBlend
                 {
-                    Positions = new[] { 0f, f * 0.35f, f, 1f - f, 1f - f * 0.35f, 1f },
-                    Colors = new[] { Light(0.7), Light(0.3), Light(0), Light(0), Light(0.3), Light(0.7) }
+                    Positions = new[] { 0f, f * 0.25f, f * 0.6f, f, 1f - f, 1f - f * 0.6f, 1f - f * 0.25f, 1f },
+                    Colors = new[] { Light(0.75), Light(0.45), Light(0.15), Light(0), Light(0), Light(0.15), Light(0.45), Light(0.75) }
                 };
                 g.FillPath(brush, path);
             }
