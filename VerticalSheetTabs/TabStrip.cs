@@ -59,9 +59,10 @@ namespace VerticalSheetTabs
         private const double InsetLeft = 3, InsetRight = 4;
         private const double PlainTop = 1, ColoredTop = 4, BottomInset = 4;
         private const double CornerRadius = 4;
-        private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 3.2;
         private const double ActiveTextLift = 1.6;
-        private const double GlowFraction = 1.0 / 3.0; // the glow reaches this fraction of the row from each edge
+        // The triangles at the ends of a selected row: distance of their center from the edge of the body, size,
+        // and the room the text keeps free at each end.
+        private const double MarkerInset = 13, MarkerHalfHeight = 5, MarkerBack = 4, MarkerFront = 3, MarkerRoom = 15;
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -533,17 +534,10 @@ namespace VerticalSheetTabs
             return colored && c.GetSaturation() >= 0.12;
         }
 
-        // The lines: dark on a light color, light on a dark one (OppositeColor).
+        // The color of the triangles: dark on a light color, light on a dark one (OppositeColor).
         private static Color LineColorFor(Color rowColor, bool colored)
         {
             return HasHue(rowColor, colored) ? OppositeColor(rowColor) : Underline;
-        }
-
-        // The glow: the same hue as the lines, but a medium lightness, so that it shines and does not darken the row.
-        private static Color GlowColorFor(Color rowColor, bool colored)
-        {
-            Color basis = LineColorFor(rowColor, colored);
-            return FromHsl(basis.GetHue(), Math.Max(basis.GetSaturation(), 0.85), 0.6);
         }
 
         // An open folder and its sheets are enclosed by a dashed line, in the opposite color of the bar
@@ -630,16 +624,13 @@ namespace VerticalSheetTabs
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
                 DrawShadow(g, body, radius, 1.0);
-                // white, or the folder color itself (not lightened); the shadow raises it
                 using (GraphicsPath path = RoundedRect(body, radius))
+                using (var brush = new SolidBrush(colored ? color : Color.White))
                 {
-                    using (var brush = new SolidBrush(colored ? color : Color.White)) g.FillPath(brush, path);
-                    using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
+                    g.FillPath(brush, path);
                 }
-                Color glowColor = GlowColorFor(color, colored);
-                DrawEdgeGlow(g, body, radius, 1.0, glowColor);
-                DrawSelectionLines(g, body, LineColorFor(color, colored));
-                if (colored) textColor = GlowedText(color, glowColor);
+                DrawSelectionFrame(g, body, radius, LineColorFor(color, colored));
+                if (colored) textColor = TextOn(color);
             }
             else if (colored)
             {
@@ -654,8 +645,9 @@ namespace VerticalSheetTabs
             }
 
             // closed: a right-pointing chevron; open: the same turned down
-            int cx = left + Px(TextPadLeft) / 2 + Px(FolderMarkWidth) / 2;
-            int cy = row.Top + row.Height / 2;
+            int markShift = selected ? Px(MarkerRoom) : 0; // room for the triangle at the left of a selected row
+            int cx = left + markShift + Px(TextPadLeft) / 2 + Px(FolderMarkWidth) / 2;
+            int cy = row.Top + row.Height / 2 - (selected ? Px(ActiveTextLift) : 0);
             int w = Px(FolderMarkWidth), h = Px(FolderMarkHeight);
             Point[] chevron = folder.Expanded
                 ? new[] { new Point(cx - h / 2, cy - w / 2), new Point(cx, cy + w / 2), new Point(cx + h / 2, cy - w / 2) }
@@ -666,8 +658,9 @@ namespace VerticalSheetTabs
                 g.DrawLines(pen, chevron);
             }
 
-            int textLeft = left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
-            var textRect = new Rectangle(textLeft, row.Top + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - CheckReserve(folder)), row.Height);
+            int textLeft = left + markShift + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
+            int roomRight = selected ? Px(MarkerRoom) : 0; // and for the one at the right
+            var textRect = new Rectangle(textLeft, row.Top - (selected ? Px(ActiveTextLift) : 0) + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - roomRight - CheckReserve(folder)), row.Height);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             if (_editor == null || _editingFolderId != folder.FolderId)
             {
@@ -766,19 +759,16 @@ namespace VerticalSheetTabs
             // when selected and has no background otherwise.
             if (selected)
             {
-                var body = new Rectangle(left, row.Top + Px(colored ? PlainTop : PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
                 // the active sheet is raised most; the other sheets of a group a little less
                 DrawShadow(g, body, radius, active ? 1.0 : 0.6);
-                // white, or the tab color itself (not lightened); the shadow raises it
                 using (GraphicsPath path = RoundedRect(body, radius))
+                using (var brush = new SolidBrush(colored ? tabColor : Color.White))
                 {
-                    using (var brush = new SolidBrush(colored ? tabColor : Color.White)) g.FillPath(brush, path);
-                    using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
+                    g.FillPath(brush, path);
                 }
-                Color glowColor = GlowColorFor(tabColor, colored);
-                DrawEdgeGlow(g, body, radius, active ? 1.0 : 0.6, glowColor);
-                DrawSelectionLines(g, body, LineColorFor(tabColor, colored));
-                if (colored) textColor = GlowedText(tabColor, glowColor);
+                DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored));
+                if (colored) textColor = TextOn(tabColor);
             }
             else if (colored)
             {
@@ -798,10 +788,12 @@ namespace VerticalSheetTabs
 
             // text: left aligned; the text of a selected tab sits a little higher (the lines above and below)
             int lift = selected ? Px(ActiveTextLift) : 0;
-            var textRect = new Rectangle(left + Px(TextPadLeft), row.Top - lift + TextShift(text),Math.Max(1, right - left - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
+            int room = selected ? Px(MarkerRoom) : 0; // room for the triangles at both ends of a selected row
+            var textRect = new Rectangle(left + room + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - 2 * room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                using (var font = selected ? new Font(TabFont, FontStyle.Bold) : null)
                 using (var brush = new SolidBrush(textColor))
                 using (var format = new StringFormat(StringFormat.GenericDefault))
                 {
@@ -809,7 +801,7 @@ namespace VerticalSheetTabs
                     format.LineAlignment = StringAlignment.Center;
                     format.Trimming = StringTrimming.EllipsisCharacter;
                     format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
-                    g.DrawString(text, TabFont, brush, textRect, format);
+                    g.DrawString(text, font ?? TabFont, brush, textRect, format);
                 }
             }
         }
@@ -831,69 +823,58 @@ namespace VerticalSheetTabs
             }
         }
 
-        // A selected row glows at its left and right edge: a light (GlowColorFor) that is strongest at the edge and
-        // fades out toward the middle, over GlowFraction of the row from each side (a third, so the two glows do
-        // not meet and the middle keeps the color of the row). The text lies in the glow, so its color is chosen
-        // for the color as the glow tints it (GlowedText).
-        private void DrawEdgeGlow(Graphics g, Rectangle body, int radius, double strength, Color glow)
+        // A selected row has a double frame (a dark outer one and a white inner one) and a small triangle at each end
+        // that points to the middle, in the opposite color of the row; the triangles have a white edge and a soft
+        // white halo of a few pixels (white shapes of growing width with a little opacity each: GDI+ has no blur),
+        // so that they can be seen on dark colors and on the dark bar of the dark Office themes as well.
+        private void DrawSelectionFrame(Graphics g, Rectangle body, int radius, Color marker)
         {
-            Rectangle inner = Rectangle.Inflate(body, -1, -1);
-            if (inner.Width < Px(30) || inner.Height < 4) return;
-            int reach = Math.Max(2, (int)Math.Round(inner.Width * GlowFraction));
-            Color Light(double a) { return Color.FromArgb((int)Math.Round(255 * a * strength), glow.R, glow.G, glow.B); }
-            GraphicsState state = g.Save();
-            try
+            bool dark = Theme.BarBack.GetBrightness() < 0.4f;
+            float outerWidth = Math.Max(2f, Px(1.6));
+            float innerWidth = Math.Max(1.5f, Px(1.3));
+            var outerRect = Rectangle.Inflate(body, -(int)Math.Ceiling(outerWidth / 2), -(int)Math.Ceiling(outerWidth / 2));
+            using (GraphicsPath path = RoundedRect(outerRect, radius))
+            using (var pen = new Pen(dark ? Color.FromArgb(16, 16, 16) : Color.FromArgb(43, 43, 43), outerWidth))
             {
-                using (GraphicsPath path = RoundedRect(inner, Math.Max(1, radius - 1)))
+                g.DrawPath(pen, path);
+            }
+            int inset = Px(2.6);
+            var innerRect = Rectangle.Inflate(body, -inset, -inset);
+            if (innerRect.Width > 4 && innerRect.Height > 4)
+            {
+                using (GraphicsPath path = RoundedRect(innerRect, Math.Max(1, radius - Px(1.5))))
+                using (var pen = new Pen(Color.White, innerWidth))
                 {
-                    g.SetClip(path, CombineMode.Intersect);
-                    var left = new Rectangle(inner.Left, inner.Top, reach, inner.Height);
-                    var right = new Rectangle(inner.Right - reach, inner.Top, reach, inner.Height);
-                    using (var brush = new LinearGradientBrush(left, Color.White, Color.White, LinearGradientMode.Horizontal))
-                    {
-                        brush.InterpolationColors = new ColorBlend
-                        {
-                            Positions = new[] { 0f, 0.25f, 0.6f, 1f },
-                            Colors = new[] { Light(0.75), Light(0.40), Light(0.10), Light(0) }
-                        };
-                        g.FillRectangle(brush, left);
-                    }
-                    using (var brush = new LinearGradientBrush(right, Color.White, Color.White, LinearGradientMode.Horizontal))
-                    {
-                        brush.InterpolationColors = new ColorBlend
-                        {
-                            Positions = new[] { 0f, 0.4f, 0.75f, 1f },
-                            Colors = new[] { Light(0), Light(0.10), Light(0.40), Light(0.75) }
-                        };
-                        g.FillRectangle(brush, right);
-                    }
+                    g.DrawPath(pen, path);
                 }
             }
-            finally
+            int cy = body.Top + body.Height / 2;
+            DrawMarker(g, body.Left + Px(MarkerInset), cy, 1, marker);
+            DrawMarker(g, body.Right - Px(MarkerInset), cy, -1, marker);
+        }
+
+        // One triangle pointing right (dir 1) or left (dir -1), centered at (cx, cy).
+        private void DrawMarker(Graphics g, int cx, int cy, int dir, Color color)
+        {
+            int halfH = Px(MarkerHalfHeight), back = Px(MarkerBack), front = Px(MarkerFront);
+            var points = new[]
             {
-                g.Restore(state);
+                new Point(cx - dir * back, cy - halfH), new Point(cx + dir * front, cy), new Point(cx - dir * back, cy + halfH)
+            };
+            const int steps = 6;
+            for (int i = steps; i >= 1; i--)
+            {
+                using (var pen = new Pen(Color.FromArgb(34, 255, 255, 255), Math.Max(1f, Px(1.2)) + i * Math.Max(1f, Px(1.3))))
+                {
+                    pen.LineJoin = LineJoin.Round;
+                    g.DrawPolygon(pen, points);
+                }
             }
-        }
-
-        // The text color of a selected row in a color: chosen for the color as the glow tints it.
-        private static Color GlowedText(Color c, Color glow)
-        {
-            return TextOn(Mix(c, glow, 0.45));
-        }
-
-        // The lines of a selected row, inside its top and its bottom edge (the green underline of Excel's
-        // selected tab, and the same above).
-        private void DrawSelectionLines(Graphics g, Rectangle body, Color color)
-        {
-            int thick = Math.Max(1, Px(UnderlineThickness));
-            int ux = body.Left + Px(UnderlineInset);
-            int uw = Math.Max(1, body.Width - 2 * Px(UnderlineInset));
-            int upper = body.Top + 1 + Px(UnderlineGap);
-            int lower = body.Bottom - 1 - Px(UnderlineGap) - thick;
-            using (var brush = new SolidBrush(color))
+            using (var brush = new SolidBrush(color)) g.FillPolygon(brush, points);
+            using (var pen = new Pen(Color.White, Math.Max(1f, Px(1.2))))
             {
-                g.FillRectangle(brush, ux, upper, uw, thick);
-                g.FillRectangle(brush, ux, lower, uw, thick);
+                pen.LineJoin = LineJoin.Round;
+                g.DrawPolygon(pen, points);
             }
         }
 
