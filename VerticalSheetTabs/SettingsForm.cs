@@ -14,8 +14,13 @@ namespace VerticalSheetTabs
         private readonly RadioButton _sideLeft = new RadioButton();
         private readonly RadioButton _sideRight = new RadioButton();
         private GroupBox _sideGroup;
+        private readonly CheckBox _outlineShow = new CheckBox();
+        private readonly TrackBar _outlineLevel = new TrackBar();
+        private readonly Panel _outlineSwatch = new Panel();
+        private readonly Label _outlineLevelText = new Label();
+        private GroupBox _outlineGroup;
 
-        public SettingsForm(TabMode mode, TabSide side)
+        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -37,6 +42,8 @@ namespace VerticalSheetTabs
 
             var modeGroup = CreateGroup("表示モード", _modeHorizontal, _modeVertical, _modeBoth);
             _sideGroup = CreateGroup("縦タブの位置", _sideLeft, _sideRight);
+
+            _outlineGroup = CreateOutlineGroup();
 
             var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(88, 0) };
             var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new Size(88, 0) };
@@ -60,6 +67,9 @@ namespace VerticalSheetTabs
             _sideGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(modeGroup);
             layout.Controls.Add(_sideGroup);
+            _outlineGroup.Dock = DockStyle.Fill;
+            _outlineGroup.Margin = new Padding(3, 8, 3, 3);
+            layout.Controls.Add(_outlineGroup);
             layout.Controls.Add(buttons);
             Controls.Add(layout);
 
@@ -68,6 +78,12 @@ namespace VerticalSheetTabs
             _modeBoth.Checked = mode == TabMode.Both;
             _sideLeft.Checked = side == TabSide.Left;
             _sideRight.Checked = side == TabSide.Right;
+
+            _outlineShow.Checked = outlineVisible;
+            _outlineLevel.Value = Math.Max(1, Math.Min(TabStrip.OutlineLevels, outlineLevel));
+            _outlineShow.CheckedChanged += (s, e) => UpdateOutline();
+            _outlineLevel.ValueChanged += (s, e) => UpdateOutline();
+            UpdateOutline();
 
             _modeHorizontal.CheckedChanged += (s, e) => UpdateSideEnabled();
             UpdateSideEnabled();
@@ -85,6 +101,64 @@ namespace VerticalSheetTabs
         public TabSide Side
         {
             get { return _sideRight.Checked ? TabSide.Right : TabSide.Left; }
+        }
+
+        public bool OutlineVisible { get { return _outlineShow.Checked; } }
+
+        public int OutlineLevel { get { return _outlineLevel.Value; } }
+
+        private void UpdateOutline()
+        {
+            _outlineLevel.Enabled = _outlineShow.Checked;
+            _outlineLevelText.Enabled = _outlineShow.Checked;
+            _outlineLevelText.Text = _outlineLevel.Value + " / " + TabStrip.OutlineLevels;
+            _outlineSwatch.BackColor = _outlineShow.Checked
+                ? TabStrip.OutlineColorAt(TabTheme.Current.BarBack, _outlineLevel.Value)
+                : SystemColors.Control;
+        }
+
+        // The dashed outline around an open folder: on/off, and a slider for the color level. The swatch
+        // shows the line color on the tab bar background.
+        private GroupBox CreateOutlineGroup()
+        {
+            var group = new GroupBox { Text = "フォルダを囲む点線", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6) };
+            _outlineShow.Text = "点線を表示する";
+            _outlineShow.AutoSize = true;
+            var caption = new Label { Text = "色 (左: 背景に近い色、右: 背景から最も離れた色)", AutoSize = true, Margin = new Padding(3, 6, 3, 0) };
+            _outlineLevel.Minimum = 1;
+            _outlineLevel.Maximum = TabStrip.OutlineLevels;
+            _outlineLevel.TickFrequency = 1;
+            _outlineLevel.SmallChange = 1;
+            _outlineLevel.LargeChange = 1;
+            _outlineLevel.AutoSize = false;
+            _outlineLevel.Size = new Size(260, 36);
+            _outlineSwatch.Size = new Size(36, 24);
+            _outlineSwatch.BorderStyle = BorderStyle.FixedSingle;
+            _outlineSwatch.BackColor = TabTheme.Current.BarBack;
+            _outlineLevelText.AutoSize = true;
+            _outlineLevelText.Text = TabStrip.OutlineLevels + " / " + TabStrip.OutlineLevels; // for measuring
+            var sliderRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            sliderRow.Controls.Add(_outlineLevel);
+            sliderRow.Controls.Add(_outlineSwatch);
+            sliderRow.Controls.Add(_outlineLevelText);
+            _outlineSwatch.Margin = new Padding(8, 6, 4, 0);
+            _outlineLevelText.Margin = new Padding(4, 10, 0, 0);
+            var panel = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.TopDown,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = false,
+                Margin = Padding.Empty
+            };
+            panel.Controls.Add(_outlineShow);
+            panel.Controls.Add(caption);
+            panel.Controls.Add(sliderRow);
+            group.Controls.Add(panel);
+            panel.Location = group.DisplayRectangle.Location;
+            Size content = panel.PreferredSize;
+            group.Size = new Size(content.Width + group.Padding.Horizontal + 8, panel.Top + content.Height + group.Padding.Bottom + 2);
+            return group;
         }
 
         // The side only matters while a vertical tab bar is shown.

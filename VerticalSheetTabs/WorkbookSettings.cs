@@ -25,6 +25,8 @@ namespace VerticalSheetTabs
         public const string ModeName = "VTab.Mode";
         public const string SideName = "VTab.Side";
         public const string WidthName = "VTab.Width";
+        public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
+        public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
 
         // Office.MsoDocProperties values.
         private const int PropTypeNumber = 1;
@@ -38,6 +40,9 @@ namespace VerticalSheetTabs
         public TabSide Side { get; set; }
         // 0 means "not stored": the caller uses the default (12 half-width characters).
         public int WidthDip { get; set; }
+        // The dashed outline around an open folder: shown or not, and its color level (1..9, 5 = middle).
+        public bool OutlineVisible { get; set; }
+        public int OutlineLevel { get; set; }
 
         public WorkbookSettings()
         {
@@ -45,6 +50,8 @@ namespace VerticalSheetTabs
             Mode = TabMode.Both;
             Side = TabSide.Left;
             WidthDip = 0;
+            OutlineVisible = true;
+            OutlineLevel = 5;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
@@ -72,6 +79,14 @@ namespace VerticalSheetTabs
                 {
                     s.Side = (string)side.Value == "Right" ? TabSide.Right : TabSide.Left;
                 }
+                dynamic outline = Find(props, OutlineName);
+                dynamic level = Find(props, OutlineLevelName);
+                if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
+                if (level != null)
+                {
+                    int v = Convert.ToInt32((object)level.Value);
+                    if (v >= 1 && v <= 9) s.OutlineLevel = v;
+                }
                 if (width != null)
                 {
                     int w = Convert.ToInt32((object)width.Value);
@@ -93,6 +108,8 @@ namespace VerticalSheetTabs
                 Write(props, ModeName, PropTypeString, ModeToString(Mode));
                 Write(props, SideName, PropTypeString, Side == TabSide.Right ? "Right" : "Left");
                 if (WidthDip > 0) Write(props, WidthName, PropTypeNumber, WidthDip);
+                Write(props, OutlineName, PropTypeString, OutlineVisible ? "On" : "Off");
+                Write(props, OutlineLevelName, PropTypeNumber, OutlineLevel);
             }
             catch (Exception)
             {

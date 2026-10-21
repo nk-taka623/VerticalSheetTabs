@@ -228,6 +228,10 @@ namespace VerticalSheetTabs
             _strip.BeginRenameFolder(folderId);
         }
 
+        public bool OutlineVisible { get { return _strip.OutlineVisible; } set { _strip.OutlineVisible = value; } }
+
+        public int OutlineLevel { get { return _strip.OutlineLevel; } set { _strip.OutlineLevel = value; } }
+
         public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors, IList<StripRow> rows)
         {
             _strip.StructureProtected = StructureProtected;
