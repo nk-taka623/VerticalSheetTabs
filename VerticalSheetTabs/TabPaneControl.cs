@@ -29,6 +29,7 @@ namespace VerticalSheetTabs
         public event Action<IList<string>, TabColorChoice> TabColorRequested;
         // (old name, new name) after the user finishes in-place editing.
         public event Action<string, string> RenameRequested;
+        public event Action<bool> GridFocusRequested;
         public event Action MoveCopyRequested;
         // (sheets, the sheet they are dropped in front of or null for the end, copy instead of move)
         public event Action<IList<string>, string, bool> MoveRequested;
@@ -68,6 +69,7 @@ namespace VerticalSheetTabs
         {
             _strip.Dock = DockStyle.Fill;
             _strip.SelectionRequested += (names, active) => { if (SelectionRequested != null) SelectionRequested(names, active); };
+            _strip.GridFocusRequested += hadFocus => { if (GridFocusRequested != null) GridFocusRequested(hadFocus); };
             _strip.RenameRequested += (o, n) => { if (RenameRequested != null) RenameRequested(o, n); };
             _strip.MoveRequested += (names, before, copy) => { if (MoveRequested != null) MoveRequested(names, before, copy); };
 
