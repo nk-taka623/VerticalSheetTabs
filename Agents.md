@@ -1342,3 +1342,8 @@ gitGraph
 - 「BSD ライセンス」は、画面の表示だけで、版 (2条項、3条項) や、ライセンス全文の `LICENSE` ファイルは、まだ無い。必要なときは、版を決めて、全文を追加する
 - 実機で確認: 設定画面の左下に、バージョン、著作権、ライセンスの3行が出る (Debugビルド)
 
+### 12.64 インストーラの更新 (バージョン1.1.20.0)
+
+- 12.62 と 12.63 (設定画面のバージョン、著作権、ライセンスの表示、配布用zipの作成スクリプト) を含めて、バージョンを 1.1.20.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_20_0\`)。インストールの実機確認は、未実施
+
