@@ -1205,5 +1205,5 @@ gitGraph
 
 ### 12.49 インストーラの更新 (バージョン1.1.13.0)
 
-- 12.47 (点線の左下の欠け)、12.48 (点線の色を、背景色の色相環の反対側の色にする) を含めて、バージョンを 1.1.13.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 12.47 (点線の左下の欠け)、12.48 (点線の色を、背景色の色相環の反対側の色にする) を含めて、バージョンを 1.1.13.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.13` のタグを付けた。配布用zip: `配布用zipVerticalSheetTabs_v1.1.13.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_13_0\`)。インストールの実機確認は、未実施
