@@ -36,6 +36,8 @@ namespace VerticalSheetTabs
             public List<string> AllNames = new List<string>();
             // True while the add-in changes the folders or the sheet order: no sync in between.
             public bool Busy;
+            // True while a sync of this window is running (see SyncSheets).
+            public bool Syncing;
             // The sheet-name rule (Agents.md 12.56): the names the grouping was last checked for, and a
             // flag for a sheet move the sync made itself (the workbook is then really changed).
             // Folders that keep their sheets in the folder's color: the sheets each had at the last look
@@ -496,6 +498,12 @@ namespace VerticalSheetTabs
         private static bool SyncSheets(Entry entry)
         {
             if (entry.Busy) return true;
+            // A sync that is already running is not started again: the moves the sync makes itself (the
+            // sheet-name rule) make Excel raise SheetActivate, whose handler would start a sync inside
+            // the running one, which sees the sheets half moved and moves more; and Excel delivers timer
+            // ticks while a call into it is running. The outer sync reads again at the next tick.
+            if (entry.Syncing) return true;
+            entry.Syncing = true;
             // The sync only reads. Should anything in it still change the workbook (an id given to a new
             // sheet, Excel's own reaction to a read), a workbook that was unchanged stays unchanged: opening
             // a workbook must never make Excel ask "save changes?". The sync runs to its end on the UI
@@ -508,6 +516,7 @@ namespace VerticalSheetTabs
             }
             finally
             {
+                entry.Syncing = false;
                 // (a move of sheets by the name rule is a real change, see EnforceNameGrouping)
                 try { if (wasSaved && !entry.RuleChanged && !entry.Workbook.Saved) entry.Workbook.Saved = true; } catch (Exception) { }
                 entry.RuleChanged = false;
