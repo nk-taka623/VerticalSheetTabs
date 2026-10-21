@@ -16,6 +16,10 @@ namespace VerticalSheetTabs
     public class StripRow
     {
         public string Sheet;
+        // The text drawn for a sheet when it differs from its name (the sheet-name rule: "B" for "A | B").
+        public string Display;
+        // The longest name that may be typed when renaming this row; 0 = Excel's 31.
+        public int EditLimit;
         public bool Indented;
         public string FolderId;
         public string FolderName;
@@ -29,9 +33,12 @@ namespace VerticalSheetTabs
 
         public bool IsFolder { get { return FolderId != null; } }
 
+        public string Text { get { return Display ?? Sheet; } }
+
         public string Signature()
         {
-            return IsFolder ? "F|" + FolderId + "|" + FolderName + "|" + Expanded + "|" + ColorBgr + "|" + string.Join("|", Members) : "S|" + Sheet + "|" + Indented;
+            return IsFolder ? "F|" + FolderId + "|" + FolderName + "|" + Expanded + "|" + ColorBgr + "|" + EditLimit + "|" + string.Join("|", Members)
+                : "S|" + Sheet + "|" + Indented + "|" + Display + "|" + EditLimit;
         }
     }
 
@@ -100,6 +107,8 @@ namespace VerticalSheetTabs
         private bool _dropInside;
         private string _dropInto, _dropBeforeSheet, _dropBeforeFolder;
         private string _editingFolderId;
+        // The full name of the sheet being renamed (the edited text may be only the part after "A | ").
+        private string _editingSheet;
         private string _rightFolder;
         private string _toggleOffFolder;
         private bool _plusHot, _plusDown;
@@ -667,6 +676,7 @@ namespace VerticalSheetTabs
         private void DrawTab(Graphics g, StripRow tabRow, Rectangle row)
         {
             string name = tabRow.Sheet;
+            string text = tabRow.Text;
             bool selected = _selected.Contains(name);
             bool active = selected && name == _active;
             int bgr;
@@ -726,8 +736,8 @@ namespace VerticalSheetTabs
 
             // text: left aligned, the active tab's text sits higher (the underline needs room)
             int lift = active ? Px(ActiveTextLift) : 0;
-            var textRect = new Rectangle(left + Px(TextPadLeft), row.Top - lift + TextShift(name),Math.Max(1, right - left - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
-            if (_editor == null || name != _editingName)
+            var textRect = new Rectangle(left + Px(TextPadLeft), row.Top - lift + TextShift(text),Math.Max(1, right - left - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
+            if (_editor == null || name != _editingSheet)
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
                 using (var brush = new SolidBrush(textColor))
@@ -737,7 +747,7 @@ namespace VerticalSheetTabs
                     format.LineAlignment = StringAlignment.Center;
                     format.Trimming = StringTrimming.EllipsisCharacter;
                     format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
-                    g.DrawString(name, TabFont, brush, textRect, format);
+                    g.DrawString(text, TabFont, brush, textRect, format);
                 }
             }
         }
@@ -1007,7 +1017,7 @@ namespace VerticalSheetTabs
             _hoverIndex = index;
             _tip.Hide(this);
             if (index < 0 || Control.MouseButtons != MouseButtons.None) return;
-            string text = _rows[index].IsFolder ? _rows[index].FolderName : _rows[index].Sheet;
+            string text = _rows[index].IsFolder ? _rows[index].FolderName : _rows[index].Text;
             if (!IsTextCut(text, _rows[index])) return;
             Rectangle row = RowRect(index);
             _tip.Show(text, this, row.Left + Px(InsetLeft + TextPadLeft), row.Bottom, 4000);
@@ -1251,7 +1261,7 @@ namespace VerticalSheetTabs
             int index = _rows.FindIndex(r => r.IsFolder && r.FolderId == folderId);
             if (index < 0) return;
             EnsureVisible(index);
-            BeginEdit(index, _rows[index].FolderName, folderId);
+            BeginEdit(index, _rows[index].FolderName, folderId, null);
         }
 
         // In-place name editing: Enter or leaving the box commits, Esc cancels. The length limit
@@ -1259,22 +1269,23 @@ namespace VerticalSheetTabs
         private void BeginRename(int index)
         {
             if (index < 0 || index >= _rows.Count || _rows[index].IsFolder || StructureProtected) return;
-            BeginEdit(index, _rows[index].Sheet, null);
+            BeginEdit(index, _rows[index].Text, null, _rows[index].Sheet);
         }
 
-        private void BeginEdit(int index, string text, string folderId)
+        private void BeginEdit(int index, string text, string folderId, string sheet)
         {
             EndRename(false);
             Rectangle r = RowRect(index);
             _editingName = text;
             _editingFolderId = folderId;
+            _editingSheet = sheet;
             int left = r.Left + Px(InsetLeft) + (_rows[index].Indented ? Px(FolderIndent) : 0);
             int right = r.Right - RightInset(_rows[index]);
             int textLeft = folderId != null ? left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4) - 2 : left + Px(TextPadLeft) - 2;
             _editor = new TextBox
             {
                 Text = text,
-                MaxLength = 31,
+                MaxLength = _rows[index].EditLimit > 0 ? _rows[index].EditLimit : 31,
                 BorderStyle = BorderStyle.FixedSingle,
                 Font = TabFont
             };
@@ -1299,14 +1310,16 @@ namespace VerticalSheetTabs
             _editor = null; // first, so the LostFocus raised by removing the box does nothing
             string oldName = _editingName;
             string folderId = _editingFolderId;
+            string sheetName = _editingSheet;
             _editingFolderId = null;
+            _editingSheet = null;
             string newName = editor.Text;
             Controls.Remove(editor);
             editor.Dispose();
             Invalidate();
             if (!commit || newName == oldName) return;
             if (folderId != null) { if (FolderRenameRequested != null) FolderRenameRequested(folderId, newName); }
-            else if (RenameRequested != null) RenameRequested(oldName, newName);
+            else if (RenameRequested != null) RenameRequested(sheetName ?? oldName, newName);
         }
 
         protected override void Dispose(bool disposing)

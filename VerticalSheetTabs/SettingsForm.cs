@@ -19,8 +19,10 @@ namespace VerticalSheetTabs
         private readonly Panel _outlineSwatch = new Panel();
         private readonly Label _outlineLevelText = new Label();
         private GroupBox _outlineGroup;
+        private readonly CheckBox _nameRule = new CheckBox();
+        private GroupBox _ruleGroup;
 
-        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel)
+        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -44,6 +46,7 @@ namespace VerticalSheetTabs
             _sideGroup = CreateGroup("縦タブの位置", _sideLeft, _sideRight);
 
             _outlineGroup = CreateOutlineGroup();
+            _ruleGroup = CreateRuleGroup();
 
             var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(88, 0) };
             var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new Size(88, 0) };
@@ -70,6 +73,9 @@ namespace VerticalSheetTabs
             _outlineGroup.Dock = DockStyle.Fill;
             _outlineGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(_outlineGroup);
+            _ruleGroup.Dock = DockStyle.Fill;
+            _ruleGroup.Margin = new Padding(3, 8, 3, 3);
+            layout.Controls.Add(_ruleGroup);
             layout.Controls.Add(buttons);
             Controls.Add(layout);
 
@@ -79,6 +85,7 @@ namespace VerticalSheetTabs
             _sideLeft.Checked = side == TabSide.Left;
             _sideRight.Checked = side == TabSide.Right;
 
+            _nameRule.Checked = nameRule;
             _outlineShow.Checked = outlineVisible;
             _outlineLevel.Value = Math.Max(1, Math.Min(TabStrip.OutlineLevels, outlineLevel));
             _outlineShow.CheckedChanged += (s, e) => UpdateOutline();
@@ -105,6 +112,8 @@ namespace VerticalSheetTabs
 
         public bool OutlineVisible { get { return _outlineShow.Checked; } }
 
+        public bool NameRule { get { return _nameRule.Checked; } }
+
         public int OutlineLevel { get { return _outlineLevel.Value; } }
 
         private void UpdateOutline()
@@ -115,6 +124,35 @@ namespace VerticalSheetTabs
             _outlineSwatch.BackColor = _outlineShow.Checked
                 ? TabStrip.OutlineColorAt(TabTheme.Current.BarBack, _outlineLevel.Value)
                 : SystemColors.Control;
+        }
+
+        // The sheet-name rule: on/off, with a short explanation.
+        private GroupBox CreateRuleGroup()
+        {
+            var group = new GroupBox { Text = "シート名のルール", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6) };
+            _nameRule.Text = "シート名のルールを使う";
+            _nameRule.AutoSize = true;
+            var note = new Label
+            {
+                Text = "横タブのシート名が「A | B」のとき、縦タブでは、フォルダ A の中の\r\nシート B として表示します。縦タブでの、フォルダの作成、移動、\r\n名前の変更も、横タブのシート名に反映します。",
+                AutoSize = true,
+                Margin = new Padding(3, 6, 3, 0)
+            };
+            var panel = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.TopDown,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = false,
+                Margin = Padding.Empty
+            };
+            panel.Controls.Add(_nameRule);
+            panel.Controls.Add(note);
+            group.Controls.Add(panel);
+            panel.Location = group.DisplayRectangle.Location;
+            Size content = panel.PreferredSize;
+            group.Size = new Size(content.Width + group.Padding.Horizontal + 8, panel.Top + content.Height + group.Padding.Bottom + 2);
+            return group;
         }
 
         // The dashed outline around an open folder: on/off, and a slider for the color level. The swatch
