@@ -50,7 +50,6 @@ namespace VerticalSheetTabs
         // (folders, color) the color of the folder rows.
         public event Action<IList<string>, TabColorChoice> FolderColorRequested;
         // (folders, color) the tab color of all sheets of the folders.
-        public event Action<IList<string>, TabColorChoice> FolderTabColorRequested;
 
         // The "unhide" item is only enabled while the workbook has hidden sheets.
         public bool HasHiddenSheets { get; set; }
@@ -161,9 +160,7 @@ namespace VerticalSheetTabs
             var fHide = FolderItem("フォルダ内のシートをすべて非表示(&H)", "hide");
             var fUnhide = FolderItem("フォルダ内のシートをすべて再表示(&U)", "unhide");
             var fColor = PaletteItem("フォルダの色(&C)", c => { if (FolderColorRequested != null) FolderColorRequested(_strip.SelectedFolders(), c); });
-            var fTabColor = PaletteItem("フォルダと中のシートの色(&T)", c => { if (FolderTabColorRequested != null) FolderTabColorRequested(_strip.SelectedFolders(), c); });
-            var fSameColor = FolderItem("中の全てを選択中シートと同一色に変更(&Y)", "samecolor");
-            var fSyncColor = FolderItem("中の全てをフォルダと同一色に変更(&F)", "synccolor");
+            var fSyncColor = FolderItem("中の全てを常にフォルダと同一色に設定(&F)", "synccolor");
             var folderSettings = new ToolStripMenuItem("タブ表示の設定");
             folderSettings.Click += (s, e) => { if (SettingsRequested != null) SettingsRequested(); };
             _folderMenu.Items.Add(folderSettings);
@@ -176,8 +173,6 @@ namespace VerticalSheetTabs
             _folderMenu.Items.Add(fUnhide);
             _folderMenu.Items.Add(new ToolStripSeparator());
             _folderMenu.Items.Add(fColor);
-            _folderMenu.Items.Add(fTabColor);
-            _folderMenu.Items.Add(fSameColor);
             _folderMenu.Items.Add(fSyncColor);
             _folderMenu.Items.Add(new ToolStripSeparator());
             _folderMenu.Items.Add(folderDelete);
