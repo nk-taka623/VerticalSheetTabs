@@ -62,6 +62,9 @@ namespace VerticalSheetTabs
         // The workbook's ten theme colors for the tab color palette; null = the Office theme.
         public Func<Color[]> ThemeColorProvider { get; set; }
 
+        // Opens Excel's "Colors" dialog for "More colors"; returns 0xBBGGRR or null.
+        public Func<int?> MoreColorsProvider { get; set; }
+
         private readonly ContextMenuStrip _menu = new ContextMenuStrip();
         private readonly ContextMenuStrip _folderMenu = new ContextMenuStrip();
 
@@ -100,7 +103,7 @@ namespace VerticalSheetTabs
             var viewCode = MenuItem("コードの表示(&V)", () => ViewCodeRequested);
             var protect = MenuItem("シートの保護(&P)...", () => ProtectSheetRequested);
             var tabColor = new ToolStripMenuItem("シート見出しの色(&T)");
-            var palette = new TabColorPalette();
+            var palette = new TabColorPalette { MoreColorsProvider = () => MoreColorsProvider == null ? (int?)null : MoreColorsProvider() };
             var paletteHost = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
             tabColor.DropDown = new ToolStripDropDown { Padding = Padding.Empty };
             tabColor.DropDown.Items.Add(paletteHost);
@@ -203,7 +206,7 @@ namespace VerticalSheetTabs
         private ToolStripMenuItem PaletteItem(string text, Action<TabColorChoice> chosen)
         {
             var item = new ToolStripMenuItem(text);
-            var palette = new TabColorPalette();
+            var palette = new TabColorPalette { MoreColorsProvider = () => MoreColorsProvider == null ? (int?)null : MoreColorsProvider() };
             var host = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
             item.DropDown = new ToolStripDropDown { Padding = Padding.Empty };
             item.DropDown.Items.Add(host);

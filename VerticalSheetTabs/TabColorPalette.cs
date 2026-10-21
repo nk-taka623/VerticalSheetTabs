@@ -268,6 +268,9 @@ namespace VerticalSheetTabs
             if (_hot != -1) { _hot = -1; Invalidate(); }
         }
 
+        // Asks for a color with Excel's dialog: 0xBBGGRR, or null when it was cancelled.
+        public Func<int?> MoreColorsProvider { get; set; }
+
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
@@ -282,7 +285,16 @@ namespace VerticalSheetTabs
             TabColorChoice choice = cell.Choice;
             if (cell.More)
             {
-                // The system color dialog stands in for Excel's "more colors" dialog.
+                // Excel's own "Colors" dialog (the one of the horizontal tab's "More Colors") when it can be
+                // opened; the system color dialog otherwise.
+                if (MoreColorsProvider != null)
+                {
+                    int? picked = MoreColorsProvider();
+                    if (picked == null) return;
+                    choice = new TabColorChoice { Kind = TabColorKind.Rgb, Bgr = picked.Value };
+                    if (ColorChosen != null) ColorChosen(choice);
+                    return;
+                }
                 using (var dialog = new ColorDialog { FullOpen = true, AnyColor = true })
                 {
                     if (dialog.ShowDialog() != DialogResult.OK) return;
