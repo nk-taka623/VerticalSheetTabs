@@ -22,7 +22,7 @@ namespace VerticalSheetTabs
         public bool Expanded;
         public int ColorBgr = -1;
         // Inside the dashed outline of an open folder (the folder row and its sheet rows): these rows end
-        // one half-width character before the outline.
+        // before the outline by the width of its cut corner.
         public bool InGroup;
         // Folder: its visible sheets (also while it is closed).
         public List<string> Members = new List<string>();
@@ -56,6 +56,7 @@ namespace VerticalSheetTabs
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
         // with a color, a bar at its left edge.
+        private const double OutlineRightInset = 1.5, OutlineCut = 10;
         private const double FolderIndent = 14, FolderMarkWidth = 6, FolderMarkHeight = 10, FolderBarWidth = 4;
         // Excel's tab text is about 9pt "Yu Gothic" (the measured width of "Sheet1" matches it).
         private const string FontFamilyName = "Yu Gothic";
@@ -278,27 +279,11 @@ namespace VerticalSheetTabs
             }
         }
 
-        private int _zeroWidth, _zeroWidthDpi;
-
-        // The width of one half-width character (a digit) in the tab font.
-        private int HalfWidthChar
-        {
-            get
-            {
-                int dpi = Dpi;
-                if (_zeroWidth == 0 || _zeroWidthDpi != dpi)
-                {
-                    _zeroWidth = TextRenderer.MeasureText("0", TabFont, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding).Width;
-                    _zeroWidthDpi = dpi;
-                }
-                return _zeroWidth;
-            }
-        }
-
-        // The space right of a row's tab: the usual inset, and in an outlined folder one more half-width character.
+        // The space right of a row's tab: the usual inset; in an outlined folder the tab ends as far from
+        // the dashed line as the cut corner of the outline is wide.
         private int RightInset(StripRow r)
         {
-            return Px(InsetRight) + (r.InGroup ? HalfWidthChar : 0);
+            return r.InGroup ? Px(OutlineRightInset + OutlineCut) : Px(InsetRight);
         }
 
         private int RowIndexOf(string sheet)
@@ -469,8 +454,8 @@ namespace VerticalSheetTabs
 
                 Rectangle top = RowRect(i), bottom = RowRect(last);
                 if (bottom.Bottom < 0 || top.Top > ViewHeight) { i = last; continue; }
-                int l = Px(1), r = ContentWidth - Px(1.5), t = top.Top + Px(1), b = bottom.Bottom - Px(1);
-                int cut = Math.Min(Px(10), Math.Min(r - l, b - t) / 2);
+                int l = Px(1), r = ContentWidth - Px(OutlineRightInset), t = top.Top + Px(1), b = bottom.Bottom - Px(1);
+                int cut = Math.Min(Px(OutlineCut), Math.Min(r - l, b - t) / 2);
                 var points = new[]
                 {
                     new Point(l, t), new Point(r - cut, t), new Point(r, t + cut), new Point(r, b), new Point(l, b)
