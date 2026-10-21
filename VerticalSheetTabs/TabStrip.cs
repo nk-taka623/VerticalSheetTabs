@@ -25,6 +25,8 @@ namespace VerticalSheetTabs
         public string FolderName;
         public bool Expanded;
         public int ColorBgr = -1;
+        // Folder: its sheets all have the folder's color (a check mark at the right end of the row).
+        public bool SyncColor;
         // Inside the dashed outline of an open folder (the folder row and its sheet rows): these rows end
         // before the outline by the width of its cut corner.
         public bool InGroup;
@@ -37,7 +39,7 @@ namespace VerticalSheetTabs
 
         public string Signature()
         {
-            return IsFolder ? "F|" + FolderId + "|" + FolderName + "|" + Expanded + "|" + ColorBgr + "|" + EditLimit + "|" + string.Join("|", Members)
+            return IsFolder ? "F|" + FolderId + "|" + FolderName + "|" + Expanded + "|" + ColorBgr + "|" + SyncColor + "|" + EditLimit + "|" + string.Join("|", Members)
                 : "S|" + Sheet + "|" + Indented + "|" + Display + "|" + EditLimit;
         }
     }
@@ -64,6 +66,8 @@ namespace VerticalSheetTabs
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
         // with a color, a bar at its left edge.
         private const double OutlineRightInset = 1.5, OutlineCut = 10;
+        // The check mark of a folder that keeps its sheets in its color: size, space to the right end, gap to the text.
+        private const double CheckWidth = 10, CheckHeight = 7, CheckPadRight = 8, CheckGap = 4;
         private const double FolderIndent = 14, FolderMarkWidth = 6, FolderMarkHeight = 10, FolderBarWidth = 4;
         // Excel's tab text is about 9pt "Yu Gothic" (the measured width of "Sheet1" matches it).
         private const string FontFamilyName = "Yu Gothic";
@@ -295,6 +299,12 @@ namespace VerticalSheetTabs
 
         // The space right of a row's tab: the usual inset; in an outlined folder the tab ends as far from
         // the dashed line as the cut corner of the outline is wide.
+        // The width the check mark takes at the right end of a folder row (the name stays clear of it).
+        private int CheckReserve(StripRow r)
+        {
+            return r.IsFolder && r.SyncColor ? Px(CheckWidth + CheckPadRight + CheckGap) : 0;
+        }
+
         private int RightInset(StripRow r)
         {
             return r.InGroup && _outlineVisible ? Px(OutlineRightInset + OutlineCut) : Px(InsetRight);
@@ -633,7 +643,7 @@ namespace VerticalSheetTabs
             }
 
             int textLeft = left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
-            var textRect = new Rectangle(textLeft, row.Top + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight)), row.Height);
+            var textRect = new Rectangle(textLeft, row.Top + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - CheckReserve(folder)), row.Height);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             if (_editor == null || _editingFolderId != folder.FolderId)
             {
@@ -648,7 +658,28 @@ namespace VerticalSheetTabs
                     g.DrawString(folder.FolderName, bold, brush, textRect, format);
                 }
             }
+            if (folder.SyncColor) DrawCheck(g, row, right, textColor);
             DrawSeparator(g, row);
+        }
+
+        // The check mark at the right end of a folder row.
+        private void DrawCheck(Graphics g, Rectangle row, int right, Color color)
+        {
+            int w = Px(CheckWidth), h = Px(CheckHeight);
+            int x2 = right - Px(CheckPadRight), x1 = x2 - w;
+            int top = row.Top + Px(PlainTop), bottom = row.Bottom - Px(BottomInset);
+            int cy = (top + bottom) / 2;
+            var points = new[]
+            {
+                new Point(x1, cy), new Point(x1 + (int)Math.Round(w * 0.38), cy + h / 2), new Point(x2, cy - h / 2)
+            };
+            using (var pen = new Pen(color, Math.Max(1.5f, Px(1.6))))
+            {
+                pen.LineJoin = LineJoin.Round;
+                pen.StartCap = LineCap.Round;
+                pen.EndCap = LineCap.Round;
+                g.DrawLines(pen, points);
+            }
         }
 
         // The text of a row is centered with the line box of its font, whose glyphs sit above the middle
@@ -1079,7 +1110,7 @@ namespace VerticalSheetTabs
         private bool IsTextCut(string name, StripRow row)
         {
             int available = ContentWidth - Px(InsetLeft + TextPadLeft + TextPadRight) - RightInset(row)
-                - (row.Indented ? Px(FolderIndent) : 0) - (row.IsFolder ? Px(FolderMarkWidth + 4) : 0);
+                - (row.Indented ? Px(FolderIndent) : 0) - (row.IsFolder ? Px(FolderMarkWidth + 4) : 0) - CheckReserve(row);
             using (Graphics g = CreateGraphics())
             using (var format = new StringFormat(StringFormat.GenericDefault))
             {
@@ -1332,7 +1363,7 @@ namespace VerticalSheetTabs
             _editingFolderId = folderId;
             _editingSheet = sheet;
             int left = r.Left + Px(InsetLeft) + (_rows[index].Indented ? Px(FolderIndent) : 0);
-            int right = r.Right - RightInset(_rows[index]);
+            int right = r.Right - RightInset(_rows[index]) - CheckReserve(_rows[index]);
             int textLeft = folderId != null ? left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4) - 2 : left + Px(TextPadLeft) - 2;
             _editor = new TextBox
             {

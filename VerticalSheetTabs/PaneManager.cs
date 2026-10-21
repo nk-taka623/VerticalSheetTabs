@@ -38,6 +38,9 @@ namespace VerticalSheetTabs
             public bool Busy;
             // The sheet-name rule (Agents.md 12.56): the names the grouping was last checked for, and a
             // flag for a sheet move the sync made itself (the workbook is then really changed).
+            // Folders that keep their sheets in the folder's color: the sheets each had at the last look
+            // (a sheet that is new in the list is colored).
+            public Dictionary<string, HashSet<string>> SyncSeen = new Dictionary<string, HashSet<string>>();
             public string RuleSignature;
             public bool RuleChanged;
             // The last SelectSheets really changed the selection of Excel (and the focus may go to the sheet).
@@ -129,10 +132,14 @@ namespace VerticalSheetTabs
             control.FolderCommandRequested += (command, folders) => FolderCommand(entry, command, folders);
             control.FolderColorRequested += (folders, choice) =>
             {
+                RefreshKeys(entry);
                 foreach (string id in folders)
                 {
                     FolderNode f = entry.Folders.FindFolder(id);
-                    if (f != null) f.Color = choice;
+                    if (f == null) continue;
+                    f.Color = choice;
+                    // a folder that keeps its sheets in its color: they follow
+                    if (f.SyncColor) ApplyTabColor(entry, MemberNames(entry, new[] { id }), choice);
                 }
                 MarkChanged(entry);
                 SyncSheets(entry);
@@ -585,6 +592,7 @@ namespace VerticalSheetTabs
                 entry.KeySignature = signature;
                 if (rule) entry.Folders = NameRule.BuildModel(allNames, entry.Keys, entry.Folders);
                 else entry.Folders.Reconcile(entry.Keys);
+                ApplySyncColors(entry);
             }
             var nameOf = new Dictionary<string, string>();
             var nameOfAll = new Dictionary<string, string>();
@@ -608,7 +616,8 @@ namespace VerticalSheetTabs
                     FolderId = node.FolderId,
                     FolderName = node.Name,
                     Expanded = node.Expanded,
-                    ColorBgr = FolderColorBgr(entry, node.Color)
+                    ColorBgr = FolderColorBgr(entry, node.Color),
+                    SyncColor = node.SyncColor
                 };
                 if (rule)
                 {
@@ -1072,6 +1081,7 @@ namespace VerticalSheetTabs
                                 unit = FolderModel.NewFolder(UniqueFolderName(entry, src.Name));
                                 unit.Color = src.Color;
                                 unit.Expanded = src.Expanded;
+                                unit.SyncColor = src.SyncColor;
                                 units.Add(unit);
                                 unit.FolderId = "copy:" + src.FolderId; // replaced below
                             }
@@ -1212,6 +1222,12 @@ namespace VerticalSheetTabs
                 if (command == "samecolor")
                 {
                     SameColorAsSelected(entry, folderIds);
+                    return;
+                }
+                if (command == "synccolor")
+                {
+                    ToggleSyncColor(entry, folderIds);
+                    SyncSheets(entry);
                     return;
                 }
                 List<string> all = MemberNames(entry, folderIds);
@@ -1605,35 +1621,132 @@ namespace VerticalSheetTabs
         {
             try
             {
-                foreach (string name in names)
-                {
-                    object sheet = entry.Workbook.Sheets[name];
-                    Excel.Tab tab = null;
-                    var ws = sheet as Excel.Worksheet;
-                    if (ws != null) tab = ws.Tab;
-                    var ch = sheet as Excel.Chart;
-                    if (ch != null) tab = ch.Tab;
-                    if (tab == null) continue;
-
-                    switch (choice.Kind)
-                    {
-                        case TabColorKind.None:
-                            tab.ColorIndex = Excel.XlColorIndex.xlColorIndexNone;
-                            break;
-                        case TabColorKind.Rgb:
-                            tab.Color = choice.Bgr;
-                            break;
-                        default:
-                            tab.ThemeColor = (Excel.XlThemeColor)TabThemeColorIndex(choice.ThemeIndex);
-                            tab.TintAndShade = choice.Tint;
-                            break;
-                    }
-                }
+                SetTabColor(entry, names, choice);
             }
             catch (Exception)
             {
                 ShowMessage("シート見出しの色を変更できませんでした。シートが保護されている可能性があります。");
             }
+        }
+
+        private static void SetTabColor(Entry entry, IList<string> names, TabColorChoice choice)
+        {
+            if (choice == null) choice = new TabColorChoice { Kind = TabColorKind.None };
+            foreach (string name in names)
+            {
+                object sheet = entry.Workbook.Sheets[name];
+                Excel.Tab tab = null;
+                var ws = sheet as Excel.Worksheet;
+                if (ws != null) tab = ws.Tab;
+                var ch = sheet as Excel.Chart;
+                if (ch != null) tab = ch.Tab;
+                if (tab == null) continue;
+
+                switch (choice.Kind)
+                {
+                    case TabColorKind.None:
+                        tab.ColorIndex = Excel.XlColorIndex.xlColorIndexNone;
+                        break;
+                    case TabColorKind.Rgb:
+                        tab.Color = choice.Bgr;
+                        break;
+                    default:
+                        tab.ThemeColor = (Excel.XlThemeColor)TabThemeColorIndex(choice.ThemeIndex);
+                        tab.TintAndShade = choice.Tint;
+                        break;
+                }
+            }
+        }
+
+        // Folders that keep their sheets in the folder's color (the check mark): a sheet that is new in such a
+        // folder (moved in, added, inserted, copied, or moved there in Excel's own tabs) gets the folder's
+        // color. The first look at a folder (the workbook was opened) only notes its sheets. A change of
+        // the workbook that the sync makes is real, so it is not taken back (RuleChanged).
+        private static void ApplySyncColors(Entry entry)
+        {
+            bool changed = false;
+            try
+            {
+                var present = new HashSet<string>();
+                foreach (FolderNode node in entry.Folders.Nodes)
+                {
+                    if (!node.IsFolder) continue;
+                    present.Add(node.FolderId);
+                    if (!node.SyncColor)
+                    {
+                        entry.SyncSeen.Remove(node.FolderId);
+                        continue;
+                    }
+                    var now = new HashSet<string>(node.Sheets);
+                    HashSet<string> seen;
+                    if (!entry.SyncSeen.TryGetValue(node.FolderId, out seen))
+                    {
+                        entry.SyncSeen[node.FolderId] = now;
+                        continue;
+                    }
+                    List<string> arrived = node.Sheets.Where(k => !seen.Contains(k)).ToList();
+                    entry.SyncSeen[node.FolderId] = now;
+                    if (arrived.Count == 0) continue;
+
+                    var names = new List<string>();
+                    foreach (string key in arrived)
+                    {
+                        int i = entry.Keys.IndexOf(key);
+                        if (i >= 0 && i < entry.AllNames.Count) names.Add(entry.AllNames[i]);
+                    }
+                    if (names.Count == 0) continue;
+                    SetTabColor(entry, names, node.Color);
+                    changed = true;
+                }
+                foreach (string id in entry.SyncSeen.Keys.ToList())
+                {
+                    if (!present.Contains(id)) entry.SyncSeen.Remove(id);
+                }
+            }
+            catch (Exception)
+            {
+                // A protected sheet or a busy Excel: the sheets keep their colors.
+            }
+            if (changed)
+            {
+                entry.RuleChanged = true;
+                MarkChanged(entry);
+            }
+        }
+
+        // The menu item "change all to the folder's color": it switches the check mark of the folders. When
+        // it is switched on, all sheets of the folder (hidden ones too) get the folder's color at once; when it
+        // is switched off, the sheets keep the colors they have. With several folders chosen: if any of
+        // them is off, all are switched on, otherwise all are switched off.
+        private void ToggleSyncColor(Entry entry, IList<string> folderIds)
+        {
+            var folders = new List<FolderNode>();
+            foreach (string id in folderIds)
+            {
+                FolderNode f = entry.Folders.FindFolder(id);
+                if (f != null) folders.Add(f);
+            }
+            if (folders.Count == 0) return;
+            bool turnOn = folders.Any(f => !f.SyncColor);
+            foreach (FolderNode f in folders)
+            {
+                f.SyncColor = turnOn;
+                if (!turnOn)
+                {
+                    entry.SyncSeen.Remove(f.FolderId);
+                    continue;
+                }
+                try
+                {
+                    SetTabColor(entry, MemberNames(entry, new[] { f.FolderId }), f.Color);
+                }
+                catch (Exception)
+                {
+                    ShowMessage("シート見出しの色を変更できませんでした。シートが保護されている可能性があります。");
+                }
+                entry.SyncSeen[f.FolderId] = new HashSet<string>(f.Sheets);
+            }
+            MarkChanged(entry);
         }
 
         // Only "hidden" counts for the unhide command; very hidden sheets cannot be unhidden from the UI.
