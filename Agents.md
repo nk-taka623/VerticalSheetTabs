@@ -1191,3 +1191,8 @@ gitGraph
 
 - 12.44、12.45 (点線と、フォルダ、シートの右端の間隔の調整) を含めて、バージョンを 1.1.12.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.12` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_12_0\`)。インストールの実機確認は、未実施
+
+### 12.47 変更: 点線の左下の角も、欠けさせる
+
+- ユーザーの要望により、開いたフォルダを囲む点線 (12.42) の、左下の角も、右上の角と同じ大きさ (10DIP) で、斜めに欠けさせた。右上と左下の、2か所が欠ける (`TabStrip.DrawFolderOutlines`)
+- 実機で確認: 開いたフォルダの点線の、右上と左下が欠けている。フォルダを閉じると、点線が消え、開き直すと、戻る。点線と右端の間隔 (12.45) は、変わらない

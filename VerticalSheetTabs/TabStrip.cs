@@ -442,7 +442,7 @@ namespace VerticalSheetTabs
         }
 
         // An open folder and its sheets are enclosed by a dashed line, white like a selected tab, with the
-        // upper right corner cut off. The line goes when the folder is closed.
+        // upper right and the lower left corners cut off. The line goes when the folder is closed.
         private void DrawFolderOutlines(Graphics g)
         {
             for (int i = 0; i < _rows.Count; i++)
@@ -458,7 +458,9 @@ namespace VerticalSheetTabs
                 int cut = Math.Min(Px(OutlineCut), Math.Min(r - l, b - t) / 2);
                 var points = new[]
                 {
-                    new Point(l, t), new Point(r - cut, t), new Point(r, t + cut), new Point(r, b), new Point(l, b)
+                    // the upper right and the lower left corners are cut off
+                    new Point(l, t), new Point(r - cut, t), new Point(r, t + cut), new Point(r, b),
+                    new Point(l + cut, b), new Point(l, b - cut)
                 };
                 using (var pen = new Pen(Color.White, Math.Max(1f, Px(1.2))))
                 {
