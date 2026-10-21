@@ -1376,6 +1376,6 @@ gitGraph
 
 ### 12.68 インストーラの更新 (バージョン1.1.21.0)
 
-- 12.65 から 12.67 (フォルダの「中の全てを選択中シートと同一色に変更」、「中の全てをフォルダと同一色に変更」とチェックマーク) を含めて、バージョンを 1.1.21.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 12.65 から 12.67 (フォルダの「中の全てを選択中シートと同一色に変更」、「中の全てをフォルダと同一色に変更」とチェックマーク) を含めて、バージョンを 1.1.21.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.21` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.21.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_21_0\`)。インストールの実機確認は、未実施
 
