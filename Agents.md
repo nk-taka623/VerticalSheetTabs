@@ -1665,6 +1665,6 @@ gitGraph
 
 ### 12.94 インストーラの更新 (バージョン1.1.33.0)
 
-- 12.93 (選択中の行を、二重の枠と、白い縁取りの付いた左右の三角のマーカーにする) を含めて、バージョンを 1.1.33.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)
+- 12.93 (選択中の行を、二重の枠と、白い縁取りの付いた左右の三角のマーカーにする) を含めて、バージョンを 1.1.33.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.33` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.33.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_33_0\`)。インストールの実機確認は、未実施
 
