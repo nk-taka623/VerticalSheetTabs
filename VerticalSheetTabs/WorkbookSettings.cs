@@ -27,6 +27,7 @@ namespace VerticalSheetTabs
         public const string WidthName = "VTab.Width";
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
+        public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
 
         // Office.MsoDocProperties values.
         private const int PropTypeNumber = 1;
@@ -43,6 +44,8 @@ namespace VerticalSheetTabs
         // The dashed outline around an open folder: shown or not, and its color level (1..9, 5 = middle).
         public bool OutlineVisible { get; set; }
         public int OutlineLevel { get; set; }
+        // The sheet-name rule: a sheet "A | B" is the sheet B in the folder A (default: not used).
+        public bool NameRule { get; set; }
 
         public WorkbookSettings()
         {
@@ -52,6 +55,7 @@ namespace VerticalSheetTabs
             WidthDip = 0;
             OutlineVisible = true;
             OutlineLevel = 5;
+            NameRule = false;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
@@ -81,6 +85,8 @@ namespace VerticalSheetTabs
                 }
                 dynamic outline = Find(props, OutlineName);
                 dynamic level = Find(props, OutlineLevelName);
+                dynamic nameRule = Find(props, NameRuleName);
+                if (nameRule != null) s.NameRule = (string)nameRule.Value == "On";
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)
                 {
@@ -110,6 +116,7 @@ namespace VerticalSheetTabs
                 if (WidthDip > 0) Write(props, WidthName, PropTypeNumber, WidthDip);
                 Write(props, OutlineName, PropTypeString, OutlineVisible ? "On" : "Off");
                 Write(props, OutlineLevelName, PropTypeNumber, OutlineLevel);
+                Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
             }
             catch (Exception)
             {
