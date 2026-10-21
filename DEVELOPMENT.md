@@ -1,0 +1,124 @@
+# 開発者向けの手引き (VerticalSheetTabs)
+
+利用者向けの説明は [README.md](README.md) (配布用zipにも入ります)、開発の経緯、仕様、検証結果は [Agents.md](Agents.md) を参照してください。
+
+## 構成
+
+| ファイル | 役割 |
+|---|---|
+| `ThisAddIn.cs` | アドインの入口。Excelのイベント (ウィンドウ、ブックの保存、閉じる) を `PaneManager` につなぐ。すべてのイベント処理は、例外を握りつぶすガードで囲む |
+| `PaneManager.cs` | ウィンドウごとのタスクペインの管理。0.3から3秒おきの同期 (シート名、表示状態、タブ色、選択)、シートの操作、フォルダの操作、設定の適用 |
+| `TabPaneControl.cs` | ペインの中身 (`TabStrip`、「+」ボタン、右クリックメニュー) |
+| `TabStrip.cs` | 縦タブの自前描画 (GDI+)。選択、ドラッグ、名前の変更、スクロール、フォルダの描画 |
+| `TabTheme.cs`、`DpiHelper.cs` | Officeテーマの配色、画面の拡大率 |
+| `TabColorPalette.cs` | シート見出しの色のパレット (Excelと同じ構成) |
+| `FolderModel.cs`、`FolderStore.cs` | フォルダの構造、XMLの読み書き、Excelのシート順との突き合わせ (`Reconcile`)、シートの識別 |
+| `NameRule.cs` | シート名のルール (`フォルダ名 \| シート名`) の解析、並びの整理、名前からのフォルダ構成 |
+| `WorkbookSettings.cs` | カスタムドキュメントプロパティ (`VTab.*`) の読み書き |
+| `SettingsForm.cs`、`RibbonController.cs`、`RibbonIcon.cs` | 設定画面、リボンのボタンと横タブのメニュー項目、アイコン |
+| `AddInVersion.cs` | 表示用のバージョン、著作権、ライセンス |
+| `tools\make-dist-zip.ps1` | 配布用zipの作成 |
+
+```mermaid
+flowchart LR
+    Excel[Excel] -- イベント --> T[ThisAddIn]
+    T --> P[PaneManager]
+    P -- ウィンドウごとに1つ --> C[TabPaneControl]
+    C --> S[TabStrip<br/>自前描画]
+    P <-- 読み書き --> W[(ブック<br/>VTab.* / カスタムXML / VTab.Id)]
+    P -- 0.3〜3秒おきに同期 --> Excel
+    S -- 操作 --> P
+```
+
+## ビルド
+
+- Visual Studio 2026 (「Office/SharePoint 開発」ワークロード) で、`VerticalSheetTabs.sln` を開く
+- ブランチ運用は、Agents.md の7章と13章を参照 (feature / fix ブランチ > `develop` > `master`、タグ `vX.Y.Z`)
+
+```powershell
+# コマンドラインでのビルド (Debug)
+& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" VerticalSheetTabs.sln -v:minimal
+```
+
+- Debug ビルドは、ビルド時に、現在のユーザーの Excel に、アドインを登録する (VSTO の標準動作)。動作確認は、Excelを通常起動して行う (COM自動化で起動した Excel では、VSTOアドインは読み込まれない)
+- C# 7.3 の制約がある (VSTOプロジェクトの既定の言語バージョン)
+
+## リリースの手順
+
+```mermaid
+flowchart TD
+    A["featureブランチで開発・実機確認"] --> B["developへ --no-ff でマージ"]
+    B --> C["バージョンを上げる<br/>.csproj ApplicationVersion<br/>AssemblyInfo.cs 2か所"]
+    C --> D["MSBuild -t:Publish<br/>-p:Configuration=Release"]
+    D --> E["Agents.md に記録して、コミット"]
+    E --> F["masterへ --no-ff でマージ"]
+    F --> G["tools/make-dist-zip.ps1 -Version X.Y.Z"]
+    G --> H["配布用zip をコミット"]
+    H --> I["Agents.md の記録を更新<br/>developをmasterに早送り<br/>マージ済みブランチを削除"]
+    I --> J["最後のコミットにタグ vX.Y.Z"]
+```
+
+### インストーラを作る (ClickOnce)
+
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" `
+    VerticalSheetTabs\VerticalSheetTabs.csproj -t:Publish -p:Configuration=Release -v:minimal
+```
+
+成果物は、`VerticalSheetTabs\bin\Release\app.publish\` に作られる (`bin\` は `.gitignore` 済み)。
+
+| ファイル | 内容 |
+|---|---|
+| `setup.exe` | インストーラ (必要なランタイムを導入して、アドインを登録する) |
+| `VerticalSheetTabs.vsto` | アドインの配置用マニフェスト |
+| `Application Files\VerticalSheetTabs_X_Y_Z_0\` | アドイン本体 (DLL とマニフェスト) |
+
+バージョンを上げるときは、次の3か所を更新する。
+
+- `VerticalSheetTabs\VerticalSheetTabs.csproj` の `ApplicationVersion`
+- `VerticalSheetTabs\Properties\AssemblyInfo.cs` の `AssemblyVersion` と `AssemblyFileVersion`
+
+(設定画面のバージョン表示は、`AssemblyVersion` から読む。)
+
+Release ビルドには、`PathMap` を設定してあり、DLL に、開発PCのフォルダのパスが入らない。公開時の警告 MSB3696 (VSTOランタイムを `setup.exe` に含めない) は、Windows 11 では問題ない。
+
+### 配布用zipを作る
+
+```powershell
+powershell -File tools\make-dist-zip.ps1 -Version 1.1.24
+```
+
+- 公開済みのインストーラの DLL の版数が、指定した版数と同じことを確かめてから、`配布用zip\VerticalSheetTabs_vX.Y.Z.zip` を作り、古いzipを削除する
+- zipの中身: `setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\`、`VerticalSheetTabs.cer`、`証明書を信頼する.ps1`、`はじめにお読みください.txt`、`README.md`、`license\`。`.cer`、`証明書を信頼する.ps1`、`はじめにお読みください.txt` は、いまの配布用zipから引き継ぐ。署名の秘密鍵 (`.pfx`) は、含めない
+
+## 署名の証明書について
+
+マニフェストは、自己署名の証明書 (`VerticalSheetTabs_TemporaryKey.pfx`、発行先 `CN=VerticalSheetTabs`) で署名している。この証明書は、リポジトリには含まれない (`.gitignore` 済み)。
+
+- インストールするPCが、証明書を信頼していないと、インストール時に、「発行元を確認できません」という警告が出て、インストールできないことがある
+- 他のPCに配るときは、証明書の公開部分 (`.cer`) を、そのPCの「信頼された発行元」と「信頼されたルート証明機関」に登録する (配布用zipの「証明書を信頼する.ps1」が行う)
+
+```powershell
+# 署名に使った証明書の公開部分を書き出す (署名のPCで実行)
+$cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq "CN=VerticalSheetTabs" } | Select-Object -First 1
+Export-Certificate -Cert $cert -FilePath VerticalSheetTabs.cer
+```
+
+- 別のPCで開発するときは、Visual Studio の「署名」タブで新しい証明書を作り、`.csproj` の `ManifestCertificateThumbprint` を更新する (または、`.pfx` を、安全な方法で受け渡す)
+- 正式に配布する場合は、コード署名証明書を購入して、`.csproj` の `ManifestCertificateThumbprint` と `ManifestKeyFile` を差し替える
+
+## アンインストール (開発PC)
+
+```powershell
+& "C:\Program Files (x86)\Common Files\Microsoft Shared\VSTO\10.0\VSTOInstaller.exe" /Uninstall <.vsto の場所> /S
+```
+
+Debug ビルドが登録した開発用のアドインは、Excelの「ファイル > オプション > アドイン」の「COMアドイン」から確認できる。
+
+## 自動確認の注意 (PowerShell + UI Automation)
+
+- Excelを通常起動して、`System.Windows.Automation`、`mouse_event` (絶対座標、`SetProcessDPIAware` 後)、`SendKeys` で操作する
+- 自分が起動したExcelだけを終了する。ほかのExcelが動いているときは、中止する
+- COM経由でExcelを操作したスクリプトは、`FinalReleaseComObject` とGCのあとでないと、Excelのプロセスが残る
+- Windows PowerShell 5.1 に日本語を含むスクリプトは、UTF-8 BOM付きで保存する
+- ペイン内の描画、配置のコードで例外を出さない (出すと、ペインにマウス入力が届かなくなる)
