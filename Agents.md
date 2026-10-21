@@ -1326,6 +1326,6 @@ gitGraph
 
 ### 12.61 インストーラの更新 (バージョン1.1.19.0)
 
-- 12.60 (セルの入力途中に縦タブで別シートを選んだときの修正) を含めて、バージョンを 1.1.19.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 12.60 (セルの入力途中に縦タブで別シートを選んだときの修正) を含めて、バージョンを 1.1.19.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.19` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.19.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_19_0\`)。インストールの実機確認は、未実施
 
