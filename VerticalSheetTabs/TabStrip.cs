@@ -767,7 +767,7 @@ namespace VerticalSheetTabs
                 {
                     g.FillPath(brush, path);
                 }
-                DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored), true);
+                DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored), active); // triangles only on the active sheet
                 if (colored) textColor = TextOn(tabColor);
             }
             else if (colored)
@@ -788,7 +788,7 @@ namespace VerticalSheetTabs
 
             // text: left aligned; the text of a selected tab sits a little higher (the lines above and below)
             int lift = selected ? Px(ActiveTextLift) : 0;
-            int room = selected ? Px(MarkerRoom) : 0; // room for the triangles at both ends of a selected row
+            int room = active ? Px(MarkerRoom) : 0; // room for the triangles at both ends of the active sheet
             var textRect = new Rectangle(left + room + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - 2 * room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
@@ -823,7 +823,7 @@ namespace VerticalSheetTabs
             }
         }
 
-        // A selected row has a double frame (a dark outer one and a white inner one) and, for a sheet, a small triangle at each end
+        // A selected row has a double frame (a dark outer one and a white inner one) and, for the active sheet only, a small triangle at each end
         // that points to the middle, in the opposite color of the row; the triangles have a white edge and a soft
         // white halo of a few pixels (white shapes of growing width with a little opacity each: GDI+ has no blur),
         // so that they can be seen on dark colors and on the dark bar of the dark Office themes as well.
