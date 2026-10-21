@@ -1374,3 +1374,8 @@ gitGraph
 - 確認 (画面に描いて、画像で確認。ExcelのOfficeテーマは、切り替えず、`TabTheme` の配色を、直接指定して描画): 明るい配色、ダークグレー、黒の、3つの配色で、色なし、赤、黄、選択中のフォルダの行に、チェックマークが見える。暗い配色の、色なしの行では、チェックマークの周りに、明るいぼかしが出る
 - 調整: ぼかしの広がり (`CheckHalo`)、不透明度 (46/255)、重ねる本数 (`steps`) は、`TabStrip.DrawCheck` の中の値
 
+### 12.68 インストーラの更新 (バージョン1.1.21.0)
+
+- 12.65 から 12.67 (フォルダの「中の全てを選択中シートと同一色に変更」、「中の全てをフォルダと同一色に変更」とチェックマーク) を含めて、バージョンを 1.1.21.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_21_0\`)。インストールの実機確認は、未実施
+
