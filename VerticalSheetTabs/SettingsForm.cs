@@ -109,6 +109,9 @@ namespace VerticalSheetTabs
             _nameRule.Checked = nameRule;
             _styleStandard.Checked = selectStyle == SelectStyle.Standard;
             _styleDouble.Checked = selectStyle == SelectStyle.DoubleFrame;
+            // the two buttons sit in different panels (each next to its samples), so the form keeps them exclusive
+            _styleStandard.CheckedChanged += (s, e) => { if (_styleStandard.Checked) _styleDouble.Checked = false; };
+            _styleDouble.CheckedChanged += (s, e) => { if (_styleDouble.Checked) _styleStandard.Checked = false; };
             _outlineShow.Checked = outlineVisible;
             _outlineLevel.Value = Math.Max(1, Math.Min(TabStrip.OutlineLevels, outlineLevel));
             _outlineShow.CheckedChanged += (s, e) => UpdateOutline();
