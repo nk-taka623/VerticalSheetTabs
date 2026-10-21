@@ -10,6 +10,13 @@ namespace VerticalSheetTabs
         Both            // C
     }
 
+    // How a selected folder or sheet looks (Agents.md 12.99).
+    public enum SelectStyle
+    {
+        Standard,   // Excel's own look: white, with a thin border and (the active sheet) an underline
+        DoubleFrame // a shadow, a double frame and, on the active sheet, a triangle at each end
+    }
+
     public enum TabSide
     {
         Left,
@@ -28,6 +35,7 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
+        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame"
 
         // Office.MsoDocProperties values.
         private const int PropTypeNumber = 1;
@@ -46,6 +54,8 @@ namespace VerticalSheetTabs
         public int OutlineLevel { get; set; }
         // The sheet-name rule: a sheet "A | B" is the sheet B in the folder A (default: not used).
         public bool NameRule { get; set; }
+        // The look of selected folders and sheets (default: the standard type).
+        public SelectStyle SelectStyle { get; set; }
 
         public WorkbookSettings()
         {
@@ -56,6 +66,7 @@ namespace VerticalSheetTabs
             OutlineVisible = true;
             OutlineLevel = 5;
             NameRule = false;
+            SelectStyle = SelectStyle.Standard;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
@@ -87,6 +98,8 @@ namespace VerticalSheetTabs
                 dynamic level = Find(props, OutlineLevelName);
                 dynamic nameRule = Find(props, NameRuleName);
                 if (nameRule != null) s.NameRule = (string)nameRule.Value == "On";
+                dynamic selectStyle = Find(props, SelectStyleName);
+                if (selectStyle != null) s.SelectStyle = (string)selectStyle.Value == "DoubleFrame" ? SelectStyle.DoubleFrame : SelectStyle.Standard;
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)
                 {
@@ -117,6 +130,7 @@ namespace VerticalSheetTabs
                 Write(props, OutlineName, PropTypeString, OutlineVisible ? "On" : "Off");
                 Write(props, OutlineLevelName, PropTypeNumber, OutlineLevel);
                 Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
+                Write(props, SelectStyleName, PropTypeString, SelectStyle == SelectStyle.DoubleFrame ? "DoubleFrame" : "Standard");
             }
             catch (Exception)
             {
