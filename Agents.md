@@ -1689,6 +1689,6 @@ gitGraph
 
 ### 12.98 インストーラの更新 (バージョン1.1.35.0)
 
-- 12.97 (三角のマーカーは、アクティブなシートだけに付ける) を含めて、バージョンを 1.1.35.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)
+- 12.97 (三角のマーカーは、アクティブなシートだけに付ける) を含めて、バージョンを 1.1.35.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.35` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.35.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_35_0\`)。インストールの実機確認は、未実施
 
