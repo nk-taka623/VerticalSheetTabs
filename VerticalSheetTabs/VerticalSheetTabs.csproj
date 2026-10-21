@@ -233,6 +233,7 @@
     <Compile Include="RibbonController.cs" />
     <Compile Include="RibbonIcon.cs" />
     <Compile Include="NameRule.cs" />
+    <Compile Include="AddInVersion.cs" />
     <Compile Include="SettingsForm.cs" />
     <Compile Include="TabColorPalette.cs" />
     <Compile Include="FolderModel.cs" />
