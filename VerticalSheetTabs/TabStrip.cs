@@ -259,10 +259,11 @@ namespace VerticalSheetTabs
 
         // ---- geometry ----
 
-        // The "+" sits after the last tab like in Excel; when the tabs overflow it stays at the bottom.
-        private bool Pinned { get { return (_rows.Count + 1) * RowPx > ClientSize.Height; } }
+        // The "+" is fixed at the bottom of the pane, so that it does not move down as sheets are added
+        // and can be pressed repeatedly. The tabs scroll above it when they do not fit.
+        private bool NeedScroll { get { return _rows.Count * RowPx > ViewHeight; } }
 
-        private int ViewHeight { get { return Pinned ? Math.Max(0, ClientSize.Height - RowPx) : ClientSize.Height; } }
+        private int ViewHeight { get { return Math.Max(0, ClientSize.Height - RowPx); } }
 
         // The rows of an open folder that has sheets listed (they are enclosed by the dashed outline).
         private static void MarkGroups(List<StripRow> rows)
@@ -283,7 +284,7 @@ namespace VerticalSheetTabs
         // the dashed line as the cut corner of the outline is wide.
         private int RightInset(StripRow r)
         {
-            return r.InGroup ? Px(OutlineRightInset + OutlineCut) : Px(InsetRight);
+            return r.InGroup && _outlineVisible ? Px(OutlineRightInset + OutlineCut) : Px(InsetRight);
         }
 
         private int RowIndexOf(string sheet)
@@ -332,7 +333,7 @@ namespace VerticalSheetTabs
 
         private Rectangle PlusButtonRect()
         {
-            int top = Pinned ? ClientSize.Height - RowPx : _rows.Count * RowPx;
+            int top = ClientSize.Height - RowPx;
             int size = Px(PlusHoverSize);
             return new Rectangle((ClientSize.Width - size) / 2, top + (RowPx - size) / 2, size, size);
         }
@@ -344,7 +345,7 @@ namespace VerticalSheetTabs
         {
             int view = ViewHeight;
             int total = _rows.Count * RowPx;
-            bool need = ClientSize.Height > 0 && Pinned && view > 0;
+            bool need = ClientSize.Height > 0 && NeedScroll && view > 0;
             _scroll.Visible = need;
             if (!need)
             {
@@ -441,12 +442,45 @@ namespace VerticalSheetTabs
             DrawPlus(g);
         }
 
-        // The outline color is the opposite of the bar background on the hue circle (hue + 180 degrees).
+        public const int OutlineLevels = 9;
+
+        private bool _outlineVisible = true;
+        private int _outlineLevel = 5;
+
+        // Whether the dashed outline around an open folder is drawn, and its color level (1..9).
+        public bool OutlineVisible
+        {
+            get { return _outlineVisible; }
+            set { if (_outlineVisible != value) { _outlineVisible = value; Invalidate(); } }
+        }
+
+        public int OutlineLevel
+        {
+            get { return _outlineLevel; }
+            set
+            {
+                int v = Math.Max(1, Math.Min(OutlineLevels, value));
+                if (_outlineLevel != v) { _outlineLevel = v; Invalidate(); }
+            }
+        }
+
+        // Level 9 is the strongest color, the opposite of the bar background on the hue circle; the
+        // levels below it blend from the background (level 0) to that color in 9 equal steps.
+        public static Color OutlineColorAt(Color bg, int level)
+        {
+            Color full = OppositeColor(bg);
+            double t = Math.Max(0, Math.Min(OutlineLevels, level)) / (double)OutlineLevels;
+            return Color.FromArgb(
+                (int)Math.Round(bg.R + (full.R - bg.R) * t),
+                (int)Math.Round(bg.G + (full.G - bg.G) * t),
+                (int)Math.Round(bg.B + (full.B - bg.B) * t));
+        }
+
+        // The opposite of the bar background on the hue circle (hue + 180 degrees).
         // A gray background has no hue to turn, so the saturation is raised and the lightness is pushed
         // away from the background's, to keep the line visible.
-        private Color OutlineColor()
+        private static Color OppositeColor(Color bg)
         {
-            Color bg = Theme.BarBack;
             double h = bg.GetHue(), s = bg.GetSaturation(), l = bg.GetBrightness();
             h = (h + 180) % 360;
             s = Math.Max(s, 0.85);
@@ -465,6 +499,8 @@ namespace VerticalSheetTabs
         // background, with the upper right and the lower left corners cut off. The line goes when the folder is closed.
         private void DrawFolderOutlines(Graphics g)
         {
+            if (!_outlineVisible) return;
+            Color lineColor = OutlineColorAt(Theme.BarBack, _outlineLevel);
             for (int i = 0; i < _rows.Count; i++)
             {
                 if (!_rows[i].IsFolder || !_rows[i].Expanded) continue;
@@ -482,7 +518,7 @@ namespace VerticalSheetTabs
                     new Point(l, t), new Point(r - cut, t), new Point(r, t + cut), new Point(r, b),
                     new Point(l + cut, b), new Point(l, b - cut)
                 };
-                using (var pen = new Pen(OutlineColor(), Math.Max(1f, Px(1.2))))
+                using (var pen = new Pen(lineColor, Math.Max(1f, Px(1.2))))
                 {
                     pen.DashStyle = DashStyle.Dash;
                     pen.LineJoin = LineJoin.Miter;
