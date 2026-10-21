@@ -15,6 +15,8 @@ namespace VerticalSheetTabs
         public string Name;
         public TabColorChoice Color = new TabColorChoice { Kind = TabColorKind.None };
         public bool Expanded = true;
+        // Folder: all its sheets have the folder's color, also the ones that come into the folder later.
+        public bool SyncColor;
         // Folder: the keys of its sheets in Excel's order (see FolderStore.SheetKeys). Loose sheet: SheetCode is its key.
         public List<string> Sheets = new List<string>();
         public string SheetCode;
@@ -74,6 +76,7 @@ namespace VerticalSheetTabs
                     new XAttribute("id", n.FolderId),
                     new XAttribute("name", n.Name ?? ""),
                     new XAttribute("expanded", n.Expanded ? 1 : 0));
+                if (n.SyncColor) f.Add(new XAttribute("syncColor", 1));
                 TabColorChoice c = n.Color ?? new TabColorChoice { Kind = TabColorKind.None };
                 f.Add(new XAttribute("color", c.Kind == TabColorKind.Rgb ? "rgb" : c.Kind == TabColorKind.Theme ? "theme" : "none"));
                 if (c.Kind == TabColorKind.Rgb) f.Add(new XAttribute("bgr", c.Bgr));
@@ -118,6 +121,7 @@ namespace VerticalSheetTabs
                             FolderId = id,
                             Name = Truncate((string)e.Attribute("name") ?? ""),
                             Expanded = ((string)e.Attribute("expanded")) != "0",
+                            SyncColor = ((string)e.Attribute("syncColor")) == "1",
                             Color = ParseColor(e)
                         };
                         foreach (XElement s in e.Elements(ns + "sheet"))
@@ -248,7 +252,7 @@ namespace VerticalSheetTabs
                 FolderNode target;
                 if (!placed.TryGetValue(f, out target))
                 {
-                    target = new FolderNode { FolderId = f.FolderId, Name = f.Name, Color = f.Color, Expanded = f.Expanded };
+                    target = new FolderNode { FolderId = f.FolderId, Name = f.Name, Color = f.Color, Expanded = f.Expanded, SyncColor = f.SyncColor };
                     placed[f] = target;
                     rebuilt.Add(target);
                 }
@@ -261,7 +265,7 @@ namespace VerticalSheetTabs
             {
                 FolderNode f = oldNodes[index];
                 if (!f.IsFolder || placed.ContainsKey(f)) continue;
-                var empty = new FolderNode { FolderId = f.FolderId, Name = f.Name, Color = f.Color, Expanded = f.Expanded };
+                var empty = new FolderNode { FolderId = f.FolderId, Name = f.Name, Color = f.Color, Expanded = f.Expanded, SyncColor = f.SyncColor };
                 int at = rebuilt.Count;
                 for (int next = index + 1; next < oldNodes.Count; next++)
                 {
