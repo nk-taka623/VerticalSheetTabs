@@ -113,7 +113,7 @@ namespace VerticalSheetTabs
             control.UngroupRequested += () => UngroupSheets(entry);
             control.SettingsRequested += () => ShowSettings(entry);
             control.AddRequested += () => AddSheet(entry);
-            control.InsertRequested += () => RunExcelCommand(entry, "SheetInsert");
+            control.InsertRequested += () => InsertSheet(entry);
             control.DeleteRequested += () => RunExcelCommand(entry, "SheetDelete");
             control.HideRequested += () => RunExcelCommand(entry, "SheetHide");
             control.UnhideRequested += () => RunExcelCommand(entry, "SheetUnhide");
@@ -1791,6 +1791,69 @@ namespace VerticalSheetTabs
                 // The command is not available now (e.g. structure protection); Excel greys it out
                 // in its own menu, so there is nothing more to report.
             }
+        }
+
+        // The menu item "Insert": Excel puts a new worksheet in front of the active sheet. When the active sheet
+        // is in a folder, the new sheet goes into that folder, also in front of the folder's first sheet (where
+        // the folder would otherwise end behind the new sheet). Without the name rule the model takes it in;
+        // with the name rule the sheet is named "Folder | Sheet" at once (a plain name in the middle of the
+        // folder's sheets would make the sync move the folder's sheets around it). The sync is stopped meanwhile.
+        private void InsertSheet(Entry entry)
+        {
+            if (entry.Busy) return;
+            CommitCellEdit(entry);
+            entry.Busy = true;
+            try
+            {
+                FolderNode folder = null;
+                string activeKey = null;
+                List<string> keysBefore = null;
+                if (entry.Folders.HasFolders)
+                {
+                    RefreshKeys(entry);
+                    activeKey = KeyOf(entry, CurrentActive(entry));
+                    folder = activeKey == null ? null : entry.Folders.FolderOf(activeKey);
+                    keysBefore = new List<string>(entry.Keys);
+                }
+                var namesBefore = new HashSet<string>(ReadNames(entry), StringComparer.OrdinalIgnoreCase);
+                RunExcelCommand(entry, "SheetInsert");
+                if (folder != null)
+                {
+                    List<string> now = ReadNames(entry);
+                    var added = new List<int>();
+                    for (int i = 0; i < now.Count; i++) if (!namesBefore.Contains(now[i])) added.Add(i);
+                    if (added.Count > 0)
+                    {
+                        if (RuleOn(entry))
+                        {
+                            foreach (int i in added)
+                            {
+                                string full = NameRule.Compose(folder.Name, NameRule.BaseOf(now[i]));
+                                if (full.Length > NameRule.MaxSheetName) continue;
+                                if (now.Any(n => string.Equals(n, full, StringComparison.OrdinalIgnoreCase))) continue;
+                                SetSheetName(entry.Workbook.Sheets[i + 1], full);
+                                now[i] = full;
+                            }
+                        }
+                        else
+                        {
+                            RefreshKeys(entry);
+                            List<string> newKeys = entry.Keys.Where(k => !keysBefore.Contains(k)).ToList();
+                            if (newKeys.Count > 0) entry.Folders.Move(newKeys, new string[0], folder.FolderId, activeKey, null);
+                        }
+                    }
+                }
+                entry.KeySignature = null;
+            }
+            catch (Exception)
+            {
+                // The command is not available now (e.g. structure protection): nothing was inserted.
+            }
+            finally
+            {
+                entry.Busy = false;
+            }
+            SyncSheets(entry);
         }
 
         // The "+" button: a new worksheet after the active sheet, as Excel's own button does.
