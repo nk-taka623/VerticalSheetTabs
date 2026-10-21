@@ -21,8 +21,11 @@ namespace VerticalSheetTabs
         private GroupBox _outlineGroup;
         private readonly CheckBox _nameRule = new CheckBox();
         private GroupBox _ruleGroup;
+        private readonly RadioButton _styleStandard = new RadioButton();
+        private readonly RadioButton _styleDouble = new RadioButton();
+        private GroupBox _styleGroup;
 
-        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule)
+        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -47,6 +50,7 @@ namespace VerticalSheetTabs
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
+            _styleGroup = CreateStyleGroup();
 
             var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(88, 0) };
             var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new Size(88, 0) };
@@ -72,6 +76,9 @@ namespace VerticalSheetTabs
             layout.Controls.Add(_sideGroup);
             _outlineGroup.Dock = DockStyle.Fill;
             _outlineGroup.Margin = new Padding(3, 8, 3, 3);
+            _styleGroup.Dock = DockStyle.Fill;
+            _styleGroup.Margin = new Padding(3, 8, 3, 3);
+            layout.Controls.Add(_styleGroup);
             layout.Controls.Add(_outlineGroup);
             _ruleGroup.Dock = DockStyle.Fill;
             _ruleGroup.Margin = new Padding(3, 8, 3, 3);
@@ -100,6 +107,8 @@ namespace VerticalSheetTabs
             _sideRight.Checked = side == TabSide.Right;
 
             _nameRule.Checked = nameRule;
+            _styleStandard.Checked = selectStyle == SelectStyle.Standard;
+            _styleDouble.Checked = selectStyle == SelectStyle.DoubleFrame;
             _outlineShow.Checked = outlineVisible;
             _outlineLevel.Value = Math.Max(1, Math.Min(TabStrip.OutlineLevels, outlineLevel));
             _outlineShow.CheckedChanged += (s, e) => UpdateOutline();
@@ -124,6 +133,8 @@ namespace VerticalSheetTabs
             get { return _sideRight.Checked ? TabSide.Right : TabSide.Left; }
         }
 
+        public SelectStyle SelectStyle { get { return _styleDouble.Checked ? SelectStyle.DoubleFrame : SelectStyle.Standard; } }
+
         public bool OutlineVisible { get { return _outlineShow.Checked; } }
 
         public bool NameRule { get { return _nameRule.Checked; } }
@@ -138,6 +149,80 @@ namespace VerticalSheetTabs
             _outlineSwatch.BackColor = _outlineShow.Checked
                 ? TabStrip.OutlineColorAt(TabTheme.Current.BarBack, _outlineLevel.Value)
                 : SystemColors.Control;
+        }
+
+        // The look of selected folders and sheets: two types, each with samples (not selected, a folder and a
+        // plain sheet selected, a colored sheet selected) drawn by the tab strip itself.
+        private GroupBox CreateStyleGroup()
+        {
+            var group = new GroupBox { Text = "フォルダ＆シートの選択デザイン", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6) };
+            _styleStandard.Text = "標準タイプ (Excelの横タブと同じ見た目)";
+            _styleDouble.Text = "ダブルフレームタイプ (二重の枠と三角で、目立たせる)";
+            var panel = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.TopDown,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = false,
+                Margin = Padding.Empty
+            };
+            panel.Controls.Add(CreateStyleBlock(_styleStandard, SelectStyle.Standard));
+            panel.Controls.Add(CreateStyleBlock(_styleDouble, SelectStyle.DoubleFrame));
+            group.Controls.Add(panel);
+            panel.Location = group.DisplayRectangle.Location;
+            Size content = panel.PreferredSize;
+            group.Size = new Size(content.Width + group.Padding.Horizontal + 8, panel.Top + content.Height + group.Padding.Bottom + 2);
+            return group;
+        }
+
+        private static FlowLayoutPanel CreateStyleBlock(RadioButton radio, SelectStyle style)
+        {
+            radio.AutoSize = true;
+            var block = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.TopDown,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+            block.Controls.Add(radio);
+            var samples = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = false,
+                Margin = new Padding(16, 0, 0, 0)
+            };
+            string[][] cells =
+            {
+                new[] { "非選択", "none" },
+                new[] { "選択 (色なしのシート)", "plain" },
+                new[] { "選択 (色付きのシート)", "colored" }
+            };
+            foreach (string[] cell in cells)
+            {
+                var strip = new TabStrip();
+                strip.SetSample(style, cell[1]);
+                strip.Size = strip.SampleSize(150);
+                strip.Margin = new Padding(0, 0, 0, 0);
+                strip.SampleClicked += () => radio.Checked = true;
+                var caption = new Label { Text = cell[0], AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(0, 0, 0, 2) };
+                var one = new FlowLayoutPanel
+                {
+                    FlowDirection = FlowDirection.TopDown,
+                    AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                    WrapContents = false,
+                    Margin = new Padding(0, 0, 8, 0)
+                };
+                one.Controls.Add(caption);
+                one.Controls.Add(strip);
+                samples.Controls.Add(one);
+            }
+            block.Controls.Add(samples);
+            return block;
         }
 
         // The sheet-name rule: on/off, with a short explanation.

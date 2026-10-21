@@ -60,6 +60,8 @@ namespace VerticalSheetTabs
         private const double PlainTop = 1, ColoredTop = 4, BottomInset = 4;
         private const double CornerRadius = 4;
         private const double ActiveTextLift = 1.6;
+        // The standard type (Excel's own look): the underline of the active sheet, and its text sitting higher.
+        private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 3.2, StandardTextLift = 3.2;
         // The triangles at the ends of a selected row: distance of their center from the edge of the body, size,
         // and the room the text keeps free at each end.
         private const double MarkerInset = 13, MarkerHalfHeight = 5, MarkerBack = 4, MarkerFront = 3, MarkerRoom = 15;
@@ -282,7 +284,7 @@ namespace VerticalSheetTabs
         // and can be pressed repeatedly. The tabs scroll above it when they do not fit.
         private bool NeedScroll { get { return _rows.Count * RowPx > ViewHeight; } }
 
-        private int ViewHeight { get { return Math.Max(0, ClientSize.Height - RowPx); } }
+        private int ViewHeight { get { return IsSample ? ClientSize.Height : Math.Max(0, ClientSize.Height - RowPx); } }
 
         // The rows of an open folder that has sheets listed (they are enclosed by the dashed outline).
         private static void MarkGroups(List<StripRow> rows)
@@ -432,6 +434,7 @@ namespace VerticalSheetTabs
         protected override void OnMouseWheel(MouseEventArgs e)
         {
             base.OnMouseWheel(e);
+            if (IsSample) return;
             SetScroll(_scrollY - Math.Sign(e.Delta) * RowPx);
         }
 
@@ -464,7 +467,7 @@ namespace VerticalSheetTabs
             }
             g.ResetClip();
 
-            DrawPlus(g);
+            if (!IsSample) DrawPlus(g);
         }
 
         public const int OutlineLevels = 9;
@@ -473,6 +476,53 @@ namespace VerticalSheetTabs
         private int _outlineLevel = 5;
 
         // Whether the dashed outline around an open folder is drawn, and its color level (1..9).
+        // How selected folders and sheets look: Excel's own look (white, with the underline), or the double frame.
+        private SelectStyle _selectStyle = SelectStyle.Standard;
+
+        public SelectStyle SelectionStyle
+        {
+            get { return _selectStyle; }
+            set { if (_selectStyle != value) { _selectStyle = value; Invalidate(); } }
+        }
+
+        private bool DoubleFrame { get { return _selectStyle == SelectStyle.DoubleFrame; } }
+
+        // A sample (in the settings dialog): the same drawing, three fixed rows, no "+" button, no operation.
+        public bool IsSample { get; private set; }
+
+        // The size of a sample of the given width (in DIP): three rows.
+        public Size SampleSize(int widthDip)
+        {
+            return new Size(Px(widthDip), 3 * RowPx + Px(2));
+        }
+
+        // A click on a sample.
+        public event Action SampleClicked;
+
+        // Three rows: a folder, Sheet1, and Sheet2 in orange. What is selected: "none", "plain" (the folder, and
+        // Sheet1 as the active sheet) or "colored" (Sheet2 as the active sheet).
+        public void SetSample(SelectStyle style, string selection)
+        {
+            IsSample = true;
+            TabStop = false;
+            _selectStyle = style;
+            var rows = new List<StripRow>
+            {
+                new StripRow { FolderId = "sample", FolderName = "資料", Expanded = true },
+                new StripRow { Sheet = "Sheet1" },
+                new StripRow { Sheet = "Sheet2" }
+            };
+            var names = new List<string> { "Sheet1", "Sheet2" };
+            var colors = new Dictionary<string, int> { { "Sheet2", 0x3A80E9 } };
+            string active = selection == "plain" ? "Sheet1" : selection == "colored" ? "Sheet2" : "";
+            var selected = new List<string>();
+            if (active != "") selected.Add(active);
+            SetSheets(names, active, selected, colors, rows);
+            _selFolders.Clear();
+            if (selection == "plain") _selFolders.Add("sample");
+            Invalidate();
+        }
+
         public bool OutlineVisible
         {
             get { return _outlineVisible; }
@@ -620,7 +670,7 @@ namespace VerticalSheetTabs
 
             // like a sheet tab: selected = white, or the color itself, with a shadow; not selected
             // with a color = a box in that color
-            if (selected)
+            if (selected && DoubleFrame)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
                 DrawShadow(g, body, radius, 1.0);
@@ -631,6 +681,11 @@ namespace VerticalSheetTabs
                 }
                 DrawSelectionFrame(g, body, radius, LineColorFor(color, colored), false); // a folder has no triangles
                 if (colored) textColor = TextOn(color);
+            }
+            else if (selected)
+            {
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                DrawStandardSelected(g, body, radius, colored, color);
             }
             else if (colored)
             {
@@ -647,7 +702,7 @@ namespace VerticalSheetTabs
             // closed: a right-pointing chevron; open: the same turned down
             int markShift = 0; // (a selected folder has no triangles, so its mark and its name keep their place)
             int cx = left + markShift + Px(TextPadLeft) / 2 + Px(FolderMarkWidth) / 2;
-            int cy = row.Top + row.Height / 2 - (selected ? Px(ActiveTextLift) : 0);
+            int cy = row.Top + row.Height / 2 - (selected && DoubleFrame ? Px(ActiveTextLift) : 0);
             int w = Px(FolderMarkWidth), h = Px(FolderMarkHeight);
             Point[] chevron = folder.Expanded
                 ? new[] { new Point(cx - h / 2, cy - w / 2), new Point(cx, cy + w / 2), new Point(cx + h / 2, cy - w / 2) }
@@ -660,7 +715,7 @@ namespace VerticalSheetTabs
 
             int textLeft = left + markShift + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
             int roomRight = 0;
-            var textRect = new Rectangle(textLeft, row.Top - (selected ? Px(ActiveTextLift) : 0) + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - roomRight - CheckReserve(folder)), row.Height);
+            var textRect = new Rectangle(textLeft, row.Top - (selected && DoubleFrame ? Px(ActiveTextLift) : 0) + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - roomRight - CheckReserve(folder)), row.Height);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             if (_editor == null || _editingFolderId != folder.FolderId)
             {
@@ -757,7 +812,7 @@ namespace VerticalSheetTabs
 
             // A colored tab that is not selected is a filled, rounded box; every other tab is white
             // when selected and has no background otherwise.
-            if (selected)
+            if (selected && DoubleFrame)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
                 // the active sheet is raised most; the other sheets of a group a little less
@@ -769,6 +824,19 @@ namespace VerticalSheetTabs
                 }
                 DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored), active); // triangles only on the active sheet
                 if (colored) textColor = TextOn(tabColor);
+            }
+            else if (selected)
+            {
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                DrawStandardSelected(g, body, radius, colored, tabColor);
+                if (active)
+                {
+                    int thick = Math.Max(1, Px(UnderlineThickness));
+                    int ux = body.Left + Px(UnderlineInset);
+                    int uw = body.Width - 2 * Px(UnderlineInset);
+                    int uy = body.Bottom - 1 - Px(UnderlineGap) - thick;
+                    using (var brush = new SolidBrush(Underline)) g.FillRectangle(brush, ux, uy, Math.Max(1, uw), thick);
+                }
             }
             else if (colored)
             {
@@ -787,13 +855,13 @@ namespace VerticalSheetTabs
             DrawSeparator(g, row);
 
             // text: left aligned; the text of a selected tab sits a little higher (the lines above and below)
-            int lift = selected ? Px(ActiveTextLift) : 0;
-            int room = active ? Px(MarkerRoom) : 0; // room for the triangles at both ends of the active sheet
+            int lift = DoubleFrame ? (selected ? Px(ActiveTextLift) : 0) : (active ? Px(StandardTextLift) : 0);
+            int room = DoubleFrame && active ? Px(MarkerRoom) : 0; // room for the triangles at both ends of the active sheet
             var textRect = new Rectangle(left + room + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - 2 * room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                using (var font = selected ? new Font(TabFont, FontStyle.Bold) : null)
+                using (var font = selected && DoubleFrame ? new Font(TabFont, FontStyle.Bold) : null)
                 using (var brush = new SolidBrush(textColor))
                 using (var format = new StringFormat(StringFormat.GenericDefault))
                 {
@@ -803,6 +871,27 @@ namespace VerticalSheetTabs
                     format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
                     g.DrawString(text, font ?? TabFont, brush, textRect, format);
                 }
+            }
+        }
+
+        // The standard type, Excel's own look: white with a thin border; a color fades in from the top
+        // (white at the top, about 45% of the color at the bottom).
+        private void DrawStandardSelected(Graphics g, Rectangle body, int radius, bool colored, Color color)
+        {
+            using (GraphicsPath path = RoundedRect(body, radius))
+            {
+                using (var brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
+                if (colored)
+                {
+                    Rectangle inner = Rectangle.Inflate(body, -1, -1);
+                    Color bottom = Mix(Color.White, color, 0.45);
+                    using (var brush = new LinearGradientBrush(new Rectangle(inner.X, inner.Y - 1, inner.Width, inner.Height + 2), Color.White, bottom, LinearGradientMode.Vertical))
+                    using (GraphicsPath innerPath = RoundedRect(inner, Math.Max(1, radius - 1)))
+                    {
+                        g.FillPath(brush, innerPath);
+                    }
+                }
+                using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
             }
         }
 
@@ -934,6 +1023,7 @@ namespace VerticalSheetTabs
 
         protected override void WndProc(ref Message m)
         {
+            if (IsSample) { base.WndProc(ref m); return; }
             if ((m.Msg == WM_LBUTTONDOWN || m.Msg == WM_LBUTTONDBLCLK) && _editor == null)
             {
                 long l = m.LParam.ToInt64();
@@ -970,6 +1060,7 @@ namespace VerticalSheetTabs
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
+            if (IsSample) { if (SampleClicked != null) SampleClicked(); return; }
             if (!_noFocusClick) Focus();
             _toggleOffFolder = null; // a drag swallows the button release, so nothing may be left over
             if (e.Button == MouseButtons.Left && !StructureProtected && PlusButtonRect().Contains(e.Location))
@@ -1114,6 +1205,7 @@ namespace VerticalSheetTabs
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
+            if (IsSample) return;
             bool noDrag = _dragIndex >= 0;
             _dragIndex = -1;
             string toggleOff = _toggleOffFolder;
@@ -1157,6 +1249,7 @@ namespace VerticalSheetTabs
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
+            if (IsSample) return;
             if (e.KeyCode == Keys.Delete)
             {
                 e.Handled = true;
@@ -1230,6 +1323,7 @@ namespace VerticalSheetTabs
         protected override void OnMouseMove(MouseEventArgs e)
         {
             base.OnMouseMove(e);
+            if (IsSample) return;
             SetPlusHot(!StructureProtected && PlusButtonRect().Contains(e.Location));
             UpdateTip(e.Location);
             if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected) return;
@@ -1422,6 +1516,7 @@ namespace VerticalSheetTabs
         protected override void OnMouseDoubleClick(MouseEventArgs e)
         {
             base.OnMouseDoubleClick(e);
+            if (IsSample) return;
             if (e.Button != MouseButtons.Left) return;
             int index = IndexFromPoint(e.Location);
             if (index < 0) return;

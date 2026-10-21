@@ -259,6 +259,8 @@ namespace VerticalSheetTabs
 
         public int OutlineLevel { get { return _strip.OutlineLevel; } set { _strip.OutlineLevel = value; } }
 
+        public SelectStyle SelectionStyle { get { return _strip.SelectionStyle; } set { _strip.SelectionStyle = value; } }
+
         public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors, IList<StripRow> rows)
         {
             _strip.StructureProtected = StructureProtected;
