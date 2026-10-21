@@ -102,7 +102,7 @@ namespace VerticalSheetTabs
             var viewCode = MenuItem("コードの表示(&V)", () => ViewCodeRequested);
             var protect = MenuItem("シートの保護(&P)...", () => ProtectSheetRequested);
             var tabColor = new ToolStripMenuItem("シート見出しの色(&T)");
-            var palette = new TabColorPalette { MoreColorsProvider = () => MoreColorsProvider == null ? (int?)null : MoreColorsProvider() };
+            var palette = new TabColorPalette { MoreColorsProvider = RequestMoreColor };
             var paletteHost = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
             tabColor.DropDown = new ToolStripDropDown { Padding = Padding.Empty };
             tabColor.DropDown.Items.Add(paletteHost);
@@ -161,6 +161,8 @@ namespace VerticalSheetTabs
             var fUnhide = FolderItem("フォルダ内のシートをすべて再表示(&U)", "unhide");
             var fColor = PaletteItem("フォルダの色(&C)", c => { if (FolderColorRequested != null) FolderColorRequested(_strip.SelectedFolders(), c); });
             var fSyncColor = FolderItem("中の全てを常にフォルダと同一色に設定(&F)", "synccolor");
+            var fCloseAll = FolderItem("全てのフォルダを閉じる(&L)", "closeall");
+            var fOpenAll = FolderItem("全てのフォルダを開く(&O)", "openall");
             var folderSettings = new ToolStripMenuItem("タブ表示の設定");
             folderSettings.Click += (s, e) => { if (SettingsRequested != null) SettingsRequested(); };
             _folderMenu.Items.Add(folderSettings);
@@ -177,6 +179,9 @@ namespace VerticalSheetTabs
             _folderMenu.Items.Add(new ToolStripSeparator());
             _folderMenu.Items.Add(folderDelete);
             _folderMenu.Items.Add(folderDeleteAll);
+            _folderMenu.Items.Add(new ToolStripSeparator());
+            _folderMenu.Items.Add(fCloseAll);
+            _folderMenu.Items.Add(fOpenAll);
             _folderMenu.Opening += (s, e) =>
             {
                 bool free = !StructureProtected;
@@ -197,11 +202,22 @@ namespace VerticalSheetTabs
             return item;
         }
 
+        // "More colors" of a palette in one of the menus. The menus are closed first: an open menu takes the keys
+        // (the Ctrl+Enter that enters a cell being edited) and the focus away from where they belong.
+        private int? RequestMoreColor()
+        {
+            if (MoreColorsProvider == null) return null;
+            _menu.Close();
+            _folderMenu.Close();
+            Application.DoEvents();
+            return MoreColorsProvider();
+        }
+
         // A menu item that opens the tab color palette (the same one as for sheets).
         private ToolStripMenuItem PaletteItem(string text, Action<TabColorChoice> chosen)
         {
             var item = new ToolStripMenuItem(text);
-            var palette = new TabColorPalette { MoreColorsProvider = () => MoreColorsProvider == null ? (int?)null : MoreColorsProvider() };
+            var palette = new TabColorPalette { MoreColorsProvider = RequestMoreColor };
             var host = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
             item.DropDown = new ToolStripDropDown { Padding = Padding.Empty };
             item.DropDown.Items.Add(host);
