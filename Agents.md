@@ -1168,7 +1168,7 @@ gitGraph
 `master` に反映するときは、ユーザーの指示がなくても、続けて、次の①から④を行う (2026-10-21 のユーザーの指示。④のタグ付けのタイミングは、v1.1.12 の後に変更)。
 
 1. マージ済みの feature / fix ブランチを、削除する (`git branch -d`。マージ済みであることを確認してから。`develop` と `master` は、残す)
-2. ワークスペースのルートの「配布用zip」フォルダの中に、配布用 zip (証明書 `VerticalSheetTabs.cer`、証明書を信頼するスクリプト、手順書つき) を、作成する。zip は、最新バージョンだけを残す (フォルダの中の、古い zip を、削除する)。zip は、公開済みのインストーラ (`VerticalSheetTabs\bin\Release\app.publish\`) から作る
+2. ワークスペースのルートの「配布用zip」フォルダの中に、配布用 zip (証明書 `VerticalSheetTabs.cer`、証明書を信頼するスクリプト、手順書つき) を、作成する。zip は、最新バージョンだけを残す (フォルダの中の、古い zip を、削除する)。zip は、公開済みのインストーラ (`VerticalSheetTabs\bin\Release\app.publish\`) から作る。作成は、`tools\make-dist-zip.ps1 -Version X.Y.Z` で行う (12.62)
 3. 「配布用zip」フォルダの中身も含めて、`master` にコミットする (`develop` は、`master` に、早送りで合わせる)
 4. バージョンタグ (`vX.Y.Z`) は、**配布用 zip をコミットしたあと** (③の後) に、そのコミットに付ける。`master` へのマージ直後には、付けない (タグが、配布用 zip を含まないコミットを指さないようにするため)。Agents.md の記録 (「`master` への反映とタグを付けた」) を更新するコミットが、zip のコミットの後に必要なときは、その更新のコミットまで終えてから、最後のコミットに、タグを付ける
 
@@ -1328,4 +1328,17 @@ gitGraph
 
 - 12.60 (セルの入力途中に縦タブで別シートを選んだときの修正) を含めて、バージョンを 1.1.19.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.19` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.19.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_19_0\`)。インストールの実機確認は、未実施
+
+### 12.62 追加: 「タブ表示の設定」にバージョンを表示、配布用zipの作成スクリプト
+
+- 「タブ表示の設定」の画面の、左下に、「バージョン v1.1.19」のように、アドインのバージョン (リリースのタグと同じ) を表示する (`SettingsForm.cs`、`AddInVersion.cs`)。バージョンは、実行中のアドイン自身のアセンブリのバージョン (`AssemblyInfo.cs` の `AssemblyVersion`) から読む。「1.1.19.0」の、最後の「.0」は、除く
+- バージョンが、アドインに埋め込まれる時期: インストーラを作るとき (`develop` へのマージのあと、「バージョンを上げ、インストーラを作り直す」コミット)。このとき、`AssemblyVersion`、`AssemblyFileVersion`、`ApplicationVersion` (`.csproj`)、`README.md` のフォルダ名を、タグにする版数に上げて、公開する。タグは、`master` への反映と、配布用zipのコミットのあとに、同じ版数で付ける (13章)。そのため、zipの作成の時点で、アドインの版数は、すでに、タグの版数になっている
+- 配布用zipの作成スクリプト `tools\make-dist-zip.ps1` を、リポジトリに入れた (以前は、作業用の一時ファイルだった)。使い方: `powershell -File tools\make-dist-zip.ps1 -Version X.Y.Z`。zipを作る直前に、公開済みのインストーラの DLL の版数が、指定した版数と同じことを確かめ、違うときは、zipを作らずに、止まる (版数の上げ忘れを防ぐ)。そのあと、いまの配布用zip (証明書、証明書を信頼するスクリプト、手順書) を引き継いで、新しいzipを作り、古いzipを削除する。作業用の場所は、`%TEMP%\vst_dist` (使ったあとに削除)
+- 実機で確認: 設定画面に、「バージョン v1.1.19」が出る (Debugビルド)。スクリプトで、版数 1.1.19 のzipが、作成済みのzipと、同じ大きさで作れる。版数 1.1.20 を指定すると、アドインの版数 (1.1.19.0) と違うため、止まる
+
+### 12.63 追加: 「タブ表示の設定」に、著作権とライセンスを表示
+
+- ユーザーの要望により、「タブ表示の設定」の画面の左下、バージョンの下に、次の2行を表示する: 「Copyright (c) 2026 nk_taka」、「BSD ライセンスに準拠」 (`AddInVersion.Copyright`、`AddInVersion.License`)。アセンブリの著作権の表記 (`AssemblyInfo.cs` の `AssemblyCopyright`) も、「Copyright (c) 2026 nk_taka」にそろえた
+- 「BSD ライセンス」は、画面の表示だけで、版 (2条項、3条項) や、ライセンス全文の `LICENSE` ファイルは、まだ無い。必要なときは、版を決めて、全文を追加する
+- 実機で確認: 設定画面の左下に、バージョン、著作権、ライセンスの3行が出る (Debugビルド)
 

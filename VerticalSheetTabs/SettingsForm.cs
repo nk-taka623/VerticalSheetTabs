@@ -76,7 +76,21 @@ namespace VerticalSheetTabs
             _ruleGroup.Dock = DockStyle.Fill;
             _ruleGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(_ruleGroup);
-            layout.Controls.Add(buttons);
+            // The bottom row: the add-in's version (the same as the release tag), copyright and license at the left, the buttons at the right.
+            var version = new Label
+            {
+                Text = "バージョン " + AddInVersion.Text + "\r\n" + AddInVersion.Copyright + "\r\n" + AddInVersion.License,
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                ForeColor = SystemColors.GrayText,
+                Margin = new Padding(3, 6, 3, 0)
+            };
+            var bottom = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, Dock = DockStyle.Fill, Margin = Padding.Empty };
+            bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            bottom.Controls.Add(version, 0, 0);
+            bottom.Controls.Add(buttons, 1, 0);
+            layout.Controls.Add(bottom);
             Controls.Add(layout);
 
             _modeHorizontal.Checked = mode == TabMode.HorizontalOnly;
