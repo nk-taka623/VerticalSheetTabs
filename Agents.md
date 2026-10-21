@@ -1184,3 +1184,8 @@ gitGraph
 
 - 12.44 の、半角1文字分の空きは、広すぎたため (実測、拡大率125%: 色付きのシートの右端から点線まで、約27px)、空きの幅を、点線の右上の角の欠けの横幅 (10DIP、拡大率125%で約12px) と、同じにした。点線に囲まれた行の右端は、点線から、欠けの幅だけ内側になる (`TabStrip.RightInset`: 点線の右の余白1.5DIP + 欠けの幅10DIP。点線の描画と、同じ定数 `OutlineRightInset`、`OutlineCut` を使う)
 - 実機で確認 (実測): 色付きのシート、色付きのフォルダの右端から、点線まで、約12から13px。欠けの横幅は、約12px
+
+### 12.46 インストーラの更新 (バージョン1.1.12.0)
+
+- 12.44、12.45 (点線と、フォルダ、シートの右端の間隔の調整) を含めて、バージョンを 1.1.12.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_12_0\`)。インストールの実機確認は、未実施
