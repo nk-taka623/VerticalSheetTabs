@@ -8,6 +8,10 @@ namespace VerticalSheetTabs
     // of the installer), which is set when the installer is built, before the tag is given.
     public static class AddInVersion
     {
+        public const string Copyright = "Copyright (c) 2026 nk_taka";
+
+        public const string License = "BSD ライセンスに準拠";
+
         public static string Text
         {
             get

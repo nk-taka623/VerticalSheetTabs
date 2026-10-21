@@ -11,7 +11,7 @@ using System.Security;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("VerticalSheetTabs")]
-[assembly: AssemblyCopyright("Copyright ©  2026")]
+[assembly: AssemblyCopyright("Copyright (c) 2026 nk_taka")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
