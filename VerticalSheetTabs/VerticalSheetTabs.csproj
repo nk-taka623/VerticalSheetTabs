@@ -130,6 +130,9 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
     <DefineConstants>$(DefineConstants);TRACE</DefineConstants>
     <WarningLevel>4</WarningLevel>
+    <!-- The path of the project folder is not written into the DLL (the debug information holds the
+         path of the PDB file, and it would show where the project is on this PC). -->
+    <PathMap>$(MSBuildProjectDirectory)=VerticalSheetTabs</PathMap>
   </PropertyGroup>
 
   <!--
