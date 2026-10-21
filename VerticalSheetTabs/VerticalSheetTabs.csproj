@@ -231,6 +231,7 @@
     <Compile Include="DpiHelper.cs" />
     <Compile Include="PaneManager.cs" />
     <Compile Include="RibbonController.cs" />
+    <Compile Include="RibbonIcon.cs" />
     <Compile Include="SettingsForm.cs" />
     <Compile Include="TabColorPalette.cs" />
     <Compile Include="FolderModel.cs" />

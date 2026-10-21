@@ -25,7 +25,7 @@ namespace VerticalSheetTabs
       <tab idMso=""TabView"">
         <group id=""VTabGroup"" label=""縦タブ"">
           <button id=""VTabSettings"" label=""タブ表示の設定"" size=""large""
-                  imageMso=""ViewNewWindow""
+                  getImage=""GetSettingsImage""
                   screentip=""タブ表示の設定""
                   supertip=""シートタブの表示モード (横のみ/縦のみ/両方) と、縦タブの位置 (左/右) を設定します。""
                   onAction=""OnSettingsClick"" />
@@ -41,6 +41,12 @@ namespace VerticalSheetTabs
     </contextMenu>
   </contextMenus>
 </customUI>";
+        }
+
+        // The button's own icon (see RibbonIcon). It is drawn large and Office scales it to the DPI.
+        public System.Drawing.Bitmap GetSettingsImage(Office.IRibbonControl control)
+        {
+            return RibbonIcon.Create(64);
         }
 
         public void OnSettingsClick(Office.IRibbonControl control)
