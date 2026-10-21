@@ -1219,3 +1219,8 @@ gitGraph
 - 実機で確認 (Debugビルド、拡大率125%): 段階5 (薄い緑)、段階9 (濃い緑)、段階1 (背景に近い薄い色)、OFF (点線なし) の表示、設定画面の表示 (表示ON、段階9、OFF)
 - 未確認: 設定画面の操作 (スライドバーを動かして、OKを押す) の実機での確認、暗い配色での、段階ごとの見え方
 
+### 12.51 インストーラの更新 (バージョン1.1.14.0)
+
+- 12.50 (「+」の下部への固定、点線の表示ON/OFFと色の段階) を含めて、バージョンを 1.1.14.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 成果物: `VerticalSheetTabsin\Releasepp.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_14_0\`)。インストールの実機確認は、未実施
+
