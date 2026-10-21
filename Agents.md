@@ -1401,3 +1401,8 @@ gitGraph
 - 対応: `VerticalSheetTabs.csproj` の Release の設定に、`<PathMap>$(MSBuildProjectDirectory)=VerticalSheetTabs</PathMap>` を追加した。コンパイラが、プロジェクトのフォルダのパスを、「VerticalSheetTabs」に置き換えて、DLLに書く。Debugビルドには、付けない (デバッガーが、ソースのパスを見つけられなくなるため)。PDBファイル自体は、配布用zipに入っていない
 - 確認: Releaseビルドの DLL に、「prote-type」、「開発ツール」、「D:\Work」の文字が、無くなった (UTF-8、UTF-16の両方で確認)。著作権の「nk_taka」は、残る
 
+### 12.72 インストーラの更新 (バージョン1.1.23.0)
+
+- 12.71 (DLLに、開発PCのフォルダのパスを入れない設定。PathMap) を含めて、バージョンを 1.1.23.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_23_0\`)。インストールの実機確認は、未実施
+
