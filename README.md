@@ -46,7 +46,7 @@ Debug ビルドは、ビルド時に、現在のユーザーの Excel に、ア�
 |---|---|
 | `setup.exe` | インストーラ (必要なランタイムを導入して、アドインを登録する) |
 | `VerticalSheetTabs.vsto` | アドインの配置用マニフェスト |
-| `Application Files\VerticalSheetTabs_1_1_11_0\` | アドイン本体 (DLL とマニフェスト) |
+| `Application Files\VerticalSheetTabs_1_1_12_0\` | アドイン本体 (DLL とマニフェスト) |
 
 配布するときは、`app.publish` フォルダごと、共有フォルダなどに置く。
 

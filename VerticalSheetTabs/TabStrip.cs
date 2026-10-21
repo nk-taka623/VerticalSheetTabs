@@ -21,6 +21,9 @@ namespace VerticalSheetTabs
         public string FolderName;
         public bool Expanded;
         public int ColorBgr = -1;
+        // Inside the dashed outline of an open folder (the folder row and its sheet rows): these rows end
+        // before the outline by the width of its cut corner.
+        public bool InGroup;
         // Folder: its visible sheets (also while it is closed).
         public List<string> Members = new List<string>();
 
@@ -53,6 +56,7 @@ namespace VerticalSheetTabs
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
         // with a color, a bar at its left edge.
+        private const double OutlineRightInset = 1.5, OutlineCut = 10;
         private const double FolderIndent = 14, FolderMarkWidth = 6, FolderMarkHeight = 10, FolderBarWidth = 4;
         // Excel's tab text is about 9pt "Yu Gothic" (the measured width of "Sheet1" matches it).
         private const string FontFamilyName = "Yu Gothic";
@@ -204,6 +208,7 @@ namespace VerticalSheetTabs
             List<StripRow> newRows = rows != null
                 ? new List<StripRow>(rows)
                 : names.Select(n => new StripRow { Sheet = n }).ToList();
+            MarkGroups(newRows);
             string newSignature = string.Join("\n", newRows.Select(r => r.Signature()));
             bool sameRows = newSignature == _rowSignature;
             bool sameColors = _colors.Count == colors.Count && _colors.All(kv => { int v; return colors.TryGetValue(kv.Key, out v) && v == kv.Value; });
@@ -258,6 +263,28 @@ namespace VerticalSheetTabs
         private bool Pinned { get { return (_rows.Count + 1) * RowPx > ClientSize.Height; } }
 
         private int ViewHeight { get { return Pinned ? Math.Max(0, ClientSize.Height - RowPx) : ClientSize.Height; } }
+
+        // The rows of an open folder that has sheets listed (they are enclosed by the dashed outline).
+        private static void MarkGroups(List<StripRow> rows)
+        {
+            for (int i = 0; i < rows.Count; i++)
+            {
+                rows[i].InGroup = false;
+                if (!rows[i].IsFolder || !rows[i].Expanded) continue;
+                int last = i;
+                while (last + 1 < rows.Count && rows[last + 1].Indented) last++;
+                if (last == i) continue;
+                for (int k = i; k <= last; k++) rows[k].InGroup = true;
+                i = last;
+            }
+        }
+
+        // The space right of a row's tab: the usual inset; in an outlined folder the tab ends as far from
+        // the dashed line as the cut corner of the outline is wide.
+        private int RightInset(StripRow r)
+        {
+            return r.InGroup ? Px(OutlineRightInset + OutlineCut) : Px(InsetRight);
+        }
 
         private int RowIndexOf(string sheet)
         {
@@ -427,8 +454,8 @@ namespace VerticalSheetTabs
 
                 Rectangle top = RowRect(i), bottom = RowRect(last);
                 if (bottom.Bottom < 0 || top.Top > ViewHeight) { i = last; continue; }
-                int l = Px(1), r = ContentWidth - Px(1.5), t = top.Top + Px(1), b = bottom.Bottom - Px(1);
-                int cut = Math.Min(Px(10), Math.Min(r - l, b - t) / 2);
+                int l = Px(1), r = ContentWidth - Px(OutlineRightInset), t = top.Top + Px(1), b = bottom.Bottom - Px(1);
+                int cut = Math.Min(Px(OutlineCut), Math.Min(r - l, b - t) / 2);
                 var points = new[]
                 {
                     new Point(l, t), new Point(r - cut, t), new Point(r, t + cut), new Point(r, b), new Point(l, b)
@@ -479,7 +506,7 @@ namespace VerticalSheetTabs
         private void DrawFolder(Graphics g, StripRow folder, Rectangle row)
         {
             int left = row.Left + Px(InsetLeft);
-            int right = row.Right - Px(InsetRight);
+            int right = row.Right - RightInset(folder);
             int radius = Px(CornerRadius);
             bool selected = _selFolders.Contains(folder.FolderId);
             bool colored = folder.ColorBgr >= 0;
@@ -589,7 +616,7 @@ namespace VerticalSheetTabs
             Color tabColor = colored ? Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF) : Color.Empty;
 
             int left = row.Left + Px(InsetLeft) + (tabRow.Indented ? Px(FolderIndent) : 0);
-            int right = row.Right - Px(InsetRight);
+            int right = row.Right - RightInset(tabRow);
             int radius = Px(CornerRadius);
             Color textColor = selected ? TextColor : Theme.InactiveText;
 
@@ -923,15 +950,16 @@ namespace VerticalSheetTabs
             _tip.Hide(this);
             if (index < 0 || Control.MouseButtons != MouseButtons.None) return;
             string text = _rows[index].IsFolder ? _rows[index].FolderName : _rows[index].Sheet;
-            if (!IsTextCut(text)) return;
+            if (!IsTextCut(text, _rows[index])) return;
             Rectangle row = RowRect(index);
             _tip.Show(text, this, row.Left + Px(InsetLeft + TextPadLeft), row.Bottom, 4000);
         }
 
         // Whether the name does not fit the tab (it is then drawn with a trailing "…").
-        private bool IsTextCut(string name)
+        private bool IsTextCut(string name, StripRow row)
         {
-            int available = ContentWidth - Px(InsetLeft + InsetRight + TextPadLeft + TextPadRight);
+            int available = ContentWidth - Px(InsetLeft + TextPadLeft + TextPadRight) - RightInset(row)
+                - (row.Indented ? Px(FolderIndent) : 0) - (row.IsFolder ? Px(FolderMarkWidth + 4) : 0);
             using (Graphics g = CreateGraphics())
             using (var format = new StringFormat(StringFormat.GenericDefault))
             {
@@ -1183,7 +1211,7 @@ namespace VerticalSheetTabs
             _editingName = text;
             _editingFolderId = folderId;
             int left = r.Left + Px(InsetLeft) + (_rows[index].Indented ? Px(FolderIndent) : 0);
-            int right = r.Right - Px(InsetRight);
+            int right = r.Right - RightInset(_rows[index]);
             int textLeft = folderId != null ? left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4) - 2 : left + Px(TextPadLeft) - 2;
             _editor = new TextBox
             {
