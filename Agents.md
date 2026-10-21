@@ -1172,7 +1172,7 @@ gitGraph
 3. 「配布用zip」フォルダの中身も含めて、`master` にコミットする (`develop` は、`master` に、早送りで合わせる)
 4. バージョンタグ (`vX.Y.Z`) は、**配布用 zip をコミットしたあと** (③の後) に、そのコミットに付ける。`master` へのマージ直後には、付けない (タグが、配布用 zip を含まないコミットを指さないようにするため)。Agents.md の記録 (「`master` への反映とタグを付けた」) を更新するコミットが、zip のコミットの後に必要なときは、その更新のコミットまで終えてから、最後のコミットに、タグを付ける
 
-- 2 の zip の中身: `setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\<バージョン>\`、`VerticalSheetTabs.cer`、`証明書を信頼する.ps1`、`はじめにお読みください.txt`、`README.md`。`VerticalSheetTabs_TemporaryKey.pfx` (署名の秘密鍵) は、zip にも、リポジトリにも、含めない
+- 2 の zip の中身: `setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\<バージョン>\`、`VerticalSheetTabs.cer`、`証明書を信頼する.ps1`、`はじめにお読みください.txt`、`README.md`、`license\` (BSD ライセンスの英文と日本語訳。12.69)。`VerticalSheetTabs_TemporaryKey.pfx` (署名の秘密鍵) は、zip にも、リポジトリにも、含めない
 - v1.1.11 から、zip の置き場所を、ルートから、「配布用zip」フォルダに変えた。ルートにあった古い zip は、削除した
 - v1.1.12 のタグは、最初、`master` へのマージのコミットに付けたが、ユーザーの指示で、配布用 zip を含むコミットに、付け直した (タグを、zip を含む状態に、そろえるため。リモートは無いため、付け直しても、影響はない)
 
@@ -1379,3 +1379,12 @@ gitGraph
 - 12.65 から 12.67 (フォルダの「中の全てを選択中シートと同一色に変更」、「中の全てをフォルダと同一色に変更」とチェックマーク) を含めて、バージョンを 1.1.21.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.21` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.21.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_21_0\`)。インストールの実機確認は、未実施
 
+### 12.69 追加: ライセンス (BSD 3条項) の格納
+
+- ユーザーの要望により、BSD ライセンスに準拠するため、リポジトリのルートに、`license` フォルダを作り、条文を入れた (版は、ユーザーの指定で、3条項。著作権者の表記は、設定画面と同じ「Copyright (c) 2026 nk_taka」)
+  - `license\LICENSE.txt`: 公式の英文 (OSI の「BSD 3-Clause License」の条文)。法的な効力は、英文にある
+  - `license\LICENSE.ja.txt`: 日本語訳 (参考。非公式の訳で、英文と違うときは、英文が優先される、と冒頭に書いた)
+- 配布用zip (13章) に、`license` フォルダを、次回から入れる (`tools\make-dist-zip.ps1` が、リポジトリの `license` フォルダを、zipの中の `VerticalSheetTabs_vX.Y.Z\license\` に、コピーする)。zipの `はじめにお読みください.txt` にも、ライセンスの説明を、1項目、足す (すでに入っているときは、足さない。「license」の文字があるかで判定)
+- `README.md` に、「ライセンス」の項目を足した
+- 設定画面の表示 (12.63) は、そのまま (「BSD ライセンスに準拠」)。12.63 に書いた、「版や全文の `LICENSE` は、まだ無い」は、この変更で、解消した
+- 実機で確認: スクリプトで作った zip に、`license` フォルダ (2ファイル) が入り、`はじめにお読みください.txt` の末尾に、ライセンスの項目が付く。このフォルダの、ライセンスの条文が、zip の中身として、読める

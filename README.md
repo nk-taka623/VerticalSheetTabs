@@ -14,6 +14,14 @@ Excelのシートタブを、縦並びで表示する、Excel (Windows版、Micr
 - 設定は、ブックのカスタムドキュメントプロパティ (`VTab.Mode`、`VTab.Side`、`VTab.Width`、`VTab.Outline`、`VTab.OutlineLevel`、`VTab.NameRule`) に保存し、開くときに復元する
 - 設定の変更は、リボンの「表示」タブの「縦タブ > タブ表示の設定」、または、タブの右クリックメニューの「タブ表示の設定」
 
+## ライセンス
+
+このソフトウェアは、BSD 3条項ライセンスに準拠します。Copyright (c) 2026 nk_taka。
+
+- 条文は、[license](license) フォルダにあります: [LICENSE.txt](license/LICENSE.txt) (英文。正本)、[LICENSE.ja.txt](license/LICENSE.ja.txt) (日本語訳。参考)
+- 配布用zipにも、同じ `license` フォルダを入れています
+- 「タブ表示の設定」の画面の左下にも、バージョン、著作権、ライセンスを表示しています
+
 ## 動作環境
 
 - Windows、Microsoft 365 の Excel (64bit で確認)

@@ -35,9 +35,15 @@ Copy-Item (Join-Path $pub "Application Files") $dir -Recurse
 Copy-Item (Join-Path $oldDir.FullName "VerticalSheetTabs.cer") $dir
 Copy-Item (Join-Path $oldDir.FullName "証明書を信頼する.ps1") $dir
 Copy-Item (Join-Path $repo "README.md") $dir
+# the license (BSD 3-Clause): the original English text and the Japanese translation
+Copy-Item (Join-Path $repo "license") $dir -Recurse
 $guide = [IO.File]::ReadAllText((Join-Path $oldDir.FullName "はじめにお読みください.txt"), [Text.Encoding]::UTF8)
 $oldVersion = $oldDir.Name -replace "^VerticalSheetTabs_v", ""
-[IO.File]::WriteAllText((Join-Path $dir "はじめにお読みください.txt"), $guide.Replace("v$oldVersion", "v$Version"), (New-Object Text.UTF8Encoding($true)))
+$guide = $guide.Replace("v$oldVersion", "v$Version")
+if ($guide -notmatch "license") {
+    $guide = $guide.TrimEnd() + "`r`n`r`nライセンス: このソフトウェアは、BSD 3条項ライセンスに準拠します (Copyright (c) 2026 nk_taka)。`r`n条文は、license フォルダの、LICENSE.txt (英文。正本) と、LICENSE.ja.txt (日本語訳。参考) です。`r`n"
+}
+[IO.File]::WriteAllText((Join-Path $dir "はじめにお読みください.txt"), $guide, (New-Object Text.UTF8Encoding($true)))
 
 $zip = Join-Path $distDir "VerticalSheetTabs_v$Version.zip"
 if (Test-Path $zip) { Remove-Item $zip }
