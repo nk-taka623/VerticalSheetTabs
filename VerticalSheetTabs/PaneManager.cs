@@ -1216,6 +1216,21 @@ namespace VerticalSheetTabs
                     DeselectFolderSheets(entry, folderIds);
                     return;
                 }
+                if (command == "closeall" || command == "openall")
+                {
+                    // all folders of the pane, whatever is selected
+                    bool open = command == "openall";
+                    bool changed = false;
+                    foreach (FolderNode node in entry.Folders.Nodes)
+                    {
+                        if (!node.IsFolder || node.Expanded == open) continue;
+                        node.Expanded = open;
+                        changed = true;
+                    }
+                    if (changed) MarkChanged(entry);
+                    SyncSheets(entry);
+                    return;
+                }
                 if (command == "synccolor")
                 {
                     ToggleSyncColor(entry, folderIds);
