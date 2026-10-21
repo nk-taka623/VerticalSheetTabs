@@ -58,7 +58,7 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.1.14.0</ApplicationVersion>
+    <ApplicationVersion>1.1.15.0</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>false</CreateDesktopShortcut>
     <CreateWebPageOnPublish>false</CreateWebPageOnPublish>
@@ -231,6 +231,7 @@
     <Compile Include="DpiHelper.cs" />
     <Compile Include="PaneManager.cs" />
     <Compile Include="RibbonController.cs" />
+    <Compile Include="RibbonIcon.cs" />
     <Compile Include="SettingsForm.cs" />
     <Compile Include="TabColorPalette.cs" />
     <Compile Include="FolderModel.cs" />
