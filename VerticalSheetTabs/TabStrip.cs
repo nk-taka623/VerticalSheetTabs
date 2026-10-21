@@ -793,6 +793,9 @@ namespace VerticalSheetTabs
         // works after a click on Excel's own tabs) would be lost. So such a click leaves the focus where it
         // is. A click that chooses nothing new (the active tab, a folder) still focuses the pane, for its
         // keys (F2, Del, up/down).
+        // Whether Excel is editing a cell: a click on the tabs must then leave the focus in the edit window too.
+        public Func<bool> IsExcelEditing;
+
         private bool _noFocusClick;
         private bool _hadFocusAtClick;
 
@@ -805,7 +808,7 @@ namespace VerticalSheetTabs
             {
                 long l = m.LParam.ToInt64();
                 var point = new Point((short)(l & 0xFFFF), (short)((l >> 16) & 0xFFFF));
-                if (ClickChangesSheet(point))
+                if (ClickChangesSheet(point) || (IsExcelEditing != null && IsExcelEditing()))
                 {
                     _hadFocusAtClick = ContainsFocus;
                     _noFocusClick = true;

@@ -234,6 +234,9 @@ namespace VerticalSheetTabs
             _strip.BeginRenameFolder(folderId);
         }
 
+        // Whether Excel is editing a cell now (set by PaneManager).
+        public Func<bool> IsExcelEditing { set { _strip.IsExcelEditing = value; } }
+
         public bool OutlineVisible { get { return _strip.OutlineVisible; } set { _strip.OutlineVisible = value; } }
 
         public int OutlineLevel { get { return _strip.OutlineLevel; } set { _strip.OutlineLevel = value; } }
