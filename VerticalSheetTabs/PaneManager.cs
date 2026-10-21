@@ -85,6 +85,9 @@ namespace VerticalSheetTabs
             entry.Folders = FolderStore.Load(workbook);
             _entries[hwnd] = entry;
 
+            control.OutlineVisible = settings.OutlineVisible;
+            control.OutlineLevel = settings.OutlineLevel;
+
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
             control.SelectionRequested += (names, active) => SelectSheets(entry, names, active);
             control.ViewCodeRequested += () => RunExcelCommand(entry, "ViewCode");
@@ -219,11 +222,22 @@ namespace VerticalSheetTabs
         // Opens the settings dialog for one window's workbook (ribbon button and tab context menu).
         private void ShowSettings(Entry entry)
         {
-            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side))
+            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
                 entry.Settings.Mode = form.Mode;
                 entry.Settings.Side = form.Side;
+                entry.Settings.OutlineVisible = form.OutlineVisible;
+                entry.Settings.OutlineLevel = form.OutlineLevel;
+            }
+            try
+            {
+                entry.Control.OutlineVisible = entry.Settings.OutlineVisible;
+                entry.Control.OutlineLevel = entry.Settings.OutlineLevel;
+            }
+            catch (Exception)
+            {
+                // Control closing.
             }
             try
             {
