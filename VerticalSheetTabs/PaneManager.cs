@@ -36,6 +36,10 @@ namespace VerticalSheetTabs
             public List<string> AllNames = new List<string>();
             // True while the add-in changes the folders or the sheet order: no sync in between.
             public bool Busy;
+            // The sheet-name rule (Agents.md 12.56): the names the grouping was last checked for, and a
+            // flag for a sheet move the sync made itself (the workbook is then really changed).
+            public string RuleSignature;
+            public bool RuleChanged;
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -222,13 +226,16 @@ namespace VerticalSheetTabs
         // Opens the settings dialog for one window's workbook (ribbon button and tab context menu).
         private void ShowSettings(Entry entry)
         {
-            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel))
+            bool nameRuleTurnedOn = false;
+            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
                 entry.Settings.Mode = form.Mode;
                 entry.Settings.Side = form.Side;
                 entry.Settings.OutlineVisible = form.OutlineVisible;
                 entry.Settings.OutlineLevel = form.OutlineLevel;
+                nameRuleTurnedOn = !entry.Settings.NameRule && form.NameRule;
+                entry.Settings.NameRule = form.NameRule;
             }
             try
             {
@@ -248,6 +255,7 @@ namespace VerticalSheetTabs
                 // Window/pane closing.
             }
             ApplyMode(entry);
+            if (nameRuleTurnedOn) EnableNameRule(entry);
         }
 
         private static Office.MsoCTPDockPosition ToDock(TabSide side)
@@ -484,7 +492,9 @@ namespace VerticalSheetTabs
             }
             finally
             {
-                try { if (wasSaved && !entry.Workbook.Saved) entry.Workbook.Saved = true; } catch (Exception) { }
+                // (a move of sheets by the name rule is a real change, see EnforceNameGrouping)
+                try { if (wasSaved && !entry.RuleChanged && !entry.Workbook.Saved) entry.Workbook.Saved = true; } catch (Exception) { }
+                entry.RuleChanged = false;
             }
         }
 
@@ -511,6 +521,7 @@ namespace VerticalSheetTabs
                     }
                     else if (SheetVisibility(sheet) == Excel.XlSheetVisibility.xlSheetHidden) anyHidden = true;
                 }
+                if (RuleOn(entry) && EnforceNameGrouping(entry, allNames, true)) return true; // read again at the next tick
                 entry.Control.HasHiddenSheets = anyHidden;
                 entry.Control.StructureProtected = entry.Workbook.ProtectStructure;
 
@@ -545,7 +556,17 @@ namespace VerticalSheetTabs
         // Sheets of a closed folder get no row.
         private static List<StripRow> BuildRows(Entry entry, List<string> allNames, List<bool> visibleAt)
         {
-            if (!entry.Folders.HasFolders) return null;
+            bool rule = RuleOn(entry);
+            if (rule)
+            {
+                // the folders are the ones the names describe
+                if (!allNames.Any(NameRule.IsFolderSheet))
+                {
+                    if (entry.Folders.HasFolders) entry.Folders = new FolderModel();
+                    return null;
+                }
+            }
+            else if (!entry.Folders.HasFolders) return null;
 
             string signature = string.Join("|", allNames);
             if (signature != entry.KeySignature || entry.Keys.Count != allNames.Count)
@@ -553,11 +574,14 @@ namespace VerticalSheetTabs
                 entry.Keys = FolderStore.SheetKeys(entry.Workbook, true, true);
                 entry.AllNames = new List<string>(allNames);
                 entry.KeySignature = signature;
-                entry.Folders.Reconcile(entry.Keys);
+                if (rule) entry.Folders = NameRule.BuildModel(allNames, entry.Keys, entry.Folders);
+                else entry.Folders.Reconcile(entry.Keys);
             }
             var nameOf = new Dictionary<string, string>();
+            var nameOfAll = new Dictionary<string, string>();
             for (int i = 0; i < entry.Keys.Count && i < allNames.Count; i++)
             {
+                nameOfAll[entry.Keys[i]] = allNames[i];
                 if (visibleAt[i]) nameOf[entry.Keys[i]] = allNames[i];
             }
 
@@ -577,12 +601,30 @@ namespace VerticalSheetTabs
                     Expanded = node.Expanded,
                     ColorBgr = FolderColorBgr(entry, node.Color)
                 };
+                if (rule)
+                {
+                    // the name of the folder and the names of its sheets share 28 characters
+                    int longest = 0;
+                    foreach (string code in node.Sheets)
+                    {
+                        string full;
+                        if (nameOfAll.TryGetValue(code, out full)) longest = Math.Max(longest, NameRule.BaseOf(full).Length);
+                    }
+                    folderRow.EditLimit = Math.Max(1, NameRule.MaxCombined - longest);
+                }
                 rows.Add(folderRow);
                 foreach (string code in node.Sheets)
                 {
                     if (!nameOf.TryGetValue(code, out name)) continue;
                     folderRow.Members.Add(name);
-                    if (node.Expanded) rows.Add(new StripRow { Sheet = name, Indented = true });
+                    if (!node.Expanded) continue;
+                    var sheetRow = new StripRow { Sheet = name, Indented = true };
+                    if (rule)
+                    {
+                        sheetRow.Display = NameRule.BaseOf(name);
+                        sheetRow.EditLimit = Math.Max(1, NameRule.MaxCombined - node.Name.Length);
+                    }
+                    rows.Add(sheetRow);
                 }
             }
             return rows;
@@ -607,12 +649,196 @@ namespace VerticalSheetTabs
         // Reads the sheets of the workbook now, gives them ids and brings the model in line with them.
         private static void RefreshKeys(Entry entry)
         {
-            var names = new List<string>();
-            foreach (object sheet in entry.Workbook.Sheets) names.Add(SheetName(sheet) ?? "?");
+            List<string> names = ReadNames(entry);
+            if (RuleOn(entry) && EnforceNameGrouping(entry, names, false)) names = ReadNames(entry);
             entry.Keys = FolderStore.SheetKeys(entry.Workbook, true);
             entry.AllNames = names;
             entry.KeySignature = string.Join("|", names);
-            entry.Folders.Reconcile(entry.Keys);
+            if (RuleOn(entry)) entry.Folders = NameRule.BuildModel(names, entry.Keys, entry.Folders);
+            else entry.Folders.Reconcile(entry.Keys);
+        }
+
+        // ---- the sheet-name rule (Agents.md 12.56) ----
+
+        private static bool RuleOn(Entry entry)
+        {
+            return entry.Settings != null && entry.Settings.NameRule;
+        }
+
+        private static List<string> ReadNames(Entry entry)
+        {
+            var names = new List<string>();
+            foreach (object sheet in entry.Workbook.Sheets) names.Add(SheetName(sheet) ?? "?");
+            return names;
+        }
+
+        // A sheet "A | D" that is not next to its folder goes to the right of the nearest sheet to its
+        // left that starts with "A | ". names is the current order of all sheets; true when sheets moved.
+        // In the sync (gated = true) the check is made only when the names changed.
+        private static bool EnforceNameGrouping(Entry entry, List<string> names, bool gated)
+        {
+            string signature = string.Join("|", names);
+            if (gated)
+            {
+                if (signature == entry.RuleSignature) return false;
+                entry.RuleSignature = signature;
+            }
+            List<KeyValuePair<int, int>> moves = NameRule.GroupingMoves(new List<string>(names));
+            if (moves.Count == 0) return false;
+            bool screen = true;
+            try
+            {
+                screen = entry.Workbook.Application.ScreenUpdating;
+                entry.Workbook.Application.ScreenUpdating = false;
+                foreach (KeyValuePair<int, int> m in moves)
+                {
+                    object sheet = entry.Workbook.Sheets[m.Key + 1];
+                    object before = entry.Workbook.Sheets[m.Value + 1];
+                    var ws = sheet as Excel.Worksheet;
+                    if (ws != null) ws.Move(before);
+                    else
+                    {
+                        var ch = sheet as Excel.Chart;
+                        if (ch != null) ch.Move(before);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // Structure protected, or Excel is busy: the sheets stay where they are.
+            }
+            finally
+            {
+                try { entry.Workbook.Application.ScreenUpdating = screen; } catch (Exception) { }
+            }
+            entry.RuleChanged = true;
+            entry.RuleSignature = null;
+            entry.KeySignature = null;
+            MarkChanged(entry);
+            return true;
+        }
+
+        // The names the sheets get from the folders of the model: "Folder | Sheet" inside a folder, the
+        // sheet's own name outside. Null when done, else why it cannot be done (nothing is renamed then).
+        private static string ApplyNamesFromModel(Entry entry)
+        {
+            var target = new Dictionary<string, string>();
+            foreach (FolderNode node in entry.Folders.Nodes)
+            {
+                if (node.IsFolder)
+                {
+                    foreach (string key in node.Sheets)
+                    {
+                        int i = entry.Keys.IndexOf(key);
+                        if (i >= 0 && i < entry.AllNames.Count) target[key] = NameRule.Compose(node.Name, NameRule.BaseOf(entry.AllNames[i]));
+                    }
+                }
+                else
+                {
+                    int i = entry.Keys.IndexOf(node.SheetCode);
+                    if (i >= 0 && i < entry.AllNames.Count) target[node.SheetCode] = NameRule.BaseOf(entry.AllNames[i]);
+                }
+            }
+
+            var final = new List<string>(entry.AllNames);
+            for (int i = 0; i < entry.Keys.Count && i < final.Count; i++)
+            {
+                string t;
+                if (target.TryGetValue(entry.Keys[i], out t)) final[i] = t;
+            }
+            for (int i = 0; i < final.Count; i++)
+            {
+                if (final[i].Length > NameRule.MaxSheetName)
+                    return "フォルダ名とシート名を合わせた長さが " + NameRule.MaxCombined + " 文字を超えるため、操作できません。\r\n(" + final[i] + ")";
+            }
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string n in final)
+            {
+                if (!seen.Add(n)) return "同じ名前のシートができるため、操作できません。\r\n(" + n + ")";
+            }
+
+            try
+            {
+                var current = new List<string>(entry.AllNames);
+                var pending = new List<int>();
+                for (int i = 0; i < final.Count; i++) if (!string.Equals(current[i], final[i], StringComparison.Ordinal)) pending.Add(i);
+                int guard = 0;
+                while (pending.Count > 0 && guard++ < pending.Count * 3 + 6)
+                {
+                    bool progress = false;
+                    foreach (int i in pending.ToList())
+                    {
+                        bool taken = false;
+                        for (int k = 0; k < current.Count; k++)
+                        {
+                            if (k != i && string.Equals(current[k], final[i], StringComparison.OrdinalIgnoreCase)) { taken = true; break; }
+                        }
+                        if (taken) continue;
+                        SetSheetName(entry.Workbook.Sheets[i + 1], final[i]);
+                        current[i] = final[i];
+                        pending.Remove(i);
+                        progress = true;
+                    }
+                    if (!progress)
+                    {
+                        // names that swap places: one goes through a temporary name
+                        int i = pending[0];
+                        string temp = "~" + Guid.NewGuid().ToString("N").Substring(0, 10);
+                        SetSheetName(entry.Workbook.Sheets[i + 1], temp);
+                        current[i] = temp;
+                    }
+                }
+                entry.AllNames = final;
+            }
+            catch (Exception)
+            {
+                return "シートの名前を変更できませんでした。ブックの構造が保護されている可能性があります。";
+            }
+            return null;
+        }
+
+        private static void SetSheetName(object sheet, string name)
+        {
+            var ws = sheet as Excel.Worksheet;
+            if (ws != null) { ws.Name = name; return; }
+            var ch = sheet as Excel.Chart;
+            if (ch != null) ch.Name = name;
+        }
+
+        // The rule was just turned on: the folders that exist get their sheet names ("Folder | Sheet").
+        private void EnableNameRule(Entry entry)
+        {
+            if (entry.Busy) return;
+            entry.Busy = true;
+            try
+            {
+                entry.Settings.NameRule = false; // the model as it is, not as the (still plain) names describe it
+                RefreshKeys(entry);
+                entry.Settings.NameRule = true;
+                if (entry.Folders.HasFolders)
+                {
+                    string problem = ApplyNamesFromModel(entry);
+                    if (problem != null)
+                    {
+                        entry.Settings.NameRule = false;
+                        ShowMessage("シート名のルールを使えません。\r\n" + problem);
+                        return;
+                    }
+                }
+                MarkChanged(entry);
+            }
+            catch (Exception)
+            {
+                entry.Settings.NameRule = false;
+                ShowMessage("シート名のルールを使えません。");
+            }
+            finally
+            {
+                entry.Busy = false;
+                entry.KeySignature = null;
+                entry.RuleSignature = null;
+            }
+            SyncSheets(entry);
         }
 
         private static string KeyOf(Entry entry, string sheetName)
@@ -687,7 +913,20 @@ namespace VerticalSheetTabs
             try
             {
                 RefreshKeys(entry);
+                string snapshot = entry.Folders.ToXml();
                 if (!change()) return;
+                if (RuleOn(entry))
+                {
+                    // the sheets are renamed after their folders; when that cannot be done, nothing changes
+                    string problem = ApplyNamesFromModel(entry);
+                    if (problem != null)
+                    {
+                        entry.Folders = FolderModel.Parse(snapshot);
+                        entry.KeySignature = null;
+                        ShowMessage(problem);
+                        return;
+                    }
+                }
                 ApplyExcelOrder(entry, selectedNames, activeName);
                 MarkChanged(entry);
             }
@@ -790,7 +1029,9 @@ namespace VerticalSheetTabs
                     FolderNode f = entry.Folders.FindFolder(beforeFolder);
                     anchorKey = f == null ? null : f.Sheets.Count > 0 ? f.Sheets[0] : KeyAfterNode(entry, f);
                 }
+                var namesBefore = new HashSet<string>(entry.AllNames, StringComparer.OrdinalIgnoreCase);
                 CopySheetsTo(entry, sourceNames, anchorKey == null ? null : entry.AllNames[oldKeys.IndexOf(anchorKey)]);
+                if (RuleOn(entry) && folders.Count == 0) NameCopiesForDrop(entry, namesBefore, into);
 
                 RefreshKeys(entry);
                 var copies = entry.Keys.Where(k => !oldKeys.Contains(k)).ToList();
@@ -839,6 +1080,13 @@ namespace VerticalSheetTabs
                     }
                     entry.Folders.Nodes.InsertRange(index, units);
                 }
+                if (RuleOn(entry))
+                {
+                    // the copies are named after the folders they went to; when that cannot be done they
+                    // keep the names Excel gave them
+                    string problem = ApplyNamesFromModel(entry);
+                    if (problem != null) ShowMessage(problem);
+                }
                 entry.KeySignature = null;
             }
             catch (Exception)
@@ -851,6 +1099,30 @@ namespace VerticalSheetTabs
             }
             entry.KeySignature = null;
             SyncSheets(entry);
+        }
+
+        // The sheet-name rule: the copies Excel just made are named for the place they were dropped at
+        // ("Folder | Sheet" in a folder, the sheet's own name outside), before the grouping sees them.
+        private static void NameCopiesForDrop(Entry entry, HashSet<string> namesBefore, string intoFolderId)
+        {
+            try
+            {
+                FolderNode target = intoFolderId == null ? null : entry.Folders.FindFolder(intoFolderId);
+                List<string> now = ReadNames(entry);
+                for (int i = 0; i < now.Count; i++)
+                {
+                    if (namesBefore.Contains(now[i])) continue;
+                    string wanted = target == null ? NameRule.BaseOf(now[i]) : NameRule.Compose(target.Name, NameRule.BaseOf(now[i]));
+                    if (wanted == now[i] || wanted.Length > NameRule.MaxSheetName) continue;
+                    if (now.Any(n => string.Equals(n, wanted, StringComparison.OrdinalIgnoreCase))) continue;
+                    SetSheetName(entry.Workbook.Sheets[i + 1], wanted);
+                    now[i] = wanted;
+                }
+            }
+            catch (Exception)
+            {
+                // the copies keep the names Excel gave them
+            }
         }
 
         private static string UniqueFolderName(Entry entry, string baseName)
@@ -1052,6 +1324,23 @@ namespace VerticalSheetTabs
                 ShowMessage("その名前は既に使われています。別の名前を入力してください。");
                 return;
             }
+            if (RuleOn(entry))
+            {
+                if (NameRule.HasSeparator(newName))
+                {
+                    ShowMessage("「" + NameRule.Separator + "」を含む名前は、縦タブでは入力できません。");
+                    return;
+                }
+                // the sheets of the folder are renamed with it
+                ChangeFolders(entry, () =>
+                {
+                    FolderNode f = entry.Folders.FindFolder(folderId);
+                    if (f == null) return false;
+                    f.Name = newName;
+                    return true;
+                }, null, null);
+                return;
+            }
             folder.Name = newName;
             MarkChanged(entry);
             SyncSheets(entry);
@@ -1060,6 +1349,16 @@ namespace VerticalSheetTabs
         // The folders go, their sheets stay where they are (outside any folder).
         private void DeleteFoldersOnly(Entry entry, IList<string> folderIds)
         {
+            if (RuleOn(entry))
+            {
+                // the sheets lose the "Folder | " of their names
+                ChangeFolders(entry, () =>
+                {
+                    foreach (string id in folderIds) entry.Folders.RemoveFolder(id);
+                    return true;
+                }, null, null);
+                return;
+            }
             foreach (string id in folderIds) entry.Folders.RemoveFolder(id);
             MarkChanged(entry);
             SyncSheets(entry);
@@ -1300,6 +1599,10 @@ namespace VerticalSheetTabs
         // The "+" button: a new worksheet after the active sheet, as Excel's own button does.
         private void AddSheet(Entry entry)
         {
+            // Excel's events for the new sheet start a sync while the sheet still has its own name; with the
+            // name rule on, that would move the sheet (or the sheets around it) before it is named
+            if (entry.Busy) return;
+            entry.Busy = true;
             try
             {
                 entry.Window.Activate();
@@ -1328,6 +1631,22 @@ namespace VerticalSheetTabs
                 }
                 entry.Workbook.Worksheets.Add(Type.Missing, entry.Window.ActiveSheet, Type.Missing, Type.Missing);
                 FolderNode folder = activeKey == null ? null : entry.Folders.FolderOf(activeKey);
+                if (folder != null && RuleOn(entry))
+                {
+                    // named after the folder at once, so that the sheet is part of the folder's run of sheets
+                    // where Excel put it (and not moved away from the middle of the folder)
+                    try
+                    {
+                        object newSheet = entry.Window.ActiveSheet; // the new sheet is the active one now
+                        string own = SheetName(newSheet);
+                        string full = NameRule.Compose(folder.Name, own);
+                        if (own != null && full.Length <= NameRule.MaxSheetName) SetSheetName(newSheet, full);
+                    }
+                    catch (Exception)
+                    {
+                        // it keeps Excel's name and is moved into the folder by the code below
+                    }
+                }
                 if (folder != null)
                 {
                     // Excel puts the sheet after the active one; behind the last sheet of a folder the
@@ -1340,6 +1659,11 @@ namespace VerticalSheetTabs
                         int at = folder.Sheets.IndexOf(activeKey);
                         if (at >= 0 && at + 1 < folder.Sheets.Count) anchor = folder.Sheets[at + 1];
                         entry.Folders.Move(new[] { added }, new string[0], folder.FolderId, anchor, null);
+                        if (RuleOn(entry))
+                        {
+                            string problem = ApplyNamesFromModel(entry);
+                            if (problem != null) ShowMessage(problem);
+                        }
                     }
                     entry.KeySignature = null;
                 }
@@ -1347,6 +1671,10 @@ namespace VerticalSheetTabs
             catch (Exception)
             {
                 ShowMessage("ブックの構造が保護されているため、シートを追加できません。");
+            }
+            finally
+            {
+                entry.Busy = false;
             }
         }
 
@@ -1403,6 +1731,26 @@ namespace VerticalSheetTabs
 
         private void RenameSheet(Entry entry, string oldName, string newName)
         {
+            if (RuleOn(entry))
+            {
+                // newName is what was typed: the part after "A | " for a sheet in a folder
+                string folderName, own;
+                bool inFolder = NameRule.TryParse(oldName, out folderName, out own);
+                if (NameRule.HasSeparator(newName))
+                {
+                    ShowMessage("「" + NameRule.Separator + "」を含む名前は、縦タブでは入力できません。");
+                    return;
+                }
+                if (inFolder)
+                {
+                    if (folderName.Length + newName.Length > NameRule.MaxCombined)
+                    {
+                        ShowMessage("フォルダ名とシート名を合わせた長さは、" + NameRule.MaxCombined + " 文字までです。");
+                        return;
+                    }
+                    newName = NameRule.Compose(folderName, newName);
+                }
+            }
             string problem = CheckSheetName(entry, oldName, newName);
             if (problem != null)
             {
