@@ -289,7 +289,15 @@ namespace VerticalSheetTabs
                 // opened; the system color dialog otherwise.
                 if (MoreColorsProvider != null)
                 {
-                    int? picked = MoreColorsProvider();
+                    int? picked = null;
+                    try
+                    {
+                        picked = MoreColorsProvider();
+                    }
+                    catch (Exception)
+                    {
+                        // never let an error leave the mouse handler: nothing is chosen
+                    }
                     if (picked == null) return;
                     choice = new TabColorChoice { Kind = TabColorKind.Rgb, Bgr = picked.Value };
                     if (ColorChosen != null) ColorChosen(choice);
