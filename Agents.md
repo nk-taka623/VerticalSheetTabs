@@ -1394,3 +1394,15 @@ gitGraph
 - 12.69 (ライセンス「BSD 3条項」の条文 (英文、日本語訳) の格納。配布用zipへの同梱) を含めて、バージョンを 1.1.22.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.22` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.22.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_22_0\`)。インストールの実機確認は、未実施
 
+### 12.71 追加: 配布するDLLに、開発PCのフォルダのパスを入れない (PathMap)
+
+- 確認 (配布用zipの中身の調査。ユーザーの質問による): 証明書 (`VerticalSheetTabs.cer`) の発行先と発行者は、`CN=VerticalSheetTabs` だけで、個人名、メールアドレス、PC名は入っていない。秘密鍵も入っていない。マニフェストの発行元も、`VerticalSheetTabs` だけ。Windowsのユーザー名、PC名は、どのファイルにも無い。`nk_taka` は、著作権の表記 (README、手順書、ライセンス、DLLのアセンブリ情報) として、意図して入っている
+- 見つかったもの: `VerticalSheetTabs.dll` (Releaseビルド) の、デバッグ情報に、PDBファイルのパス (`D:\Work\Develop\開発ツール\prote-type_06\VerticalSheetTabs\obj\Release\VerticalSheetTabs.pdb`) が入っていた。ユーザー名やPC名は無いが、開発PCのフォルダの構成が分かる
+- 対応: `VerticalSheetTabs.csproj` の Release の設定に、`<PathMap>$(MSBuildProjectDirectory)=VerticalSheetTabs</PathMap>` を追加した。コンパイラが、プロジェクトのフォルダのパスを、「VerticalSheetTabs」に置き換えて、DLLに書く。Debugビルドには、付けない (デバッガーが、ソースのパスを見つけられなくなるため)。PDBファイル自体は、配布用zipに入っていない
+- 確認: Releaseビルドの DLL に、「prote-type」、「開発ツール」、「D:\Work」の文字が、無くなった (UTF-8、UTF-16の両方で確認)。著作権の「nk_taka」は、残る
+
+### 12.72 インストーラの更新 (バージョン1.1.23.0)
+
+- 12.71 (DLLに、開発PCのフォルダのパスを入れない設定。PathMap) を含めて、バージョンを 1.1.23.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_23_0\`)。インストールの実機確認は、未実施
+
