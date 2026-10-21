@@ -159,6 +159,7 @@ namespace VerticalSheetTabs
             var fUnhide = FolderItem("フォルダ内のシートをすべて再表示(&U)", "unhide");
             var fColor = PaletteItem("フォルダの色(&C)", c => { if (FolderColorRequested != null) FolderColorRequested(_strip.SelectedFolders(), c); });
             var fTabColor = PaletteItem("フォルダと中のシートの色(&T)", c => { if (FolderTabColorRequested != null) FolderTabColorRequested(_strip.SelectedFolders(), c); });
+            var fSameColor = FolderItem("中の全てを選択中シートと同一色に変更(&Y)", "samecolor");
             var folderSettings = new ToolStripMenuItem("タブ表示の設定");
             folderSettings.Click += (s, e) => { if (SettingsRequested != null) SettingsRequested(); };
             _folderMenu.Items.Add(folderSettings);
@@ -172,6 +173,7 @@ namespace VerticalSheetTabs
             _folderMenu.Items.Add(new ToolStripSeparator());
             _folderMenu.Items.Add(fColor);
             _folderMenu.Items.Add(fTabColor);
+            _folderMenu.Items.Add(fSameColor);
             _folderMenu.Items.Add(new ToolStripSeparator());
             _folderMenu.Items.Add(folderDelete);
             _folderMenu.Items.Add(folderDeleteAll);

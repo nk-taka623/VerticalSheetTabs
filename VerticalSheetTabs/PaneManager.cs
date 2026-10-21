@@ -1209,6 +1209,11 @@ namespace VerticalSheetTabs
                     DeselectFolderSheets(entry, folderIds);
                     return;
                 }
+                if (command == "samecolor")
+                {
+                    SameColorAsSelected(entry, folderIds);
+                    return;
+                }
                 List<string> all = MemberNames(entry, folderIds);
                 var visible = new List<string>();
                 var hidden = new List<object>();
@@ -1245,6 +1250,76 @@ namespace VerticalSheetTabs
                 ShowMessage("フォルダ内のシートの操作を完了できませんでした。");
             }
             SyncSheets(entry);
+        }
+
+        // "Change all to the color of the selected sheet": every sheet of the folder (hidden ones too) gets the
+        // tab color of the first sheet of the folder (in the folder's order) that is selected in Excel now.
+        // The color is copied as Excel holds it: no color, a theme color with its tint, or an RGB color.
+        // A folder without a selected sheet is left as it is.
+        private void SameColorAsSelected(Entry entry, IList<string> folderIds)
+        {
+            var selected = new HashSet<string>(CurrentSelection(entry));
+            var without = new List<string>();
+            int done = 0;
+            foreach (string id in folderIds)
+            {
+                FolderNode folder = entry.Folders.FindFolder(id);
+                List<string> members = MemberNames(entry, new[] { id });
+                string source = members.FirstOrDefault(selected.Contains);
+                if (source == null)
+                {
+                    if (folder != null) without.Add(folder.Name);
+                    continue;
+                }
+                try
+                {
+                    CopyTabColor(entry, source, members);
+                    done++;
+                }
+                catch (Exception)
+                {
+                    ShowMessage("シート見出しの色を変更できませんでした。シートが保護されている可能性があります。");
+                    return;
+                }
+            }
+            if (done == 0)
+            {
+                ShowMessage("フォルダ内で選択中のシートはありません");
+                return;
+            }
+            if (without.Count > 0) ShowMessage("フォルダ内で選択中のシートはありません\r\n(" + string.Join("、", without) + ")");
+        }
+
+        private static Excel.Tab TabOf(object sheet)
+        {
+            var ws = sheet as Excel.Worksheet;
+            if (ws != null) return ws.Tab;
+            var ch = sheet as Excel.Chart;
+            return ch != null ? ch.Tab : null;
+        }
+
+        private static void CopyTabColor(Entry entry, string sourceName, IList<string> targetNames)
+        {
+            Excel.Tab from = TabOf(entry.Workbook.Sheets[sourceName]);
+            if (from == null) return;
+            // Excel: ColorIndex -4142 = no color; ThemeColor is 0 for an RGB color
+            bool none = Convert.ToInt32((object)from.ColorIndex) == (int)Excel.XlColorIndex.xlColorIndexNone;
+            int theme = none ? 0 : Convert.ToInt32((object)from.ThemeColor);
+            double tint = theme != 0 ? Convert.ToDouble((object)from.TintAndShade) : 0;
+            int rgb = (none || theme != 0) ? 0 : Convert.ToInt32((object)from.Color);
+            foreach (string name in targetNames)
+            {
+                if (name == sourceName) continue;
+                Excel.Tab tab = TabOf(entry.Workbook.Sheets[name]);
+                if (tab == null) continue;
+                if (none) tab.ColorIndex = Excel.XlColorIndex.xlColorIndexNone;
+                else if (theme != 0)
+                {
+                    tab.ThemeColor = (Excel.XlThemeColor)theme;
+                    tab.TintAndShade = tint;
+                }
+                else tab.Color = rgb;
+            }
         }
 
         // "Deselect all sheets of the folder": when sheets outside the folders are selected, all sheets of
