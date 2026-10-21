@@ -629,7 +629,7 @@ namespace VerticalSheetTabs
                 {
                     g.FillPath(brush, path);
                 }
-                DrawSelectionFrame(g, body, radius, LineColorFor(color, colored));
+                DrawSelectionFrame(g, body, radius, LineColorFor(color, colored), false); // a folder has no triangles
                 if (colored) textColor = TextOn(color);
             }
             else if (colored)
@@ -645,7 +645,7 @@ namespace VerticalSheetTabs
             }
 
             // closed: a right-pointing chevron; open: the same turned down
-            int markShift = selected ? Px(MarkerRoom) : 0; // room for the triangle at the left of a selected row
+            int markShift = 0; // (a selected folder has no triangles, so its mark and its name keep their place)
             int cx = left + markShift + Px(TextPadLeft) / 2 + Px(FolderMarkWidth) / 2;
             int cy = row.Top + row.Height / 2 - (selected ? Px(ActiveTextLift) : 0);
             int w = Px(FolderMarkWidth), h = Px(FolderMarkHeight);
@@ -659,7 +659,7 @@ namespace VerticalSheetTabs
             }
 
             int textLeft = left + markShift + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
-            int roomRight = selected ? Px(MarkerRoom) : 0; // and for the one at the right
+            int roomRight = 0;
             var textRect = new Rectangle(textLeft, row.Top - (selected ? Px(ActiveTextLift) : 0) + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - roomRight - CheckReserve(folder)), row.Height);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             if (_editor == null || _editingFolderId != folder.FolderId)
@@ -767,7 +767,7 @@ namespace VerticalSheetTabs
                 {
                     g.FillPath(brush, path);
                 }
-                DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored));
+                DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored), true);
                 if (colored) textColor = TextOn(tabColor);
             }
             else if (colored)
@@ -823,11 +823,11 @@ namespace VerticalSheetTabs
             }
         }
 
-        // A selected row has a double frame (a dark outer one and a white inner one) and a small triangle at each end
+        // A selected row has a double frame (a dark outer one and a white inner one) and, for a sheet, a small triangle at each end
         // that points to the middle, in the opposite color of the row; the triangles have a white edge and a soft
         // white halo of a few pixels (white shapes of growing width with a little opacity each: GDI+ has no blur),
         // so that they can be seen on dark colors and on the dark bar of the dark Office themes as well.
-        private void DrawSelectionFrame(Graphics g, Rectangle body, int radius, Color marker)
+        private void DrawSelectionFrame(Graphics g, Rectangle body, int radius, Color marker, bool markers)
         {
             bool dark = Theme.BarBack.GetBrightness() < 0.4f;
             float outerWidth = Math.Max(2f, Px(1.6));
@@ -848,6 +848,7 @@ namespace VerticalSheetTabs
                     g.DrawPath(pen, path);
                 }
             }
+            if (!markers) return;
             int cy = body.Top + body.Height / 2;
             DrawMarker(g, body.Left + Px(MarkerInset), cy, 1, marker);
             DrawMarker(g, body.Right - Px(MarkerInset), cy, -1, marker);
