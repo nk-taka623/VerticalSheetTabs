@@ -1500,6 +1500,6 @@ gitGraph
 
 ### 12.77 インストーラの更新 (バージョン1.1.25.0)
 
-- 12.76 (縦タブの同期が、実行中の同期の中で再び始まらないようにする修正。性能の検討) を含めて、バージョンを 1.1.25.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)
+- 12.76 (縦タブの同期が、実行中の同期の中で再び始まらないようにする修正。性能の検討) を含めて、バージョンを 1.1.25.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.25` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.25.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_25_0\`)。インストールの実機確認は、未実施
 
