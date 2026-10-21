@@ -101,6 +101,7 @@ namespace VerticalSheetTabs
 
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
             control.IsExcelEditing = IsExcelEditing;
+            control.MoreColorsProvider = () => PickMoreColor(entry);
             control.SelectionRequested += (names, active) =>
             {
                 CommitCellEdit(entry);
@@ -1799,6 +1800,44 @@ namespace VerticalSheetTabs
             {
                 // The command is not available now (e.g. structure protection); Excel greys it out
                 // in its own menu, so there is nothing more to report.
+            }
+        }
+
+        // "More colors": Excel's own "Colors" dialog (hexagon palette and custom tab), as the horizontal tab
+        // shows it. It is Excel's editor of a workbook palette color, so an entry of the palette is lent to it:
+        // it starts with the active tab's color, the chosen color is read back, and the entry and the
+        // workbook's "saved" state are put back as they were. Null when the dialog was cancelled or cannot
+        // be opened (then nothing is chosen).
+        private int? PickMoreColor(Entry entry)
+        {
+            const int Slot = 56; // the last of the 56 palette colors, the one least likely to be used
+            Excel.Workbook wb = entry.Workbook;
+            bool wasSaved = false;
+            try { wasSaved = wb.Saved; } catch (Exception) { }
+            object original = null;
+            try
+            {
+                original = wb.Colors[Slot];
+                int start;
+                if (TryGetTabColor(entry.Window.ActiveSheet, out start)) wb.Colors[Slot] = start;
+                bool ok = (bool)_app.Dialogs[Excel.XlBuiltInDialog.xlDialogEditColor].Show(Slot);
+                if (!ok) return null;
+                return Convert.ToInt32(wb.Colors[Slot]);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+            finally
+            {
+                try
+                {
+                    if (original != null) wb.Colors[Slot] = original;
+                    if (wasSaved) wb.Saved = true;
+                }
+                catch (Exception)
+                {
+                }
             }
         }
 
