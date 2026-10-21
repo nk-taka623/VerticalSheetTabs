@@ -1388,3 +1388,9 @@ gitGraph
 - `README.md` に、「ライセンス」の項目を足した
 - 設定画面の表示 (12.63) は、そのまま (「BSD ライセンスに準拠」)。12.63 に書いた、「版や全文の `LICENSE` は、まだ無い」は、この変更で、解消した
 - 実機で確認: スクリプトで作った zip に、`license` フォルダ (2ファイル) が入り、`はじめにお読みください.txt` の末尾に、ライセンスの項目が付く。このフォルダの、ライセンスの条文が、zip の中身として、読める
+
+### 12.70 インストーラの更新 (バージョン1.1.22.0)
+
+- 12.69 (ライセンス「BSD 3条項」の条文 (英文、日本語訳) の格納。配布用zipへの同梱) を含めて、バージョンを 1.1.22.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_22_0\`)。インストールの実機確認は、未実施
+
