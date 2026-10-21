@@ -1162,3 +1162,14 @@ gitGraph
 
 - 12.42 (開いたフォルダと中のシートを囲む点線) を含めて、バージョンを 1.1.11.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.11` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_11_0\`)。インストールの実機確認は、未実施
+
+## 13. リリースの定型作業 (ユーザーの指示、2026-10-21)
+
+`master` に反映して、バージョンタグを付けるときは、ユーザーの指示がなくても、続けて、次の①から③を行う。
+
+1. マージ済みの feature / fix ブランチを、削除する (`git branch -d`。マージ済みであることを確認してから。`develop` と `master` は、残す)
+2. ワークスペースのルートの「配布用zip」フォルダの中に、配布用 zip (証明書 `VerticalSheetTabs.cer`、証明書を信頼するスクリプト、手順書つき) を、作成する。zip は、最新バージョンだけを残す (フォルダの中の、古い zip を、削除する)。zip は、公開済みのインストーラ (`VerticalSheetTabs\bin\Release\app.publish\`) から作る
+3. 「配布用zip」フォルダの中身も含めて、`master` にコミットする (`develop` は、`master` に、早送りで合わせる)
+
+- 2 の zip の中身: `setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\<バージョン>\`、`VerticalSheetTabs.cer`、`証明書を信頼する.ps1`、`はじめにお読みください.txt`、`README.md`。`VerticalSheetTabs_TemporaryKey.pfx` (署名の秘密鍵) は、zip にも、リポジトリにも、含めない
+- 今回 (v1.1.11) から、zip の置き場所を、ルートから、「配布用zip」フォルダに変えた。ルートにあった古い zip は、削除した
