@@ -1707,7 +1707,7 @@ gitGraph
 
 ### 12.100 インストーラの更新 (バージョン1.1.36.0)
 
-- 12.99 (設定画面に「フォルダ＆シートの選択デザイン」(標準タイプ、ダブルフレームタイプ) を追加) を含めて、バージョンを 1.1.36.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)
+- 12.99 (設定画面に「フォルダ＆シートの選択デザイン」(標準タイプ、ダブルフレームタイプ) を追加) を含めて、バージョンを 1.1.36.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.36` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.36.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_36_0\`)。インストールの実機確認は、未実施
 - 注意: v1.1.33 から v1.1.35 で保存したブックは、`VTab.SelectStyle` が無いため、v1.1.36 で開くと、標準タイプの見た目になる (ダブルフレームタイプにするときは、ブックごとに、設定画面で選ぶ)
 
