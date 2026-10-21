@@ -102,7 +102,7 @@ namespace VerticalSheetTabs
             var viewCode = MenuItem("コードの表示(&V)", () => ViewCodeRequested);
             var protect = MenuItem("シートの保護(&P)...", () => ProtectSheetRequested);
             var tabColor = new ToolStripMenuItem("シート見出しの色(&T)");
-            var palette = new TabColorPalette { MoreColorsProvider = () => MoreColorsProvider == null ? (int?)null : MoreColorsProvider() };
+            var palette = new TabColorPalette { MoreColorsProvider = RequestMoreColor };
             var paletteHost = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
             tabColor.DropDown = new ToolStripDropDown { Padding = Padding.Empty };
             tabColor.DropDown.Items.Add(paletteHost);
@@ -202,11 +202,22 @@ namespace VerticalSheetTabs
             return item;
         }
 
+        // "More colors" of a palette in one of the menus. The menus are closed first: an open menu takes the keys
+        // (the Ctrl+Enter that enters a cell being edited) and the focus away from where they belong.
+        private int? RequestMoreColor()
+        {
+            if (MoreColorsProvider == null) return null;
+            _menu.Close();
+            _folderMenu.Close();
+            Application.DoEvents();
+            return MoreColorsProvider();
+        }
+
         // A menu item that opens the tab color palette (the same one as for sheets).
         private ToolStripMenuItem PaletteItem(string text, Action<TabColorChoice> chosen)
         {
             var item = new ToolStripMenuItem(text);
-            var palette = new TabColorPalette { MoreColorsProvider = () => MoreColorsProvider == null ? (int?)null : MoreColorsProvider() };
+            var palette = new TabColorPalette { MoreColorsProvider = RequestMoreColor };
             var host = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
             item.DropDown = new ToolStripDropDown { Padding = Padding.Empty };
             item.DropDown.Items.Add(host);

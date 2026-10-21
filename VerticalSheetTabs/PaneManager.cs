@@ -1733,27 +1733,96 @@ namespace VerticalSheetTabs
         // "More colors": Excel's own "Colors" dialog (hexagon palette and custom tab), as the horizontal tab
         // shows it. It is Excel's editor of a workbook palette color, so an entry of the palette is lent to it:
         // it starts with the active tab's color, the chosen color is read back, and the entry and the
-        // workbook's "saved" state are put back as they were. Null when the dialog was cancelled or cannot
-        // be opened (then nothing is chosen).
+        // workbook's "saved" state are put back as they were.
+        // Excel's dialog cannot be shown in every state (a cell is being edited, another window is active, the
+        // workbook does not accept a change of its palette). Then the system color dialog takes its place, so
+        // that choosing "More colors" never silently does nothing. Null: cancelled (or nothing could be shown).
         private int? PickMoreColor(Entry entry)
         {
+            int start = -1;
+            try
+            {
+                int c;
+                if (TryGetTabColor(entry.Window.ActiveSheet, out c)) start = c;
+            }
+            catch (Exception)
+            {
+            }
+
+            int? picked = null;
+            bool shown = false;
+            try
+            {
+                shown = TryExcelColorDialog(entry, start, out picked);
+            }
+            catch (Exception)
+            {
+                shown = false;
+            }
+            if (shown) return picked;
+
+            try
+            {
+                using (var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true, AnyColor = true })
+                {
+                    if (start >= 0) dialog.Color = System.Drawing.Color.FromArgb(start & 0xFF, (start >> 8) & 0xFF, (start >> 16) & 0xFF);
+                    if (dialog.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return null;
+                    System.Drawing.Color chosen = dialog.Color;
+                    return chosen.R | (chosen.G << 8) | (chosen.B << 16);
+                }
+            }
+            catch (Exception)
+            {
+                try { ShowMessage("色の設定画面を開けませんでした。"); } catch (Exception) { }
+                return null;
+            }
+        }
+
+        // True when Excel's dialog was shown (picked: the color, or null when it was cancelled); false when it
+        // could not be shown.
+        private bool TryExcelColorDialog(Entry entry, int start, out int? picked)
+        {
+            picked = null;
             const int Slot = 56; // the last of the 56 palette colors, the one least likely to be used
             Excel.Workbook wb = entry.Workbook;
+
+            // a cell being edited is entered first (as for the other commands); Excel shows no dialog while editing
+            CommitCellEdit(entry);
+            if (IsExcelEditing()) return false;
+
+            // the dialog edits the palette of the active workbook: it has to be this one
+            try { entry.Window.Activate(); } catch (Exception) { }
+            try
+            {
+                if (!wb.Equals(_app.ActiveWorkbook)) return false;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
             bool wasSaved = false;
             try { wasSaved = wb.Saved; } catch (Exception) { }
             object original = null;
             try
             {
                 original = wb.Colors[Slot];
-                int start;
-                if (TryGetTabColor(entry.Window.ActiveSheet, out start)) wb.Colors[Slot] = start;
+                if (start >= 0) wb.Colors[Slot] = start;
+                try { SetForegroundWindow(new IntPtr(_app.Hwnd)); } catch (Exception) { }
+                var watch = System.Diagnostics.Stopwatch.StartNew();
                 bool ok = (bool)_app.Dialogs[Excel.XlBuiltInDialog.xlDialogEditColor].Show(Slot);
-                if (!ok) return null;
-                return Convert.ToInt32(wb.Colors[Slot]);
+                if (!ok)
+                {
+                    // Excel answers "false" at once when it cannot show the dialog; cancelling takes a person longer
+                    return watch.ElapsedMilliseconds >= 500;
+                }
+                picked = Convert.ToInt32(wb.Colors[Slot]);
+                return true;
             }
             catch (Exception)
             {
-                return null;
+                picked = null;
+                return false;
             }
             finally
             {
@@ -1767,6 +1836,9 @@ namespace VerticalSheetTabs
                 }
             }
         }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
 
         // The menu item "Insert": Excel puts a new worksheet in front of the active sheet. When the active sheet
         // is in a folder, the new sheet goes into that folder, also in front of the folder's first sheet (where
