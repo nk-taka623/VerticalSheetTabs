@@ -1286,3 +1286,8 @@ gitGraph
 - グラフシート (フォルダへの所属は、名前で決まるため、ルールの下では、名前の変更で所属が変わるだけ)
 - 非表示のシートを含むフォルダ、構造が保護されたブック、多数のシートのブックでの、名前の変更の時間
 
+### 12.57 インストーラの更新 (バージョン1.1.17.0)
+
+- 12.56 (シート名のルール「フォルダ名 | シート名」) を含めて、バージョンを 1.1.17.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映。`master` への反映とタグは、未実施)
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_17_0\`)。インストールの実機確認は、未実施
+
