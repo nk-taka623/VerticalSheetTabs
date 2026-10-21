@@ -119,6 +119,10 @@ namespace VerticalSheetTabs
 
         // (selected sheets in tab order, the active one) after the user changed the selection.
         public event Action<IList<string>, string> SelectionRequested;
+        // Raised after a click with the left button has selected sheets: Excel's own tabs hand the keyboard
+        // focus back to the sheet, so that typing goes into the cell of the sheet just chosen.
+        // The argument tells whether the pane had the keyboard focus when the click was made.
+        public event Action<bool> GridFocusRequested;
         // (old name, new name) after the user finishes in-place editing.
         public event Action<string, string> RenameRequested;
         // (sheets, the sheet they are dropped in front of or null for the end, copy instead of move)
@@ -784,12 +788,56 @@ namespace VerticalSheetTabs
             SelectionRequested(SelectedInOrder(), _active);
         }
 
+        // A click that chooses another sheet must not give the keyboard focus to the pane: while the pane has
+        // it, Excel does not pass the keys on to the sheet, and typing right after choosing a sheet (which
+        // works after a click on Excel's own tabs) would be lost. So such a click leaves the focus where it
+        // is. A click that chooses nothing new (the active tab, a folder) still focuses the pane, for its
+        // keys (F2, Del, up/down).
+        private bool _noFocusClick;
+        private bool _hadFocusAtClick;
+
+        private const int WM_LBUTTONDOWN = 0x0201;
+        private const int WM_LBUTTONDBLCLK = 0x0203;
+
+        protected override void WndProc(ref Message m)
+        {
+            if ((m.Msg == WM_LBUTTONDOWN || m.Msg == WM_LBUTTONDBLCLK) && _editor == null)
+            {
+                long l = m.LParam.ToInt64();
+                var point = new Point((short)(l & 0xFFFF), (short)((l >> 16) & 0xFFFF));
+                if (ClickChangesSheet(point))
+                {
+                    _hadFocusAtClick = ContainsFocus;
+                    _noFocusClick = true;
+                    SetStyle(ControlStyles.Selectable, false);
+                    try { base.WndProc(ref m); }
+                    finally
+                    {
+                        SetStyle(ControlStyles.Selectable, true);
+                        _noFocusClick = false;
+                    }
+                    return;
+                }
+            }
+            base.WndProc(ref m);
+        }
+
+        // Whether a left click here would choose other sheets than the ones Excel has selected now.
+        private bool ClickChangesSheet(Point p)
+        {
+            int index = IndexFromPoint(p);
+            if (index < 0 || index >= _rows.Count || _rows[index].IsFolder) return false;
+            if (ModifierKeys != Keys.None) return true; // Ctrl / Shift: the group changes
+            string name = _rows[index].Sheet;
+            return !(name == _active && _selected.Count == 1 && _selected.Contains(name));
+        }
+
         // Left button down: update the selection on screen, remember where a drag could start.
         // Excel is told when the button is released, unless a drag starts first.
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            Focus();
+            if (!_noFocusClick) Focus();
             _toggleOffFolder = null; // a drag swallows the button release, so nothing may be left over
             if (e.Button == MouseButtons.Left && !StructureProtected && PlusButtonRect().Contains(e.Location))
             {
@@ -952,6 +1000,7 @@ namespace VerticalSheetTabs
             if (e.Button != MouseButtons.Left || !_selectionPending) return;
             _selectionPending = false;
             Raise();
+            if (GridFocusRequested != null) GridFocusRequested(_hadFocusAtClick);
         }
 
         // Keys that Excel would handle if the pane did not have the focus (save, save as).

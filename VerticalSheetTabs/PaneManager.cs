@@ -40,6 +40,8 @@ namespace VerticalSheetTabs
             // flag for a sheet move the sync made itself (the workbook is then really changed).
             public string RuleSignature;
             public bool RuleChanged;
+            // The last SelectSheets really changed the selection of Excel (and the focus may go to the sheet).
+            public bool SelectionChanged;
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -94,6 +96,7 @@ namespace VerticalSheetTabs
 
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
             control.SelectionRequested += (names, active) => SelectSheets(entry, names, active);
+            control.GridFocusRequested += hadFocus => FocusGrid(entry, hadFocus);
             control.ViewCodeRequested += () => RunExcelCommand(entry, "ViewCode");
             control.ProtectSheetRequested += () => RunExcelCommand(entry, "SheetProtect");
             control.TabColorRequested += (names, choice) => ApplyTabColor(entry, names, choice);
@@ -1818,11 +1821,13 @@ namespace VerticalSheetTabs
         private static void SelectSheets(Entry entry, IList<string> names, string active)
         {
             bool busyBefore = entry.Busy;
+            entry.SelectionChanged = false;
             try
             {
                 // Already the selection in Excel: do not touch it, a click on the active tab must not
                 // move the focus into the grid (that would cancel a double click that renames).
                 if (SameSelection(entry, names, active)) return;
+                entry.SelectionChanged = true;
 
                 // Selecting sheet by sheet raises Excel's events; a sync in between would see a half-made selection.
                 entry.Busy = true;
@@ -1855,6 +1860,57 @@ namespace VerticalSheetTabs
             finally
             {
                 entry.Busy = busyBefore;
+            }
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr SetFocus(IntPtr hWnd);
+
+        private delegate bool EnumChildProc(IntPtr hWnd, IntPtr lParam);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool EnumChildWindows(IntPtr parent, EnumChildProc callback, IntPtr lParam);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder name, int max);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        // After a click in the vertical tabs has chosen another sheet: the keyboard focus goes to the sheet
+        // (Excel's window "EXCEL7"), as it does after a click on Excel's own tabs, so that the next key
+        // press is typed into the selected cell. A click that chose nothing new leaves the focus where it
+        // is (it could be the first click of a double click that renames).
+        // While the pane has the focus, Excel does not pass the keys on to the sheet, whatever window gets
+        // the focus afterwards. Such a click (hadFocus) is rare: normally a click on a tab does not give the
+        // focus to the pane at all (TabStrip.WndProc). The pane is then hidden and shown again, which ends
+        // its hold on the keyboard.
+        private static void FocusGrid(Entry entry, bool hadFocus)
+        {
+            if (!entry.SelectionChanged) return;
+            entry.SelectionChanged = false;
+            try
+            {
+                if (hadFocus)
+                {
+                    entry.IgnoreVisibleUntil = DateTime.Now.AddMilliseconds(1500); // not the user closing the pane
+                    entry.Pane.Visible = false;
+                    entry.Pane.Visible = true;
+                }
+                IntPtr grid = IntPtr.Zero;
+                var name = new System.Text.StringBuilder(64);
+                EnumChildWindows(new IntPtr(entry.Window.Hwnd), (h, l) =>
+                {
+                    name.Clear();
+                    GetClassName(h, name, name.Capacity);
+                    if (name.ToString() == "EXCEL7" && IsWindowVisible(h)) { grid = h; return false; }
+                    return true;
+                }, IntPtr.Zero);
+                if (grid != IntPtr.Zero) SetFocus(grid);
+            }
+            catch (Exception)
+            {
+                // The window is closing; the focus stays where it is.
             }
         }
 
