@@ -393,6 +393,7 @@ namespace VerticalSheetTabs
 
             // the tabs scroll inside the area above the pinned "+" row
             g.SetClip(new Rectangle(0, 0, ClientSize.Width, ViewHeight));
+            DrawFolderOutlines(g);
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
             for (int i = first; i < _rows.Count; i++)
             {
@@ -411,6 +412,35 @@ namespace VerticalSheetTabs
             g.ResetClip();
 
             DrawPlus(g);
+        }
+
+        // An open folder and its sheets are enclosed by a dashed line, white like a selected tab, with the
+        // upper right corner cut off. The line goes when the folder is closed.
+        private void DrawFolderOutlines(Graphics g)
+        {
+            for (int i = 0; i < _rows.Count; i++)
+            {
+                if (!_rows[i].IsFolder || !_rows[i].Expanded) continue;
+                int last = i;
+                while (last + 1 < _rows.Count && _rows[last + 1].Indented) last++;
+                if (last == i) continue; // no sheet of the folder is listed
+
+                Rectangle top = RowRect(i), bottom = RowRect(last);
+                if (bottom.Bottom < 0 || top.Top > ViewHeight) { i = last; continue; }
+                int l = Px(1), r = ContentWidth - Px(1.5), t = top.Top + Px(1), b = bottom.Bottom - Px(1);
+                int cut = Math.Min(Px(10), Math.Min(r - l, b - t) / 2);
+                var points = new[]
+                {
+                    new Point(l, t), new Point(r - cut, t), new Point(r, t + cut), new Point(r, b), new Point(l, b)
+                };
+                using (var pen = new Pen(Color.White, Math.Max(1f, Px(1.2))))
+                {
+                    pen.DashStyle = DashStyle.Dash;
+                    pen.LineJoin = LineJoin.Miter;
+                    g.DrawPolygon(pen, points);
+                }
+                i = last;
+            }
         }
 
         // Excel marks the place a dragged tab will land with a small black triangle; here it points
