@@ -67,7 +67,7 @@ namespace VerticalSheetTabs
         // with a color, a bar at its left edge.
         private const double OutlineRightInset = 1.5, OutlineCut = 10;
         // The check mark of a folder that keeps its sheets in its color: size, space to the right end, gap to the text.
-        private const double CheckWidth = 10, CheckHeight = 7, CheckPadRight = 8, CheckGap = 4;
+        private const double CheckWidth = 10, CheckHeight = 7, CheckPadRight = 8, CheckGap = 4, CheckHalo = 3;
         private const double FolderIndent = 14, FolderMarkWidth = 6, FolderMarkHeight = 10, FolderBarWidth = 4;
         // Excel's tab text is about 9pt "Yu Gothic" (the measured width of "Sheet1" matches it).
         private const string FontFamilyName = "Yu Gothic";
@@ -658,12 +658,14 @@ namespace VerticalSheetTabs
                     g.DrawString(folder.FolderName, bold, brush, textRect, format);
                 }
             }
-            if (folder.SyncColor) DrawCheck(g, row, right, textColor);
+            if (folder.SyncColor) DrawCheck(g, row, right);
             DrawSeparator(g, row);
         }
 
-        // The check mark at the right end of a folder row.
-        private void DrawCheck(Graphics g, Rectangle row, int right, Color color)
+        // The check mark at the right end of a folder row. It is dark and has a soft light halo (a few pixels
+        // wide, white pens of growing width with a little opacity each, which looks like a blur), so that it
+        // can be seen on the dark bar of the dark Office themes and on any folder color alike.
+        private void DrawCheck(Graphics g, Rectangle row, int right)
         {
             int w = Px(CheckWidth), h = Px(CheckHeight);
             int x2 = right - Px(CheckPadRight), x1 = x2 - w;
@@ -673,7 +675,20 @@ namespace VerticalSheetTabs
             {
                 new Point(x1, cy), new Point(x1 + (int)Math.Round(w * 0.38), cy + h / 2), new Point(x2, cy - h / 2)
             };
-            using (var pen = new Pen(color, Math.Max(1.5f, Px(1.6))))
+            float markWidth = Math.Max(1.5f, Px(1.6));
+            float halo = Math.Max(2f, Px(CheckHalo));
+            const int steps = 6;
+            for (int i = steps; i >= 1; i--)
+            {
+                using (var pen = new Pen(Color.FromArgb(46, 255, 255, 255), markWidth + 2 * halo * i / steps))
+                {
+                    pen.LineJoin = LineJoin.Round;
+                    pen.StartCap = LineCap.Round;
+                    pen.EndCap = LineCap.Round;
+                    g.DrawLines(pen, points);
+                }
+            }
+            using (var pen = new Pen(TextColor, markWidth))
             {
                 pen.LineJoin = LineJoin.Round;
                 pen.StartCap = LineCap.Round;
