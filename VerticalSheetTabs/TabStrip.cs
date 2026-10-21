@@ -462,10 +462,20 @@ namespace VerticalSheetTabs
                     new Point(l, t), new Point(r - cut, t), new Point(r, t + cut), new Point(r, b),
                     new Point(l + cut, b), new Point(l, b - cut)
                 };
-                using (var pen = new Pen(Color.White, Math.Max(1f, Px(1.2))))
+                // The dashes are edged with a dark line: the bar color, 75% darker. The edge is a wider pen
+                // whose dashes are one pixel longer at both ends; both pens use the same dash pattern in pixels.
+                int w = Math.Max(2, Px(1.2)), edge = 1, on = Px(5), off = Px(4);
+                Color dark = Color.FromArgb(Theme.BarBack.R / 4, Theme.BarBack.G / 4, Theme.BarBack.B / 4);
+                float wide = w + 2 * edge;
+                using (var edgePen = new Pen(dark, wide))
+                using (var pen = new Pen(Color.White, w))
                 {
-                    pen.DashStyle = DashStyle.Dash;
+                    edgePen.LineJoin = LineJoin.Miter;
+                    edgePen.DashPattern = new[] { (on + 2 * edge) / wide, Math.Max(0.5f, (off - 2 * edge) / wide) };
+                    edgePen.DashOffset = edge / wide;
                     pen.LineJoin = LineJoin.Miter;
+                    pen.DashPattern = new[] { on / (float)w, off / (float)w };
+                    g.DrawPolygon(edgePen, points);
                     g.DrawPolygon(pen, points);
                 }
                 i = last;
