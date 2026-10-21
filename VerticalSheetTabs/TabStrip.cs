@@ -61,6 +61,7 @@ namespace VerticalSheetTabs
         private const double CornerRadius = 4;
         private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 3.2;
         private const double ActiveTextLift = 3.2;
+        private const double GlowWidth = 14;
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -608,6 +609,7 @@ namespace VerticalSheetTabs
                     using (var brush = new SolidBrush(colored ? color : Color.White)) g.FillPath(brush, path);
                     using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
+                DrawEdgeGlow(g, body, radius, 1.0);
                 if (colored) textColor = TextOn(color);
             }
             else if (colored)
@@ -744,6 +746,7 @@ namespace VerticalSheetTabs
                     using (var brush = new SolidBrush(colored ? tabColor : Color.White)) g.FillPath(brush, path);
                     using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
+                DrawEdgeGlow(g, body, radius, active ? 1.0 : 0.6);
                 if (colored) textColor = TextOn(tabColor);
                 if (active)
                 {
@@ -802,6 +805,27 @@ namespace VerticalSheetTabs
                 {
                     g.FillPath(brush, path);
                 }
+            }
+        }
+
+        // A selected row glows at its left and right edge: a white light at the edge that fades out toward the
+        // middle within a few DIP (the text starts behind it, so it stays readable). The color of the row is
+        // unchanged except for this edge.
+        private void DrawEdgeGlow(Graphics g, Rectangle body, int radius, double strength)
+        {
+            Rectangle inner = Rectangle.Inflate(body, -1, -1);
+            if (inner.Width < Px(30) || inner.Height < 4) return;
+            float f = (float)Math.Min(0.4, Px(GlowWidth) / (double)inner.Width);
+            Color Light(double a) { return Color.FromArgb((int)Math.Round(255 * a * strength), 255, 255, 255); }
+            using (var brush = new LinearGradientBrush(inner, Color.White, Color.White, LinearGradientMode.Horizontal))
+            using (GraphicsPath path = RoundedRect(inner, Math.Max(1, radius - 1)))
+            {
+                brush.InterpolationColors = new ColorBlend
+                {
+                    Positions = new[] { 0f, f * 0.35f, f, 1f - f, 1f - f * 0.35f, 1f },
+                    Colors = new[] { Light(0.7), Light(0.3), Light(0), Light(0), Light(0.3), Light(0.7) }
+                };
+                g.FillPath(brush, path);
             }
         }
 
