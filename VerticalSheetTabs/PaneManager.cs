@@ -95,7 +95,12 @@ namespace VerticalSheetTabs
             control.OutlineLevel = settings.OutlineLevel;
 
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
-            control.SelectionRequested += (names, active) => SelectSheets(entry, names, active);
+            control.IsExcelEditing = IsExcelEditing;
+            control.SelectionRequested += (names, active) =>
+            {
+                CommitCellEdit(entry);
+                SelectSheets(entry, names, active);
+            };
             control.GridFocusRequested += hadFocus => FocusGrid(entry, hadFocus);
             control.ViewCodeRequested += () => RunExcelCommand(entry, "ViewCode");
             control.ProtectSheetRequested += () => RunExcelCommand(entry, "SheetProtect");
@@ -457,6 +462,7 @@ namespace VerticalSheetTabs
 
             foreach (Entry entry in new List<Entry>(_entries.Values))
             {
+                AllowPaneInput(entry);
                 if (SyncSheets(entry)) entry.Failures = 0;
                 else if (++entry.Failures > 20) PurgeEntry(entry); // about 6 seconds without an answer
             }
@@ -1605,6 +1611,7 @@ namespace VerticalSheetTabs
             // Excel's events for the new sheet start a sync while the sheet still has its own name; with the
             // name rule on, that would move the sheet (or the sheets around it) before it is named
             if (entry.Busy) return;
+            CommitCellEdit(entry);
             entry.Busy = true;
             try
             {
@@ -1865,6 +1872,91 @@ namespace VerticalSheetTabs
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern IntPtr SetFocus(IntPtr hWnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetFocus();
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetParent(IntPtr hWnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool IsWindowEnabled(IntPtr hWnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool EnableWindow(IntPtr hWnd, bool enable);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern void keybd_event(byte vk, byte scan, int flags, UIntPtr extra);
+
+        private const int KeyUp = 0x0002;
+        private const byte VkControl = 0x11;
+        private const byte VkReturn = 0x0D;
+
+        // A cell (or the formula bar) is being edited: the keyboard focus is in Excel's edit window.
+        private static bool IsExcelEditing()
+        {
+            try
+            {
+                IntPtr focus = GetFocus();
+                if (focus == IntPtr.Zero) return false;
+                var name = new System.Text.StringBuilder(64);
+                GetClassName(focus, name, name.Capacity);
+                string cls = name.ToString();
+                return cls == "EXCEL6" || cls == "EXCEL<";
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        // While a cell is edited, Excel disables its task panes, so that a click on the vertical tabs would
+        // not arrive at all. Excel's own tabs do work then (they enter the text and switch the sheet), so
+        // the pane is enabled again for as long as the editing lasts; Excel enables its panes itself
+        // afterwards. Only the windows between the pane and Excel's main window are touched, and only
+        // while editing (with a dialog open Excel disables the main window, and the pane stays disabled).
+        private static void AllowPaneInput(Entry entry)
+        {
+            try
+            {
+                if (!IsExcelEditing()) return;
+                IntPtr h = entry.Control.Handle;
+                var name = new System.Text.StringBuilder(64);
+                for (int i = 0; i < 10 && h != IntPtr.Zero; i++)
+                {
+                    name.Clear();
+                    GetClassName(h, name, name.Capacity);
+                    if (name.ToString() == "XLMAIN") break;
+                    if (!IsWindowEnabled(h)) EnableWindow(h, true);
+                    h = GetParent(h);
+                }
+            }
+            catch (Exception)
+            {
+                // The window is closing.
+            }
+        }
+
+        // The user chooses another sheet in the vertical tabs while a cell is being edited. Excel's own
+        // tabs enter what was typed into the cell (which stays the active one) and then switch the sheet.
+        // The sheet cannot be switched while editing, so Ctrl+Enter is pressed for the user (it enters the
+        // text and keeps the cell), and the switch is made when the editing has ended. The click did not
+        // take the focus away from the edit window (TabStrip.WndProc), so the keys reach it.
+        private static void CommitCellEdit(Entry entry)
+        {
+            if (!IsExcelEditing()) return;
+            keybd_event(VkControl, 0, 0, UIntPtr.Zero);
+            keybd_event(VkReturn, 0, 0, UIntPtr.Zero);
+            keybd_event(VkReturn, 0, KeyUp, UIntPtr.Zero);
+            keybd_event(VkControl, 0, KeyUp, UIntPtr.Zero);
+            // the keys are handled by Excel's message loop, which is this thread: let it run
+            for (int i = 0; i < 60; i++)
+            {
+                System.Windows.Forms.Application.DoEvents();
+                if (!IsExcelEditing()) return;
+                System.Threading.Thread.Sleep(25);
+            }
+        }
 
         private delegate bool EnumChildProc(IntPtr hWnd, IntPtr lParam);
 
