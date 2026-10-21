@@ -1627,6 +1627,6 @@ gitGraph
 
 ### 12.90 インストーラの更新 (バージョン1.1.31.0)
 
-- 12.89 (左右の端の光を、行の2/3の幅に広げる) を含めて、バージョンを 1.1.31.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)
+- 12.89 (左右の端の光を、行の2/3の幅に広げる) を含めて、バージョンを 1.1.31.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.31` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.31.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_31_0\`)。インストールの実機確認は、未実施
 
