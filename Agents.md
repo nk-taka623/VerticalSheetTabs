@@ -1539,6 +1539,6 @@ gitGraph
 
 ### 12.81 インストーラの更新 (バージョン1.1.27.0)
 
-- 12.80 (フォルダの一括操作メニューの整理) を含めて、バージョンを 1.1.27.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)
+- 12.80 (フォルダの一括操作メニューの整理) を含めて、バージョンを 1.1.27.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.27` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.27.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_27_0\`)。インストールの実機確認は、未実施
 
