@@ -1187,5 +1187,5 @@ gitGraph
 
 ### 12.46 インストーラの更新 (バージョン1.1.12.0)
 
-- 12.44、12.45 (点線と、フォルダ、シートの右端の間隔の調整) を含めて、バージョンを 1.1.12.0 に上げ、ClickOnce のインストーラを作り直した (`develop` ブランチ。`master` への反映とタグは、未実施)
+- 12.44、12.45 (点線と、フォルダ、シートの右端の間隔の調整) を含めて、バージョンを 1.1.12.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.12` のタグを付けた)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_12_0\`)。インストールの実機確認は、未実施
