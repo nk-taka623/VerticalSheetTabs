@@ -60,7 +60,7 @@ namespace VerticalSheetTabs
         private const double PlainTop = 1, ColoredTop = 4, BottomInset = 4;
         private const double CornerRadius = 4;
         private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 3.2;
-        private const double ActiveTextLift = 1.6;
+        private const double ActiveTextLift = 3.2;
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -601,8 +601,22 @@ namespace VerticalSheetTabs
             if (selected)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
-                DrawRaised(g, body, radius, colored ? color : Color.Empty, 1.0, true);
-                if (colored) textColor = TextOn(color);
+                DrawShadow(g, body, radius, 1.0);
+                using (GraphicsPath path = RoundedRect(body, radius))
+                {
+                    using (var brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
+                    if (colored)
+                    {
+                        Rectangle inner = Rectangle.Inflate(body, -1, -1);
+                        Color bottom = Mix(Color.White, color, 0.45);
+                        using (var brush = new LinearGradientBrush(new Rectangle(inner.X, inner.Y - 1, inner.Width, inner.Height + 2), Color.White, bottom, LinearGradientMode.Vertical))
+                        using (GraphicsPath innerPath = RoundedRect(inner, Math.Max(1, radius - 1)))
+                        {
+                            g.FillPath(brush, innerPath);
+                        }
+                    }
+                    using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
+                }
             }
             else if (colored)
             {
@@ -618,7 +632,7 @@ namespace VerticalSheetTabs
 
             // closed: a right-pointing chevron; open: the same turned down
             int cx = left + Px(TextPadLeft) / 2 + Px(FolderMarkWidth) / 2;
-            int cy = row.Top + row.Height / 2 - (selected ? Px(ActiveTextLift) : 0);
+            int cy = row.Top + row.Height / 2;
             int w = Px(FolderMarkWidth), h = Px(FolderMarkHeight);
             Point[] chevron = folder.Expanded
                 ? new[] { new Point(cx - h / 2, cy - w / 2), new Point(cx, cy + w / 2), new Point(cx + h / 2, cy - w / 2) }
@@ -630,8 +644,7 @@ namespace VerticalSheetTabs
             }
 
             int textLeft = left + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
-            int folderLift = selected ? Px(ActiveTextLift) : 0;
-            var textRect = new Rectangle(textLeft, row.Top - folderLift + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - CheckReserve(folder)), row.Height);
+            var textRect = new Rectangle(textLeft, row.Top + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - CheckReserve(folder)), row.Height);
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             if (_editor == null || _editingFolderId != folder.FolderId)
             {
@@ -730,11 +743,33 @@ namespace VerticalSheetTabs
             // when selected and has no background otherwise.
             if (selected)
             {
-                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
-                // the active sheet stands out most (shadow and the green lines); the other sheets of the group
-                // are raised less and have no lines
-                DrawRaised(g, body, radius, colored ? tabColor : Color.Empty, active ? 1.0 : 0.6, active);
-                if (colored) textColor = TextOn(tabColor);
+                var body = new Rectangle(left, row.Top + Px(colored ? PlainTop : PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                // the active sheet is raised most; the other sheets of a group a little less
+                DrawShadow(g, body, radius, active ? 1.0 : 0.6);
+                using (GraphicsPath path = RoundedRect(body, radius))
+                {
+                    using (var brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
+                    if (colored)
+                    {
+                        // white at the top, a mix of the tab color (about 45%) at the bottom
+                        Rectangle inner = Rectangle.Inflate(body, -1, -1);
+                        Color bottom = Mix(Color.White, tabColor, 0.45);
+                        using (var brush = new LinearGradientBrush(new Rectangle(inner.X, inner.Y - 1, inner.Width, inner.Height + 2), Color.White, bottom, LinearGradientMode.Vertical))
+                        using (GraphicsPath innerPath = RoundedRect(inner, Math.Max(1, radius - 1)))
+                        {
+                            g.FillPath(brush, innerPath);
+                        }
+                    }
+                    using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
+                }
+                if (active)
+                {
+                    int thick = Math.Max(1, Px(UnderlineThickness));
+                    int ux = body.Left + Px(UnderlineInset);
+                    int uw = body.Width - 2 * Px(UnderlineInset);
+                    int uy = body.Bottom - 1 - Px(UnderlineGap) - thick;
+                    using (var brush = new SolidBrush(Underline)) g.FillRectangle(brush, ux, uy, Math.Max(1, uw), thick);
+                }
             }
             else if (colored)
             {
@@ -770,66 +805,20 @@ namespace VerticalSheetTabs
             }
         }
 
-        // The text color on a sheet color: dark on light colors, white on dark ones.
-        private static Color TextOn(Color c)
+        // A selected row looks raised: a soft shadow below and at the right of its body, made of a few
+        // translucent black rounded rectangles of growing size (GDI+ has no blur), drawn before the body.
+        private void DrawShadow(Graphics g, Rectangle body, int radius, double strength)
         {
-            double luma = (c.R * 299 + c.G * 587 + c.B * 114) / 1000.0;
-            return luma >= 150 ? TextColor : Color.White;
-        }
-
-        // A selected row looks raised: a soft shadow below and at the right (stacked translucent rounded
-        // rectangles), a darker edge under the body, a body that is lighter at the top and a little darker at
-        // the bottom (the sheet color for a colored sheet), and, with lines, the green lines inside the top
-        // and the bottom edge. strength 1 = the active sheet or a selected folder, less = the other sheets of a group.
-        private void DrawRaised(Graphics g, Rectangle body, int radius, Color color, double strength, bool lines)
-        {
-            bool colored = !color.IsEmpty;
             bool dark = Theme.BarBack.GetBrightness() < 0.4f;
-
-            // shadow
-            int alpha = (int)Math.Round((dark ? 16 : 7) * strength);
-            for (int i = 5; i >= 1; i--)
+            int alpha = (int)Math.Round((dark ? 22 : 11) * strength);
+            for (int k = 4; k >= 1; k--)
             {
-                var r = new Rectangle(body.X - Px(0.4 * i), body.Y + Px(1.5 + 0.9 * i), body.Width + Px(0.8 * i), body.Height);
-                using (GraphicsPath path = RoundedRect(r, radius + Px(0.5 * i)))
+                var r = new Rectangle(body.X - Px(k - 1), body.Y + Px(1 + k), body.Width + Px(1.2 * k), body.Height);
+                using (GraphicsPath path = RoundedRect(r, radius + Px(k)))
                 using (var brush = new SolidBrush(Color.FromArgb(alpha, 0, 0, 0)))
                 {
                     g.FillPath(brush, path);
                 }
-            }
-
-            // the edge under the body
-            Color edge = colored ? Mix(color, Color.Black, 0.22) : Color.FromArgb(207, 207, 207);
-            var under = new Rectangle(body.X, body.Y + Math.Max(1, Px(1.3 * strength + 0.4)), body.Width, body.Height);
-            using (GraphicsPath path = RoundedRect(under, radius))
-            using (var brush = new SolidBrush(edge))
-            {
-                g.FillPath(brush, path);
-            }
-
-            // the body
-            Color top = colored ? Mix(color, Color.White, 0.22) : Color.White;
-            Color bottom = colored ? color : Color.FromArgb(243, 243, 243);
-            var lifted = new Rectangle(body.X, body.Y - Math.Max(1, Px(0.8)), body.Width, body.Height);
-            using (GraphicsPath path = RoundedRect(lifted, radius))
-            {
-                using (var brush = new LinearGradientBrush(new Rectangle(lifted.X, lifted.Y - 1, lifted.Width, lifted.Height + 2), top, bottom, LinearGradientMode.Vertical))
-                {
-                    g.FillPath(brush, path);
-                }
-                using (var pen = new Pen(colored ? Color.FromArgb(24, 0, 0, 0) : Color.FromArgb(218, 218, 218), 1)) g.DrawPath(pen, path);
-            }
-
-            if (!lines) return;
-            int thick = Math.Max(1, Px(UnderlineThickness));
-            int ux = lifted.Left + Px(UnderlineInset);
-            int uw = Math.Max(1, lifted.Width - 2 * Px(UnderlineInset));
-            int upper = lifted.Top + 1 + Px(UnderlineGap);
-            int lower = lifted.Bottom - 1 - Px(UnderlineGap) - thick;
-            using (var brush = new SolidBrush(Underline))
-            {
-                g.FillRectangle(brush, ux, upper, uw, thick);
-                g.FillRectangle(brush, ux, lower, uw, thick);
             }
         }
 
