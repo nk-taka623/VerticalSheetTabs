@@ -58,7 +58,7 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.1.19.0</ApplicationVersion>
+    <ApplicationVersion>1.1.20.0</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>false</CreateDesktopShortcut>
     <CreateWebPageOnPublish>false</CreateWebPageOnPublish>
@@ -233,6 +233,7 @@
     <Compile Include="RibbonController.cs" />
     <Compile Include="RibbonIcon.cs" />
     <Compile Include="NameRule.cs" />
+    <Compile Include="AddInVersion.cs" />
     <Compile Include="SettingsForm.cs" />
     <Compile Include="TabColorPalette.cs" />
     <Compile Include="FolderModel.cs" />
