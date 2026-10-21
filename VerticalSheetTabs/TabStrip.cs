@@ -61,7 +61,7 @@ namespace VerticalSheetTabs
         private const double CornerRadius = 4;
         private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 3.2;
         private const double ActiveTextLift = 3.2;
-        private const double GlowWidth = 14;
+        private const double GlowFraction = 2.0 / 3.0; // the glow reaches this fraction of the row from each edge
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -610,7 +610,7 @@ namespace VerticalSheetTabs
                     using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
                 DrawEdgeGlow(g, body, radius, 1.0);
-                if (colored) textColor = TextOn(color);
+                if (colored) textColor = GlowedText(color);
             }
             else if (colored)
             {
@@ -747,7 +747,7 @@ namespace VerticalSheetTabs
                     using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
                 DrawEdgeGlow(g, body, radius, active ? 1.0 : 0.6);
-                if (colored) textColor = TextOn(tabColor);
+                if (colored) textColor = GlowedText(tabColor);
                 if (active)
                 {
                     int thick = Math.Max(1, Px(UnderlineThickness));
@@ -808,25 +808,54 @@ namespace VerticalSheetTabs
             }
         }
 
-        // A selected row glows at its left and right edge: a white light at the edge that fades out toward the
-        // middle within a few DIP (the text starts behind it, so it stays readable). The color of the row is
-        // unchanged except for this edge.
+        // A selected row glows at its left and right edge: a white light that is strongest at the edge and fades
+        // out toward the middle, over GlowFraction of the row from each side (two thirds: the two glows meet in the
+        // middle, where little of them is left). The text lies in the glow, so its color is chosen for the color
+        // lightened by it (TextOn of the lightened color, see GlowedText).
         private void DrawEdgeGlow(Graphics g, Rectangle body, int radius, double strength)
         {
             Rectangle inner = Rectangle.Inflate(body, -1, -1);
             if (inner.Width < Px(30) || inner.Height < 4) return;
-            float f = (float)Math.Min(0.4, Px(GlowWidth) / (double)inner.Width);
+            int reach = Math.Max(2, (int)Math.Round(inner.Width * GlowFraction));
             Color Light(double a) { return Color.FromArgb((int)Math.Round(255 * a * strength), 255, 255, 255); }
-            using (var brush = new LinearGradientBrush(inner, Color.White, Color.White, LinearGradientMode.Horizontal))
-            using (GraphicsPath path = RoundedRect(inner, Math.Max(1, radius - 1)))
+            GraphicsState state = g.Save();
+            try
             {
-                brush.InterpolationColors = new ColorBlend
+                using (GraphicsPath path = RoundedRect(inner, Math.Max(1, radius - 1)))
                 {
-                    Positions = new[] { 0f, f * 0.35f, f, 1f - f, 1f - f * 0.35f, 1f },
-                    Colors = new[] { Light(0.7), Light(0.3), Light(0), Light(0), Light(0.3), Light(0.7) }
-                };
-                g.FillPath(brush, path);
+                    g.SetClip(path, CombineMode.Intersect);
+                    var left = new Rectangle(inner.Left, inner.Top, reach, inner.Height);
+                    var right = new Rectangle(inner.Right - reach, inner.Top, reach, inner.Height);
+                    using (var brush = new LinearGradientBrush(left, Color.White, Color.White, LinearGradientMode.Horizontal))
+                    {
+                        brush.InterpolationColors = new ColorBlend
+                        {
+                            Positions = new[] { 0f, 0.25f, 0.6f, 1f },
+                            Colors = new[] { Light(0.75), Light(0.40), Light(0.10), Light(0) }
+                        };
+                        g.FillRectangle(brush, left);
+                    }
+                    using (var brush = new LinearGradientBrush(right, Color.White, Color.White, LinearGradientMode.Horizontal))
+                    {
+                        brush.InterpolationColors = new ColorBlend
+                        {
+                            Positions = new[] { 0f, 0.4f, 0.75f, 1f },
+                            Colors = new[] { Light(0), Light(0.10), Light(0.40), Light(0.75) }
+                        };
+                        g.FillRectangle(brush, right);
+                    }
+                }
             }
+            finally
+            {
+                g.Restore(state);
+            }
+        }
+
+        // The text color of a selected row in a color: chosen for the color as the glow lightens it.
+        private static Color GlowedText(Color c)
+        {
+            return TextOn(Mix(c, Color.White, 0.5));
         }
 
         // The text color on a sheet or folder color: dark on light colors, white on dark ones.
