@@ -596,26 +596,19 @@ namespace VerticalSheetTabs
                 : Color.Empty;
             Color textColor = selected ? TextColor : Theme.InactiveText;
 
-            // like a sheet tab: selected = white (with the color fading in from the top), not selected
+            // like a sheet tab: selected = white, or the color itself, with a shadow; not selected
             // with a color = a box in that color
             if (selected)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                DrawShadow(g, body, radius, 1.0);
+                // white, or the folder color itself (not lightened); the shadow raises it
                 using (GraphicsPath path = RoundedRect(body, radius))
                 {
-                    using (var brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
-                    if (colored)
-                    {
-                        Rectangle inner = Rectangle.Inflate(body, -1, -1);
-                        Color bottom = Mix(Color.White, color, 0.45);
-                        using (var brush = new LinearGradientBrush(new Rectangle(inner.X, inner.Y - 1, inner.Width, inner.Height + 2), Color.White, bottom, LinearGradientMode.Vertical))
-                        using (GraphicsPath innerPath = RoundedRect(inner, Math.Max(1, radius - 1)))
-                        {
-                            g.FillPath(brush, innerPath);
-                        }
-                    }
-                    using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
+                    using (var brush = new SolidBrush(colored ? color : Color.White)) g.FillPath(brush, path);
+                    using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
+                if (colored) textColor = TextOn(color);
             }
             else if (colored)
             {
@@ -743,22 +736,15 @@ namespace VerticalSheetTabs
             if (selected)
             {
                 var body = new Rectangle(left, row.Top + Px(colored ? PlainTop : PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                // the active sheet is raised most; the other sheets of a group a little less
+                DrawShadow(g, body, radius, active ? 1.0 : 0.6);
+                // white, or the tab color itself (not lightened); the shadow raises it
                 using (GraphicsPath path = RoundedRect(body, radius))
                 {
-                    using (var brush = new SolidBrush(Color.White)) g.FillPath(brush, path);
-                    if (colored)
-                    {
-                        // white at the top, a mix of the tab color (about 45%) at the bottom
-                        Rectangle inner = Rectangle.Inflate(body, -1, -1);
-                        Color bottom = Mix(Color.White, tabColor, 0.45);
-                        using (var brush = new LinearGradientBrush(new Rectangle(inner.X, inner.Y - 1, inner.Width, inner.Height + 2), Color.White, bottom, LinearGradientMode.Vertical))
-                        using (GraphicsPath innerPath = RoundedRect(inner, Math.Max(1, radius - 1)))
-                        {
-                            g.FillPath(brush, innerPath);
-                        }
-                    }
-                    using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
+                    using (var brush = new SolidBrush(colored ? tabColor : Color.White)) g.FillPath(brush, path);
+                    using (var pen = new Pen(colored ? Color.FromArgb(48, 0, 0, 0) : Theme.TabBorder, 1)) g.DrawPath(pen, path);
                 }
+                if (colored) textColor = TextOn(tabColor);
                 if (active)
                 {
                     int thick = Math.Max(1, Px(UnderlineThickness));
@@ -800,6 +786,30 @@ namespace VerticalSheetTabs
                     g.DrawString(text, TabFont, brush, textRect, format);
                 }
             }
+        }
+
+        // A selected row looks raised: a soft shadow below and at the right of its body, made of a few
+        // translucent black rounded rectangles of growing size (GDI+ has no blur), drawn before the body.
+        private void DrawShadow(Graphics g, Rectangle body, int radius, double strength)
+        {
+            bool dark = Theme.BarBack.GetBrightness() < 0.4f;
+            int alpha = (int)Math.Round((dark ? 22 : 11) * strength);
+            for (int k = 4; k >= 1; k--)
+            {
+                var r = new Rectangle(body.X - Px(k - 1), body.Y + Px(1 + k), body.Width + Px(1.2 * k), body.Height);
+                using (GraphicsPath path = RoundedRect(r, radius + Px(k)))
+                using (var brush = new SolidBrush(Color.FromArgb(alpha, 0, 0, 0)))
+                {
+                    g.FillPath(brush, path);
+                }
+            }
+        }
+
+        // The text color on a sheet or folder color: dark on light colors, white on dark ones.
+        private static Color TextOn(Color c)
+        {
+            double luma = (c.R * 299 + c.G * 587 + c.B * 114) / 1000.0;
+            return luma >= 150 ? TextColor : Color.White;
         }
 
         private static Color Mix(Color a, Color b, double t)
