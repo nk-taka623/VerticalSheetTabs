@@ -61,7 +61,7 @@ namespace VerticalSheetTabs
         private const double CornerRadius = 4;
         private const double UnderlineInset = 8, UnderlineThickness = 1.6, UnderlineGap = 3.2;
         private const double ActiveTextLift = 1.6;
-        private const double GlowFraction = 2.0 / 3.0; // the glow reaches this fraction of the row from each edge
+        private const double GlowFraction = 2.0 / 3.0 * 0.7; // the glow reaches this fraction of the row from each edge (0.7 of two thirds)
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -831,10 +831,10 @@ namespace VerticalSheetTabs
             }
         }
 
-        // A selected row glows at its left and right edge: a light (GlowColorFor) that is strongest at the edge and fades
-        // out toward the middle, over GlowFraction of the row from each side (two thirds: the two glows meet in the
-        // middle, where little of them is left). The text lies in the glow, so its color is chosen for the color
-        // lightened by it (TextOn of the lightened color, see GlowedText).
+        // A selected row glows at its left and right edge: a light (GlowColorFor) that is strongest at the edge and
+        // fades out toward the middle, over GlowFraction of the row from each side (about 47%, so the two glows do
+        // not meet and the middle keeps the color of the row). The text lies in the glow, so its color is chosen
+        // for the color as the glow tints it (GlowedText).
         private void DrawEdgeGlow(Graphics g, Rectangle body, int radius, double strength, Color glow)
         {
             Rectangle inner = Rectangle.Inflate(body, -1, -1);
