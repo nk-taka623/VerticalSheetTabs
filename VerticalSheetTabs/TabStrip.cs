@@ -841,6 +841,7 @@ namespace VerticalSheetTabs
                 // the active sheet behind thicker glass than the other sheets of a group
                 DrawGlass(g, body, radius, active, colored, tabColor);
                 textColor = GlassText(colored);
+                if (active) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
             }
             else if (selected)
             {
@@ -853,6 +854,8 @@ namespace VerticalSheetTabs
                     int uw = body.Width - 2 * Px(UnderlineInset);
                     int uy = body.Bottom - 1 - Px(UnderlineGap) - thick;
                     using (var brush = new SolidBrush(Underline)) g.FillRectangle(brush, ux, uy, Math.Max(1, uw), thick);
+                    // the text of the active sheet sits higher (the underline), the triangles go with it
+                    DrawMarkers(g, body, Px(StandardTextLift) / 2, LineColorFor(tabColor, colored));
                 }
             }
             else if (colored)
@@ -873,7 +876,7 @@ namespace VerticalSheetTabs
 
             // text: left aligned; the text of a selected tab sits a little higher (the lines above and below)
             int lift = DoubleFrame ? (selected ? Px(ActiveTextLift) : 0) : Glass ? 0 : (active ? Px(StandardTextLift) : 0);
-            int room = DoubleFrame && active ? Px(MarkerRoom) : 0; // room for the triangles at both ends of the active sheet
+            int room = active ? Px(MarkerRoom) : 0; // room for the triangles at both ends of the active sheet (every type)
             var textRect = new Rectangle(left + room + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - 2 * room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
@@ -1069,8 +1072,14 @@ namespace VerticalSheetTabs
                     g.DrawPath(pen, path);
                 }
             }
-            if (!markers) return;
-            int cy = body.Top + body.Height / 2;
+            if (markers) DrawMarkers(g, body, 0, marker);
+        }
+
+        // The triangles at both ends of the active sheet (Agents.md 12.109: every type has them), raise pixels above
+        // the middle of the body.
+        private void DrawMarkers(Graphics g, Rectangle body, int raise, Color marker)
+        {
+            int cy = body.Top + body.Height / 2 - raise;
             DrawMarker(g, body.Left + Px(MarkerInset), cy, 1, marker);
             DrawMarker(g, body.Right - Px(MarkerInset), cy, -1, marker);
         }
@@ -1086,7 +1095,7 @@ namespace VerticalSheetTabs
             const int steps = 6;
             for (int i = steps; i >= 1; i--)
             {
-                using (var pen = new Pen(Color.FromArgb(34, 255, 255, 255), Math.Max(1f, Px(1.2)) + i * Math.Max(1f, Px(1.3))))
+                using (var pen = new Pen(Color.FromArgb(34, 255, 255, 255), Math.Max(1f, Px(1.2)) + i * Math.Max(1f, Px(1.3)) / 2f)) // half of the first halo (12.109)
                 {
                     pen.LineJoin = LineJoin.Round;
                     g.DrawPolygon(pen, points);
