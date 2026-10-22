@@ -2182,6 +2182,15 @@ namespace VerticalSheetTabs
                 if (SameSelection(entry, names, active)) return;
                 entry.SelectionChanged = true;
 
+                // The same group with another active sheet: activating a sheet of the group keeps the group, so it
+                // is not taken apart and put together again on screen (Agents.md 12.123).
+                HashSet<string> current = CurrentGroup(entry);
+                if (current != null && current.Count > 1 && current.SetEquals(names))
+                {
+                    ActivateSheet(entry.Workbook.Sheets[active]);
+                    return;
+                }
+
                 // Selecting sheet by sheet raises Excel's events; a sync in between would see a half-made selection.
                 entry.Busy = true;
                 var ordered = new List<string> { active };
@@ -2199,11 +2208,27 @@ namespace VerticalSheetTabs
                     }
                 }
 
-                bool first = true;
-                foreach (string n in ordered)
+                // Excel would show each step of the selection (the tabs and the sheet drawn again for every sheet): the
+                // screen is updated once, at the end.
+                bool frozen = false, screen = true;
+                try
                 {
-                    SelectSheet(entry.Workbook.Sheets[n], first);
-                    first = false;
+                    if (ordered.Count > 1)
+                    {
+                        screen = entry.Workbook.Application.ScreenUpdating;
+                        entry.Workbook.Application.ScreenUpdating = false;
+                        frozen = true;
+                    }
+                    bool first = true;
+                    foreach (string n in ordered)
+                    {
+                        SelectSheet(entry.Workbook.Sheets[n], first);
+                        first = false;
+                    }
+                }
+                finally
+                {
+                    if (frozen) try { entry.Workbook.Application.ScreenUpdating = screen; } catch (Exception) { }
                 }
             }
             catch (Exception)
@@ -2237,6 +2262,7 @@ namespace VerticalSheetTabs
         private const int KeyUp = 0x0002;
         private const byte VkControl = 0x11;
         private const byte VkReturn = 0x0D;
+        private const byte VkF6 = 0x75;
 
         // A cell (or the formula bar) is being edited: the keyboard focus is in Excel's edit window.
         private static bool IsExcelEditing()
@@ -2320,9 +2346,9 @@ namespace VerticalSheetTabs
         // press is typed into the selected cell. A click that chose nothing new leaves the focus where it
         // is (it could be the first click of a double click that renames).
         // While the pane has the focus, Excel does not pass the keys on to the sheet, whatever window gets
-        // the focus afterwards. Such a click (hadFocus) is rare: normally a click on a tab does not give the
-        // focus to the pane at all (TabStrip.WndProc). The pane is then hidden and shown again, which ends
-        // its hold on the keyboard.
+        // the focus afterwards. Such a click (hadFocus) comes after a click on a folder, on the active tab or a right
+        // click (which give the pane the focus); a click that chooses a sheet does not (TabStrip.WndProc). Excel is
+        // then sent F6, which ends the pane's hold on the keyboard.
         private static void FocusGrid(Entry entry, bool hadFocus)
         {
             if (!entry.SelectionChanged) return;
@@ -2331,9 +2357,16 @@ namespace VerticalSheetTabs
             {
                 if (hadFocus)
                 {
-                    entry.IgnoreVisibleUntil = DateTime.Now.AddMilliseconds(1500); // not the user closing the pane
-                    entry.Pane.Visible = false;
-                    entry.Pane.Visible = true;
+                    // F6, the key with which Excel itself moves the focus on to the next part of its window, ends the
+                    // pane's hold. Hiding and showing the pane again (as before) also ended it, but Excel then laid the
+                    // window out twice and it flickered (Agents.md 12.123).
+                    keybd_event(VkF6, 0, 0, UIntPtr.Zero);
+                    keybd_event(VkF6, 0, KeyUp, UIntPtr.Zero);
+                    for (int i = 0; i < 10; i++)
+                    {
+                        System.Windows.Forms.Application.DoEvents();
+                        System.Threading.Thread.Sleep(10);
+                    }
                 }
                 IntPtr grid = IntPtr.Zero;
                 var name = new System.Text.StringBuilder(64);
@@ -2372,6 +2405,33 @@ namespace VerticalSheetTabs
             {
                 return false;
             }
+        }
+
+        // The visible sheets Excel has selected now; null when it cannot be read.
+        private static HashSet<string> CurrentGroup(Entry entry)
+        {
+            try
+            {
+                var selected = new HashSet<string>();
+                foreach (object sheet in (System.Collections.IEnumerable)entry.Window.SelectedSheets)
+                {
+                    string name;
+                    if (IsVisibleSheet(sheet, out name)) selected.Add(name);
+                }
+                return selected;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private static void ActivateSheet(object sheet)
+        {
+            var ws = sheet as Excel.Worksheet;
+            if (ws != null) { ws.Activate(); return; }
+            var ch = sheet as Excel.Chart;
+            if (ch != null) ch.Activate();
         }
 
         private static void SelectSheet(object sheet, bool replace)
