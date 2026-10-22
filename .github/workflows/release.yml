@@ -1,0 +1,25 @@
+name: Release Artifact
+
+on:
+  push:
+    tags:
+      - 'v*' # 「v1.1.46」などのタグがプッシュされたときに起動
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # リリースを作成するために必須の権限
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release and Upload Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          # プッシュされたタグ名（例: v1.1.46）をファイル名に埋め込みます
+          files: 配布用zip/VerticalSheetTabs_${{ github.ref_name }}.zip
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
