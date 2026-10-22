@@ -35,6 +35,8 @@ Copy-Item (Join-Path $pub "Application Files") $dir -Recurse
 Copy-Item (Join-Path $oldDir.FullName "VerticalSheetTabs.cer") $dir
 Copy-Item (Join-Path $oldDir.FullName "証明書を信頼する.ps1") $dir
 Copy-Item (Join-Path $repo "README.md") $dir
+# screenshots used by README.md (relative paths: docs\images\*.png)
+Copy-Item (Join-Path $repo "docs") $dir -Recurse
 # the license (BSD 3-Clause): the original English text and the Japanese translation
 Copy-Item (Join-Path $repo "license") $dir -Recurse
 $guide = [IO.File]::ReadAllText((Join-Path $oldDir.FullName "はじめにお読みください.txt"), [Text.Encoding]::UTF8)

@@ -46,7 +46,7 @@
 | 8 | Step0 から Step5 の開発メモ |
 | 9 | Step6 見た目の再現 (採寸結果、テーマ、DPI) |
 | 10、11 | Step7 仕上げ、完了状況と残課題 |
-| 12 | Step8 フォルダ機能の設計と、その後の改善、不具合の修正、リリースの記録 (12.1 から 12.126) |
+| 12 | Step8 フォルダ機能の設計と、その後の改善、不具合の修正、リリースの記録 (12.1 から 12.127) |
 | 13 | リリースの定型作業 |
 
 ## 1. 目的
@@ -1905,4 +1905,13 @@ gitGraph
 
 - 12.125 (設定画面の「シート名のルール」の説明文の改行位置) を含めて、バージョンを 1.1.47.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.47` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.47.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_47_0\`)。インストールの実機確認は、未実施
+
+### 12.127 変更: README.md を、画面の Before / After で見せる構成に書き直す
+
+- ユーザーの指示 (オープンソースとして GitHub で一般公開する予定。適用前と適用後を、左右に並べて比較でき、使いたくなる文章にする。最低限、(1) リボンのアイコン、(2) 設定画面と設定できること、(3) 表示モードごとの変化、(4) 各機能による変化、(5) 各機能の使い方、を載せる。GitHub での表示を、エミュレートして確認する) による
+- 画像: 実機の Excel (拡大率125%、アドインあり / なし) を、スクリプトで撮影して、PIL で、ラベル付きの左右比較などに合成した。`docs\images\` に置く (`hero.png`、`ribbon.png`、`settings_full.png`、`settings_design.png`、`modes.png`、`designs.png`、`markers.png`、`menu_sheet.png`、`menu_folder.png`、`menu_palette.png`、`rule.png`)。撮影用のブックは、アドインを登録解除した状態で作り、アドインあり / なしで、同じブックを開いて撮った
+- README.md: 先頭に、ヒーロー画像 (Before / After) と、特長を置き、1章を「使うとこう変わる」に変えた (1.1 リボン、1.2 設定画面、1.3 表示モード、1.4 フォルダ、1.5 選択デザインとマーカー、1.6 シート名のルール、1.7 シート見出しの色、1.8 使い方のまとめ)。2章以降の番号と内容は、そのまま (相互参照を保つため)
+- 配布用zip: `tools\make-dist-zip.ps1` が、`docs` フォルダ (画像) も、zip に入れる (zip内の README.md の画像の、相対パスが切れないように)
+- GitHub の表示の確認: marked (GFM) と github-markdown-css、mermaid を使って、組み込みブラウザで表示した。画像11枚の読み込み、表の表示、mermaid 4か所、目次のリンク (すべて有効) を確認した
+- 注意: 画像は、撮影時の環境 (Windows 11、拡大率125%、カラフルの配色) のもの。UI を変えたときは、撮り直す
 
