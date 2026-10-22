@@ -65,7 +65,7 @@ namespace VerticalSheetTabs
             _markerUnderline.Text = "下線マーカー (名前の下に線)";
             _markerTriangle.Text = "三角マーカー (左右の端に三角)";
             _markerBars.Text = "両端バーマーカー (左右の端に帯)";
-            _markerGroup = CreateRowGroup("アクティブシートのマーカー表示", _markerNone, _markerUnderline, _markerTriangle, _markerBars);
+            _markerGroup = CreateRowGroup("アクティブシートのマーカー表示", _markerUnderline, _markerTriangle, _markerBars, _markerNone);
             _markerNone.Checked = activeMarker == ActiveMarker.None;
             _markerUnderline.Checked = activeMarker == ActiveMarker.Underline;
             _markerTriangle.Checked = activeMarker == ActiveMarker.Triangle;

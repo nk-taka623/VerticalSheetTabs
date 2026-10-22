@@ -58,7 +58,8 @@ namespace VerticalSheetTabs
         // No add-in property in the workbook: it is the first time it is opened with the add-in.
         public bool IsFirstOpen { get; private set; }
 
-        // Until Step4 lets the user choose, new workbooks show both tab bars (non-destructive).
+        // A workbook opened for the first time shows Excel's own tabs only (Agents.md 12.119); the vertical tabs are
+        // turned on in the settings dialog.
         public TabMode Mode { get; set; }
         public TabSide Side { get; set; }
         // 0 means "not stored": the caller uses the default (12 half-width characters).
@@ -76,7 +77,7 @@ namespace VerticalSheetTabs
         public WorkbookSettings()
         {
             IsFirstOpen = true;
-            Mode = TabMode.Both;
+            Mode = TabMode.HorizontalOnly;
             Side = TabSide.Left;
             WidthDip = 0;
             OutlineVisible = true;
