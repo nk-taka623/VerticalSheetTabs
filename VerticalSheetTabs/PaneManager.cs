@@ -45,6 +45,12 @@ namespace VerticalSheetTabs
             public Dictionary<string, HashSet<string>> SyncSeen = new Dictionary<string, HashSet<string>>();
             public string RuleSignature;
             public bool RuleChanged;
+            // Just opened with the sheet-name rule: the sheets are put in order without making the workbook
+            // "changed" (opening it and closing it again must not ask "save changes?"), until the order holds.
+            public bool QuietRegroup;
+            // Sheets whose key could not be read: consecutive tries, and keys that were taken although partly guessed.
+            public int KeyMisses;
+            public bool KeysGuessed;
             // The last SelectSheets really changed the selection of Excel (and the focus may go to the sheet).
             public bool SelectionChanged;
         }
@@ -93,6 +99,7 @@ namespace VerticalSheetTabs
             pane.Width = 150; // temporary; the real width is applied in InitializeWidth
 
             var entry = new Entry { Pane = pane, Control = control, Window = window, Workbook = workbook, Settings = settings };
+            entry.QuietRegroup = settings.NameRule;
             entry.Folders = FolderStore.Load(workbook);
             _entries[hwnd] = entry;
 
@@ -587,12 +594,31 @@ namespace VerticalSheetTabs
             string signature = string.Join("|", allNames);
             if (signature != entry.KeySignature || entry.Keys.Count != allNames.Count)
             {
-                entry.Keys = FolderStore.SheetKeys(entry.Workbook, true, true);
-                entry.AllNames = new List<string>(allNames);
-                entry.KeySignature = signature;
-                if (rule) entry.Folders = NameRule.BuildModel(allNames, entry.Keys, entry.Folders);
-                else entry.Folders.Reconcile(entry.Keys);
-                ApplySyncColors(entry);
+                bool complete;
+                List<string> keys = FolderStore.SheetKeys(entry.Workbook, true, true, out complete);
+                if (!complete && ++entry.KeyMisses < 3)
+                {
+                    // A sheet could not be read (Excel is busy): a guessed key would take the sheet out of its
+                    // folder and, back with its real key, make it look new (and colored by a folder that keeps
+                    // its color). The model stays as it is and the keys are read again at the next tick.
+                    entry.KeySignature = null;
+                    if (entry.Keys.Count != allNames.Count) return null;
+                }
+                else
+                {
+                    entry.KeyMisses = 0;
+                    bool guessed = entry.KeysGuessed;
+                    entry.KeysGuessed = !complete;
+                    entry.Keys = keys;
+                    entry.AllNames = new List<string>(allNames);
+                    entry.KeySignature = signature;
+                    if (rule) entry.Folders = NameRule.BuildModel(allNames, entry.Keys, entry.Folders);
+                    else entry.Folders.Reconcile(entry.Keys);
+                    // keys that were (or are) partly guessed cannot tell a new sheet from a known one: the
+                    // folders that keep their color only note their sheets this time
+                    if (guessed || !complete) entry.SyncSeen.Clear();
+                    ApplySyncColors(entry);
+                }
             }
             var nameOf = new Dictionary<string, string>();
             var nameOfAll = new Dictionary<string, string>();
@@ -702,7 +728,12 @@ namespace VerticalSheetTabs
                 entry.RuleSignature = signature;
             }
             List<KeyValuePair<int, int>> moves = NameRule.GroupingMoves(new List<string>(names));
-            if (moves.Count == 0) return false;
+            if (moves.Count == 0)
+            {
+                if (gated) entry.QuietRegroup = false; // the order holds: from now on a move is a real change
+                return false;
+            }
+            int moved = 0;
             bool screen = true;
             try
             {
@@ -719,6 +750,7 @@ namespace VerticalSheetTabs
                         var ch = sheet as Excel.Chart;
                         if (ch != null) ch.Move(before);
                     }
+                    moved++;
                 }
             }
             catch (Exception)
@@ -729,9 +761,18 @@ namespace VerticalSheetTabs
             {
                 try { entry.Workbook.Application.ScreenUpdating = screen; } catch (Exception) { }
             }
-            entry.RuleChanged = true;
+            // Nothing could be moved (a protected structure): the workbook is not changed, and the same order
+            // is not tried again at every tick (RuleSignature keeps it; a change of the names tries again).
+            if (moved == 0)
+            {
+                if (gated) entry.QuietRegroup = false;
+                return false;
+            }
             entry.RuleSignature = null;
             entry.KeySignature = null;
+            // Putting a just opened workbook in order is not the user's change: the sync keeps it unchanged.
+            if (gated && entry.QuietRegroup) return true;
+            entry.RuleChanged = true;
             MarkChanged(entry);
             return true;
         }
@@ -827,6 +868,7 @@ namespace VerticalSheetTabs
         private void EnableNameRule(Entry entry)
         {
             if (entry.Busy) return;
+            entry.QuietRegroup = false;
             entry.Busy = true;
             try
             {
