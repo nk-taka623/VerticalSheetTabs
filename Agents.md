@@ -10,9 +10,9 @@
 
 | 項目 | 内容 |
 |---|---|
-| 最新版 | v1.1.48 (`develop`。`master` への反映とタグは、未実施)。v1.1.47 は `master`、タグ `v1.1.47`。v1.1.4 は、`master` に反映せず、タグも無い (内容は v1.1.5 に含まれる) |
+| 最新版 | v1.1.48 (`develop`、`master`、タグ `v1.1.48` は、同じコミット)。v1.1.4 は、`master` に反映せず、タグも無い (内容は v1.1.5 に含まれる) |
 | 開発ステップ | Step0 から Step8 (フォルダ機能) まで完了。以降は、ユーザーの要望と不具合の修正を、`fix/...`、`feature/...` ブランチで行い、リリースごとにインストーラと配布用zipを作る (13章) |
-| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.1.47.zip`。v1.1.48 のzipは、`master` 反映時に作る)。自己署名の証明書 |
+| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.1.48.zip`)。自己署名の証明書 |
 | 実機の確認環境 | Windows 11、拡大率125%、Excel 365 (64bit、カラフルのテーマ)。ほかの拡大率、暗い配色は、未確認 (11.3) |
 
 ### 0.2 現在の仕様の要約 (最新の決定)
@@ -1917,6 +1917,6 @@ gitGraph
 
 ### 12.128 インストーラの更新 (バージョン1.1.48.0)
 
-- 12.127 (README.md を、画面の Before / After で見せる構成に書き直す。画像を `docs\images` に追加) を含めて、バージョンを 1.1.48.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)。アドイン本体の変更は無い (版数のみ)
+- 12.127 (README.md を、画面の Before / After で見せる構成に書き直す。画像を `docs\images` に追加) を含めて、バージョンを 1.1.48.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.48` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.48.zip`。zip には `docs\images` の画像も入る)。アドイン本体の変更は無い (版数のみ)
 - 成果物: `VerticalSheetTabsin\Releasepp.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_48_0\`)。インストールの実機確認は、未実施
 
