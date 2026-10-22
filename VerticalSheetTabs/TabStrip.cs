@@ -487,7 +487,7 @@ namespace VerticalSheetTabs
 
         private bool DoubleFrame { get { return _selectStyle == SelectStyle.DoubleFrame; } }
 
-        private bool Glass { get { return _selectStyle == SelectStyle.FrostedGlass || _selectStyle == SelectStyle.GlossyGlass; } }
+        private bool Glass { get { return _selectStyle == SelectStyle.FrostedGlass || _selectStyle == SelectStyle.GlossyGlass || _selectStyle == SelectStyle.FrostedGlass2; } }
 
         // A sample (in the settings dialog): the same drawing, three fixed rows, no "+" button, no operation.
         public bool IsSample { get; private set; }
@@ -688,7 +688,7 @@ namespace VerticalSheetTabs
             {
                 if (colored) FillColoredBox(g, left, right, row, radius, color);
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
-                DrawGlass(g, body, radius, true);
+                DrawGlass(g, body, radius, true, colored, color);
                 textColor = GlassText(colored);
             }
             else if (selected)
@@ -839,7 +839,7 @@ namespace VerticalSheetTabs
                 if (colored) FillColoredBox(g, left, right, row, radius, tabColor);
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
                 // the active sheet behind thicker glass than the other sheets of a group
-                DrawGlass(g, body, radius, active);
+                DrawGlass(g, body, radius, active, colored, tabColor);
                 textColor = GlassText(colored);
             }
             else if (selected)
@@ -936,7 +936,7 @@ namespace VerticalSheetTabs
         // on the upper half. GDI+ has no blur: the glass is translucent white, the grain a fixed texture and the
         // glow a few rings of growing inset. The shadow is drawn outside the glass only (it would show through).
         // On the dark bars of the dark Office themes the glass is less white.
-        private void DrawGlass(Graphics g, Rectangle body, int radius, bool strong)
+        private void DrawGlass(Graphics g, Rectangle body, int radius, bool strong, bool colored, Color color)
         {
             double k = strong ? 1.0 : 0.7;
             double wk = Theme.BarBack.GetBrightness() < 0.4f ? 0.55 : 1.0;
@@ -959,6 +959,25 @@ namespace VerticalSheetTabs
                         g.FillPath(brush, topPath);
                     }
                     using (var pen = new Pen(Color.FromArgb(240, 255, 255, 255), Math.Max(1f, (float)(1.1 * Dpi / 96.0)))) g.DrawPath(pen, path);
+                    return;
+                }
+
+                if (_selectStyle == SelectStyle.FrostedGlass2)
+                {
+                    // frosted glass tinted with the row's color (Excel's green on a row without color), with an edge
+                    // in that color and a thin white line inside it
+                    Color tint = colored ? color : Underline;
+                    using (var brush = new SolidBrush(Color.FromArgb((int)(110 * k * wk), 255, 255, 255))) g.FillPath(brush, path);
+                    using (var brush = new SolidBrush(Color.FromArgb((int)(60 * k), tint))) g.FillPath(brush, path);
+                    using (var brush = new TextureBrush(GrainTexture((int)(60 * wk), 9))) g.FillPath(brush, path);
+                    using (var pen = new Pen(Color.FromArgb(170, tint), Math.Max(1f, (float)(1.1 * Dpi / 96.0)))) g.DrawPath(pen, path);
+                    int inset = Math.Max(1, (int)Math.Round(1.3 * Dpi / 96.0));
+                    var inner = Rectangle.Inflate(body, -inset, -inset);
+                    using (GraphicsPath innerPath = RoundedRect(inner, Math.Max(1, rad - inset)))
+                    using (var pen = new Pen(Color.FromArgb(200, 255, 255, 255), 1f))
+                    {
+                        g.DrawPath(pen, innerPath);
+                    }
                     return;
                 }
 
@@ -985,14 +1004,14 @@ namespace VerticalSheetTabs
 
         // The grain of the frosted glass: white and a few dark dots, always the same pattern (a fixed seed), so
         // that it does not flicker when the list is drawn again.
-        private static Bitmap _grain;
-        private static int _grainKey;
+        // One per strength (the two frosted types and the light and dark Office themes differ).
+        private static readonly Dictionary<int, Bitmap> _grains = new Dictionary<int, Bitmap>();
 
         private static Bitmap GrainTexture(int whiteAlpha, int darkAlpha)
         {
             int key = whiteAlpha * 1000 + darkAlpha;
-            if (_grain != null && _grainKey == key) return _grain;
-            if (_grain != null) _grain.Dispose();
+            Bitmap cached;
+            if (_grains.TryGetValue(key, out cached)) return cached;
             var bmp = new Bitmap(97, 97, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             var rnd = new Random(20261022);
             Color white = Color.FromArgb(whiteAlpha, 255, 255, 255), dark = Color.FromArgb(darkAlpha, 0, 0, 0);
@@ -1004,8 +1023,7 @@ namespace VerticalSheetTabs
                     bmp.SetPixel(x, y, v < 0.30 ? white : v > 0.93 ? dark : Color.Transparent);
                 }
             }
-            _grain = bmp;
-            _grainKey = key;
+            _grains[key] = bmp;
             return bmp;
         }
 
