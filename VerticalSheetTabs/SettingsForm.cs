@@ -54,8 +54,8 @@ namespace VerticalSheetTabs
             _sideLeft.Text = "左";
             _sideRight.Text = "右";
 
-            var modeGroup = CreateGroup("表示モード", _modeHorizontal, _modeVertical, _modeBoth);
-            _sideGroup = CreateGroup("縦タブの位置", _sideLeft, _sideRight);
+            var modeGroup = CreateRowGroup("表示モード", _modeHorizontal, _modeVertical, _modeBoth);
+            _sideGroup = CreateRowGroup("縦タブの位置", _sideLeft, _sideRight);
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
@@ -397,38 +397,6 @@ namespace VerticalSheetTabs
             foreach (RadioButton r in radios)
             {
                 r.Margin = new Padding(3, 3, widest - r.PreferredSize.Width + gap, 3);
-                panel.Controls.Add(r);
-            }
-            group.Controls.Add(panel);
-            panel.Location = group.DisplayRectangle.Location;
-            Size content = panel.PreferredSize;
-            group.Size = new Size(
-                content.Width + group.Padding.Horizontal + 8,
-                panel.Top + content.Height + group.Padding.Bottom + 2);
-            return group;
-        }
-
-        // A group box sized to its content (AutoSize leaves a wide empty margin on the right and bottom).
-        private static GroupBox CreateGroup(string title, params RadioButton[] radios)
-        {
-            var group = new GroupBox
-            {
-                Text = title,
-                Font = SystemFonts.MessageBoxFont,
-                AutoSize = false,
-                Padding = new Padding(8, 4, 8, 6)
-            };
-            var panel = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.TopDown,
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                WrapContents = false,
-                Margin = Padding.Empty
-            };
-            foreach (RadioButton r in radios)
-            {
-                r.AutoSize = true;
                 panel.Controls.Add(r);
             }
             group.Controls.Add(panel);
