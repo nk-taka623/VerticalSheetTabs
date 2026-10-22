@@ -31,6 +31,7 @@ namespace VerticalSheetTabs
         private readonly RadioButton _markerNone = new RadioButton();
         private readonly RadioButton _markerUnderline = new RadioButton();
         private readonly RadioButton _markerTriangle = new RadioButton();
+        private readonly RadioButton _markerBars = new RadioButton();
         private GroupBox _markerGroup;
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
@@ -63,12 +64,14 @@ namespace VerticalSheetTabs
             _markerNone.Text = "マーカーなし";
             _markerUnderline.Text = "下線マーカー (名前の下に線)";
             _markerTriangle.Text = "三角マーカー (左右の端に三角)";
-            _markerGroup = CreateRowGroup("アクティブシートのマーカー表示", _markerNone, _markerUnderline, _markerTriangle);
+            _markerBars.Text = "両端バーマーカー (左右の端に帯)";
+            _markerGroup = CreateRowGroup("アクティブシートのマーカー表示", _markerNone, _markerUnderline, _markerTriangle, _markerBars);
             _markerNone.Checked = activeMarker == ActiveMarker.None;
             _markerUnderline.Checked = activeMarker == ActiveMarker.Underline;
             _markerTriangle.Checked = activeMarker == ActiveMarker.Triangle;
+            _markerBars.Checked = activeMarker == ActiveMarker.EdgeBars;
             _styleGroup = CreateStyleGroup();
-            foreach (RadioButton r in new[] { _markerNone, _markerUnderline, _markerTriangle })
+            foreach (RadioButton r in new[] { _markerNone, _markerUnderline, _markerTriangle, _markerBars })
             {
                 r.CheckedChanged += (s, e) => { foreach (TabStrip sample in _samples) sample.ActiveMarker = ActiveMarker; };
             }
@@ -188,7 +191,8 @@ namespace VerticalSheetTabs
         {
             get
             {
-                return _markerNone.Checked ? ActiveMarker.None : _markerUnderline.Checked ? ActiveMarker.Underline : ActiveMarker.Triangle;
+                return _markerNone.Checked ? ActiveMarker.None : _markerUnderline.Checked ? ActiveMarker.Underline
+                    : _markerBars.Checked ? ActiveMarker.EdgeBars : ActiveMarker.Triangle;
             }
         }
 

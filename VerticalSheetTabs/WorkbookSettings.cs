@@ -26,7 +26,8 @@ namespace VerticalSheetTabs
     {
         None,
         Underline, // a line under the name
-        Triangle   // a small triangle at each end
+        Triangle,  // a small triangle at each end
+        EdgeBars   // a thick bar at each end (Agents.md 12.116)
     }
 
     public enum TabSide
@@ -47,7 +48,7 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
-        public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" (default "Underline")
+        public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" (default "Underline")
         public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset"
 
         // Office.MsoDocProperties values.
@@ -120,7 +121,7 @@ namespace VerticalSheetTabs
                 if (marker != null)
                 {
                     string v = (string)marker.Value;
-                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : ActiveMarker.Underline;
+                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : v == "EdgeBars" ? ActiveMarker.EdgeBars : ActiveMarker.Underline;
                 }
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)
@@ -153,7 +154,7 @@ namespace VerticalSheetTabs
                 Write(props, OutlineLevelName, PropTypeNumber, OutlineLevel);
                 Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
                 Write(props, SelectStyleName, PropTypeString, SelectStyleToString(SelectStyle));
-                Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : "Triangle");
+                Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : ActiveMarker == ActiveMarker.EdgeBars ? "EdgeBars" : "Triangle");
             }
             catch (Exception)
             {
