@@ -66,6 +66,14 @@ namespace VerticalSheetTabs
         // (for the background sync: opening a workbook must not make Excel ask "save changes?").
         public static List<string> SheetKeys(Excel.Workbook wb, bool assign, bool keepSaved = false)
         {
+            bool complete;
+            return SheetKeys(wb, assign, keepSaved, out complete);
+        }
+
+        // complete is false when a sheet could not be read (its key is then only a guess, "u:" + index).
+        public static List<string> SheetKeys(Excel.Workbook wb, bool assign, bool keepSaved, out bool complete)
+        {
+            complete = true;
             var list = new List<string>();
             int index = 0;
             bool wasSaved = false;
@@ -97,6 +105,7 @@ namespace VerticalSheetTabs
                 }
                 catch (Exception)
                 {
+                    complete = false;
                 }
                 list.Add(key);
             }
