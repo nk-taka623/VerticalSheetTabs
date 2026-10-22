@@ -261,6 +261,8 @@ namespace VerticalSheetTabs
 
         public SelectStyle SelectionStyle { get { return _strip.SelectionStyle; } set { _strip.SelectionStyle = value; } }
 
+        public ActiveMarker ActiveMarker { get { return _strip.ActiveMarker; } set { _strip.ActiveMarker = value; } }
+
         public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors, IList<StripRow> rows)
         {
             _strip.StructureProtected = StructureProtected;
