@@ -217,12 +217,12 @@ namespace VerticalSheetTabs
         private GroupBox CreateStyleGroup()
         {
             var group = new GroupBox { Text = "フォルダ＆シートの選択デザイン", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6) };
-            _styleStandard.Text = "標準タイプ (Excelの横タブと同じ見た目)";
-            _styleDouble.Text = "ダブルフレームタイプ (二重の枠で、目立たせる)";
-            _styleGlossy.Text = "グロッシーグラスタイプ (光沢のあるガラス)";
-            _styleFrosted.Text = "フロストグラス１タイプ (縁が光る磨りガラス)";
-            _styleFrosted2.Text = "フロストグラス２タイプ (行の色を帯びた磨りガラス)";
-            _styleInset.Text = "インセットタイプ (押し込まれたように凹む)";
+            _styleStandard.Text = "標準 (Excelの横タブと同じ見た目)";
+            _styleDouble.Text = "ダブルフレーム (二重の枠で、目立たせる)";
+            _styleGlossy.Text = "グロッシーグラス (光沢のあるガラス)";
+            _styleFrosted.Text = "フロストグラス１ (縁が光る磨りガラス)";
+            _styleFrosted2.Text = "フロストグラス２ (行の色を帯びた磨りガラス)";
+            _styleInset.Text = "インセット (押し込まれたように凹む)";
             var panel = new TableLayoutPanel
             {
                 ColumnCount = 3,
