@@ -16,7 +16,8 @@ namespace VerticalSheetTabs
         Standard,   // Excel's own look: white, with a thin border and (the active sheet) an underline
         DoubleFrame, // a shadow, a double frame and, on the active sheet, a triangle at each end
         FrostedGlass, // a pane of frosted glass whose edges glow from inside (Agents.md 12.105)
-        GlossyGlass  // a pane of glass with a reflection on its upper half
+        GlossyGlass,  // a pane of glass with a reflection on its upper half
+        FrostedGlass2 // frosted glass tinted with the row's color (Agents.md 12.107)
     }
 
     public enum TabSide
@@ -37,7 +38,7 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
-        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass"
+        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2"
 
         // Office.MsoDocProperties values.
         private const int PropTypeNumber = 1;
@@ -147,6 +148,7 @@ namespace VerticalSheetTabs
                 case "DoubleFrame": return SelectStyle.DoubleFrame;
                 case "FrostedGlass": return SelectStyle.FrostedGlass;
                 case "GlossyGlass": return SelectStyle.GlossyGlass;
+                case "FrostedGlass2": return SelectStyle.FrostedGlass2;
                 default: return SelectStyle.Standard;
             }
         }
@@ -158,6 +160,7 @@ namespace VerticalSheetTabs
                 case SelectStyle.DoubleFrame: return "DoubleFrame";
                 case SelectStyle.FrostedGlass: return "FrostedGlass";
                 case SelectStyle.GlossyGlass: return "GlossyGlass";
+                case SelectStyle.FrostedGlass2: return "FrostedGlass2";
                 default: return "Standard";
             }
         }

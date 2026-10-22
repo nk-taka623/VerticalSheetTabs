@@ -25,6 +25,7 @@ namespace VerticalSheetTabs
         private readonly RadioButton _styleDouble = new RadioButton();
         private readonly RadioButton _styleFrosted = new RadioButton();
         private readonly RadioButton _styleGlossy = new RadioButton();
+        private readonly RadioButton _styleFrosted2 = new RadioButton();
         private GroupBox _styleGroup;
 
         public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle)
@@ -113,8 +114,9 @@ namespace VerticalSheetTabs
             _styleDouble.Checked = selectStyle == SelectStyle.DoubleFrame;
             _styleFrosted.Checked = selectStyle == SelectStyle.FrostedGlass;
             _styleGlossy.Checked = selectStyle == SelectStyle.GlossyGlass;
+            _styleFrosted2.Checked = selectStyle == SelectStyle.FrostedGlass2;
             // the buttons sit in different panels (each next to its samples), so the form keeps them exclusive
-            RadioButton[] styles = { _styleStandard, _styleDouble, _styleFrosted, _styleGlossy };
+            RadioButton[] styles = { _styleStandard, _styleDouble, _styleGlossy, _styleFrosted, _styleFrosted2 };
             foreach (RadioButton r in styles)
             {
                 RadioButton self = r;
@@ -154,7 +156,8 @@ namespace VerticalSheetTabs
             {
                 return _styleDouble.Checked ? SelectStyle.DoubleFrame
                     : _styleFrosted.Checked ? SelectStyle.FrostedGlass
-                    : _styleGlossy.Checked ? SelectStyle.GlossyGlass : SelectStyle.Standard;
+                    : _styleGlossy.Checked ? SelectStyle.GlossyGlass
+                    : _styleFrosted2.Checked ? SelectStyle.FrostedGlass2 : SelectStyle.Standard;
             }
         }
 
@@ -174,18 +177,20 @@ namespace VerticalSheetTabs
                 : SystemColors.Control;
         }
 
-        // The look of selected folders and sheets: four types in two columns and two rows, each with samples (not
-        // selected, a folder and a plain sheet selected, a colored sheet selected) drawn by the tab strip itself.
+        // The look of selected folders and sheets: the types in three columns and two rows (the last cell is kept
+        // free for a type to come), each with samples (not selected, a folder and a plain sheet selected, a colored
+        // sheet selected) drawn by the tab strip itself.
         private GroupBox CreateStyleGroup()
         {
             var group = new GroupBox { Text = "フォルダ＆シートの選択デザイン", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6) };
             _styleStandard.Text = "標準タイプ (Excelの横タブと同じ見た目)";
             _styleDouble.Text = "ダブルフレームタイプ (二重の枠と三角で、目立たせる)";
-            _styleFrosted.Text = "フロストグラスタイプ (縁が光る磨りガラス)";
             _styleGlossy.Text = "グロッシーグラスタイプ (光沢のあるガラス)";
+            _styleFrosted.Text = "フロストグラス１タイプ (縁が光る磨りガラス)";
+            _styleFrosted2.Text = "フロストグラス２タイプ (行の色を帯びた磨りガラス)";
             var panel = new TableLayoutPanel
             {
-                ColumnCount = 2,
+                ColumnCount = 3,
                 RowCount = 2,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -193,8 +198,10 @@ namespace VerticalSheetTabs
             };
             panel.Controls.Add(CreateStyleBlock(_styleStandard, SelectStyle.Standard), 0, 0);
             panel.Controls.Add(CreateStyleBlock(_styleDouble, SelectStyle.DoubleFrame), 1, 0);
+            panel.Controls.Add(CreateStyleBlock(_styleGlossy, SelectStyle.GlossyGlass), 2, 0);
             panel.Controls.Add(CreateStyleBlock(_styleFrosted, SelectStyle.FrostedGlass), 0, 1);
-            panel.Controls.Add(CreateStyleBlock(_styleGlossy, SelectStyle.GlossyGlass), 1, 1);
+            panel.Controls.Add(CreateStyleBlock(_styleFrosted2, SelectStyle.FrostedGlass2), 1, 1);
+            // (row 2, column 3: free for now)
             group.Controls.Add(panel);
             panel.Location = group.DisplayRectangle.Location;
             Size content = panel.PreferredSize;
@@ -232,7 +239,7 @@ namespace VerticalSheetTabs
             {
                 var strip = new TabStrip();
                 strip.SetSample(style, cell[1]);
-                strip.Size = strip.SampleSize(132);
+                strip.Size = strip.SampleSize(120);
                 strip.Margin = new Padding(0, 0, 0, 0);
                 strip.SampleClicked += () => radio.Checked = true;
                 var caption = new Label { Text = cell[0], AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(0, 0, 0, 2) };
