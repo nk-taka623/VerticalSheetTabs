@@ -20,6 +20,14 @@ namespace VerticalSheetTabs
         FrostedGlass2 // frosted glass tinted with the row's color (Agents.md 12.107)
     }
 
+    // The mark of the active sheet (Agents.md 12.110), drawn with every look of SelectStyle.
+    public enum ActiveMarker
+    {
+        None,
+        Underline, // a line under the name
+        Triangle   // a small triangle at each end
+    }
+
     public enum TabSide
     {
         Left,
@@ -38,6 +46,7 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
+        public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle"
         public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2"
 
         // Office.MsoDocProperties values.
@@ -59,6 +68,8 @@ namespace VerticalSheetTabs
         public bool NameRule { get; set; }
         // The look of selected folders and sheets (default: the standard type).
         public SelectStyle SelectStyle { get; set; }
+        // The mark of the active sheet (default: the triangles).
+        public ActiveMarker ActiveMarker { get; set; }
 
         public WorkbookSettings()
         {
@@ -70,6 +81,7 @@ namespace VerticalSheetTabs
             OutlineLevel = 5;
             NameRule = false;
             SelectStyle = SelectStyle.Standard;
+            ActiveMarker = ActiveMarker.Triangle;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
@@ -103,6 +115,12 @@ namespace VerticalSheetTabs
                 if (nameRule != null) s.NameRule = (string)nameRule.Value == "On";
                 dynamic selectStyle = Find(props, SelectStyleName);
                 if (selectStyle != null) s.SelectStyle = ParseSelectStyle((string)selectStyle.Value);
+                dynamic marker = Find(props, ActiveMarkerName);
+                if (marker != null)
+                {
+                    string v = (string)marker.Value;
+                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Underline" ? ActiveMarker.Underline : ActiveMarker.Triangle;
+                }
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)
                 {
@@ -134,6 +152,7 @@ namespace VerticalSheetTabs
                 Write(props, OutlineLevelName, PropTypeNumber, OutlineLevel);
                 Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
                 Write(props, SelectStyleName, PropTypeString, SelectStyleToString(SelectStyle));
+                Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : "Triangle");
             }
             catch (Exception)
             {

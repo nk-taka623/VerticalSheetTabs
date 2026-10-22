@@ -487,6 +487,15 @@ namespace VerticalSheetTabs
 
         private bool DoubleFrame { get { return _selectStyle == SelectStyle.DoubleFrame; } }
 
+        // The mark of the active sheet, with every look (Agents.md 12.110).
+        private ActiveMarker _activeMarker = ActiveMarker.Triangle;
+
+        public ActiveMarker ActiveMarker
+        {
+            get { return _activeMarker; }
+            set { if (_activeMarker != value) { _activeMarker = value; Invalidate(); } }
+        }
+
         private bool Glass { get { return _selectStyle == SelectStyle.FrostedGlass || _selectStyle == SelectStyle.GlossyGlass || _selectStyle == SelectStyle.FrostedGlass2; } }
 
         // A sample (in the settings dialog): the same drawing, three fixed rows, no "+" button, no operation.
@@ -503,8 +512,9 @@ namespace VerticalSheetTabs
 
         // Three rows: a folder, Sheet1, and Sheet2 in orange. What is selected: "none", "plain" (the folder, and
         // Sheet1 as the active sheet) or "colored" (Sheet2 as the active sheet).
-        public void SetSample(SelectStyle style, string selection)
+        public void SetSample(SelectStyle style, string selection, ActiveMarker marker)
         {
+            _activeMarker = marker;
             IsSample = true;
             TabStop = false;
             _selectStyle = style;
@@ -818,6 +828,8 @@ namespace VerticalSheetTabs
             int right = row.Right - RightInset(tabRow);
             int radius = Px(CornerRadius);
             Color textColor = selected ? TextColor : Theme.InactiveText;
+            bool underline = active && _activeMarker == ActiveMarker.Underline;
+            bool triangles = active && _activeMarker == ActiveMarker.Triangle;
 
             // A colored tab that is not selected is a filled, rounded box; every other tab is white
             // when selected and has no background otherwise.
@@ -831,7 +843,8 @@ namespace VerticalSheetTabs
                 {
                     g.FillPath(brush, path);
                 }
-                DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored), active); // triangles only on the active sheet
+                DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored), triangles);
+                if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
                 if (colored) textColor = TextOn(tabColor);
             }
             else if (selected && Glass)
@@ -841,22 +854,16 @@ namespace VerticalSheetTabs
                 // the active sheet behind thicker glass than the other sheets of a group
                 DrawGlass(g, body, radius, active, colored, tabColor);
                 textColor = GlassText(colored);
-                if (active) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
+                if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
+                if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
             }
             else if (selected)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
                 DrawStandardSelected(g, body, radius, colored, tabColor);
-                if (active)
-                {
-                    int thick = Math.Max(1, Px(UnderlineThickness));
-                    int ux = body.Left + Px(UnderlineInset);
-                    int uw = body.Width - 2 * Px(UnderlineInset);
-                    int uy = body.Bottom - 1 - Px(UnderlineGap) - thick;
-                    using (var brush = new SolidBrush(Underline)) g.FillRectangle(brush, ux, uy, Math.Max(1, uw), thick);
-                    // the text of the active sheet sits higher (the underline), the triangles go with it
-                    DrawMarkers(g, body, Px(StandardTextLift) / 2, LineColorFor(tabColor, colored));
-                }
+                // Excel's own look: its green underline, whatever the color of the tab
+                if (underline) DrawUnderline(g, body, Underline);
+                if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
             }
             else if (colored)
             {
@@ -875,8 +882,9 @@ namespace VerticalSheetTabs
             DrawSeparator(g, row);
 
             // text: left aligned; the text of a selected tab sits a little higher (the lines above and below)
-            int lift = DoubleFrame ? (selected ? Px(ActiveTextLift) : 0) : Glass ? 0 : (active ? Px(StandardTextLift) : 0);
-            int room = active ? Px(MarkerRoom) : 0; // room for the triangles at both ends of the active sheet (every type)
+            // an underline needs room below the text, so the text sits higher
+            int lift = underline ? Px(StandardTextLift) : DoubleFrame && selected ? Px(ActiveTextLift) : 0;
+            int room = triangles ? Px(MarkerRoom) : 0; // room for the triangles at both ends of the active sheet
             var textRect = new Rectangle(left + room + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - 2 * room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
@@ -1073,6 +1081,17 @@ namespace VerticalSheetTabs
                 }
             }
             if (markers) DrawMarkers(g, body, 0, marker);
+        }
+
+        // The underline of the active sheet (Excel's measures: 8 DIP in from both ends, 1.6 DIP thick, 3.2 DIP above
+        // the bottom of the body).
+        private void DrawUnderline(Graphics g, Rectangle body, Color color)
+        {
+            int thick = Math.Max(1, Px(UnderlineThickness));
+            int ux = body.Left + Px(UnderlineInset);
+            int uw = body.Width - 2 * Px(UnderlineInset);
+            int uy = body.Bottom - 1 - Px(UnderlineGap) - thick;
+            using (var brush = new SolidBrush(color)) g.FillRectangle(brush, ux, uy, Math.Max(1, uw), thick);
         }
 
         // The triangles at both ends of the active sheet (Agents.md 12.109: every type has them), raise pixels above

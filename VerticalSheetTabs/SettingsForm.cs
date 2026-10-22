@@ -27,8 +27,14 @@ namespace VerticalSheetTabs
         private readonly RadioButton _styleGlossy = new RadioButton();
         private readonly RadioButton _styleFrosted2 = new RadioButton();
         private GroupBox _styleGroup;
+        private readonly RadioButton _markerNone = new RadioButton();
+        private readonly RadioButton _markerUnderline = new RadioButton();
+        private readonly RadioButton _markerTriangle = new RadioButton();
+        private GroupBox _markerGroup;
+        // The samples of the looks: they show the active-sheet mark that is chosen above them.
+        private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle)
+        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -53,7 +59,18 @@ namespace VerticalSheetTabs
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
+            _markerNone.Text = "マーカーなし";
+            _markerUnderline.Text = "下線マーカー (名前の下に線)";
+            _markerTriangle.Text = "三角マーカー (左右の端に三角)";
+            _markerGroup = CreateGroup("アクティブシートのマーカー表示", _markerNone, _markerUnderline, _markerTriangle);
+            _markerNone.Checked = activeMarker == ActiveMarker.None;
+            _markerUnderline.Checked = activeMarker == ActiveMarker.Underline;
+            _markerTriangle.Checked = activeMarker == ActiveMarker.Triangle;
             _styleGroup = CreateStyleGroup();
+            foreach (RadioButton r in new[] { _markerNone, _markerUnderline, _markerTriangle })
+            {
+                r.CheckedChanged += (s, e) => { foreach (TabStrip sample in _samples) sample.ActiveMarker = ActiveMarker; };
+            }
 
             var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(88, 0) };
             var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new Size(88, 0) };
@@ -79,6 +96,9 @@ namespace VerticalSheetTabs
             layout.Controls.Add(_sideGroup);
             _outlineGroup.Dock = DockStyle.Fill;
             _outlineGroup.Margin = new Padding(3, 8, 3, 3);
+            _markerGroup.Dock = DockStyle.Fill;
+            _markerGroup.Margin = new Padding(3, 8, 3, 3);
+            layout.Controls.Add(_markerGroup);
             _styleGroup.Dock = DockStyle.Fill;
             _styleGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(_styleGroup);
@@ -161,6 +181,14 @@ namespace VerticalSheetTabs
             }
         }
 
+        public ActiveMarker ActiveMarker
+        {
+            get
+            {
+                return _markerNone.Checked ? ActiveMarker.None : _markerUnderline.Checked ? ActiveMarker.Underline : ActiveMarker.Triangle;
+            }
+        }
+
         public bool OutlineVisible { get { return _outlineShow.Checked; } }
 
         public bool NameRule { get { return _nameRule.Checked; } }
@@ -184,7 +212,7 @@ namespace VerticalSheetTabs
         {
             var group = new GroupBox { Text = "フォルダ＆シートの選択デザイン", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6) };
             _styleStandard.Text = "標準タイプ (Excelの横タブと同じ見た目)";
-            _styleDouble.Text = "ダブルフレームタイプ (二重の枠と三角で、目立たせる)";
+            _styleDouble.Text = "ダブルフレームタイプ (二重の枠で、目立たせる)";
             _styleGlossy.Text = "グロッシーグラスタイプ (光沢のあるガラス)";
             _styleFrosted.Text = "フロストグラス１タイプ (縁が光る磨りガラス)";
             _styleFrosted2.Text = "フロストグラス２タイプ (行の色を帯びた磨りガラス)";
@@ -209,7 +237,7 @@ namespace VerticalSheetTabs
             return group;
         }
 
-        private static FlowLayoutPanel CreateStyleBlock(RadioButton radio, SelectStyle style)
+        private FlowLayoutPanel CreateStyleBlock(RadioButton radio, SelectStyle style)
         {
             radio.AutoSize = true;
             var block = new FlowLayoutPanel
@@ -238,7 +266,8 @@ namespace VerticalSheetTabs
             foreach (string[] cell in cells)
             {
                 var strip = new TabStrip();
-                strip.SetSample(style, cell[1]);
+                strip.SetSample(style, cell[1], ActiveMarker);
+                _samples.Add(strip);
                 strip.Size = strip.SampleSize(120);
                 strip.Margin = new Padding(0, 0, 0, 0);
                 strip.SampleClicked += () => radio.Checked = true;
