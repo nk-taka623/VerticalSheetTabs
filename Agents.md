@@ -1893,6 +1893,6 @@ gitGraph
 
 ### 12.124 インストーラの更新 (バージョン1.1.46.0)
 
-- 12.123 (フォルダやシートを選ぶときのちらつきを減らす修正) を含めて、バージョンを 1.1.46.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)
+- 12.123 (フォルダやシートを選ぶときのちらつきを減らす修正) を含めて、バージョンを 1.1.46.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.46` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.46.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_46_0\`)。インストールの実機確認は、未実施
 
