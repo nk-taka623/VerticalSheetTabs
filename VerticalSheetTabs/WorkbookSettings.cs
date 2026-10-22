@@ -46,7 +46,7 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
-        public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle"
+        public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" (default "Underline")
         public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2"
 
         // Office.MsoDocProperties values.
@@ -68,7 +68,7 @@ namespace VerticalSheetTabs
         public bool NameRule { get; set; }
         // The look of selected folders and sheets (default: the standard type).
         public SelectStyle SelectStyle { get; set; }
-        // The mark of the active sheet (default: the triangles).
+        // The mark of the active sheet (default: the underline).
         public ActiveMarker ActiveMarker { get; set; }
 
         public WorkbookSettings()
@@ -81,7 +81,7 @@ namespace VerticalSheetTabs
             OutlineLevel = 5;
             NameRule = false;
             SelectStyle = SelectStyle.Standard;
-            ActiveMarker = ActiveMarker.Triangle;
+            ActiveMarker = ActiveMarker.Underline;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
@@ -119,7 +119,7 @@ namespace VerticalSheetTabs
                 if (marker != null)
                 {
                     string v = (string)marker.Value;
-                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Underline" ? ActiveMarker.Underline : ActiveMarker.Triangle;
+                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : ActiveMarker.Underline;
                 }
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)

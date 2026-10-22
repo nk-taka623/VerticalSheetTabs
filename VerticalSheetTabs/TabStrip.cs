@@ -488,7 +488,7 @@ namespace VerticalSheetTabs
         private bool DoubleFrame { get { return _selectStyle == SelectStyle.DoubleFrame; } }
 
         // The mark of the active sheet, with every look (Agents.md 12.110).
-        private ActiveMarker _activeMarker = ActiveMarker.Triangle;
+        private ActiveMarker _activeMarker = ActiveMarker.Underline;
 
         public ActiveMarker ActiveMarker
         {

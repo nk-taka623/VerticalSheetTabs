@@ -62,7 +62,7 @@ namespace VerticalSheetTabs
             _markerNone.Text = "マーカーなし";
             _markerUnderline.Text = "下線マーカー (名前の下に線)";
             _markerTriangle.Text = "三角マーカー (左右の端に三角)";
-            _markerGroup = CreateGroup("アクティブシートのマーカー表示", _markerNone, _markerUnderline, _markerTriangle);
+            _markerGroup = CreateRowGroup("アクティブシートのマーカー表示", _markerNone, _markerUnderline, _markerTriangle);
             _markerNone.Checked = activeMarker == ActiveMarker.None;
             _markerUnderline.Checked = activeMarker == ActiveMarker.Underline;
             _markerTriangle.Checked = activeMarker == ActiveMarker.Triangle;
@@ -365,6 +365,47 @@ namespace VerticalSheetTabs
         private void UpdateSideEnabled()
         {
             _sideGroup.Enabled = !_modeHorizontal.Checked;
+        }
+
+        // A group box with its radio buttons side by side, at equal steps: the widest one plus a gap of about
+        // four half-width characters.
+        private static GroupBox CreateRowGroup(string title, params RadioButton[] radios)
+        {
+            var group = new GroupBox
+            {
+                Text = title,
+                Font = SystemFonts.MessageBoxFont,
+                AutoSize = false,
+                Padding = new Padding(8, 4, 8, 6)
+            };
+            var panel = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = false,
+                Margin = Padding.Empty
+            };
+            int widest = 0;
+            foreach (RadioButton r in radios)
+            {
+                r.AutoSize = true;
+                r.Font = group.Font;
+                widest = Math.Max(widest, r.PreferredSize.Width);
+            }
+            int gap = TextRenderer.MeasureText("0000", group.Font).Width;
+            foreach (RadioButton r in radios)
+            {
+                r.Margin = new Padding(3, 3, widest - r.PreferredSize.Width + gap, 3);
+                panel.Controls.Add(r);
+            }
+            group.Controls.Add(panel);
+            panel.Location = group.DisplayRectangle.Location;
+            Size content = panel.PreferredSize;
+            group.Size = new Size(
+                content.Width + group.Padding.Horizontal + 8,
+                panel.Top + content.Height + group.Padding.Bottom + 2);
+            return group;
         }
 
         // A group box sized to its content (AutoSize leaves a wide empty margin on the right and bottom).
