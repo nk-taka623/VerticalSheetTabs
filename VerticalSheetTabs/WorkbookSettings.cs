@@ -17,7 +17,8 @@ namespace VerticalSheetTabs
         DoubleFrame, // a shadow, a double frame and, on the active sheet, a triangle at each end
         FrostedGlass, // a pane of frosted glass whose edges glow from inside (Agents.md 12.105)
         GlossyGlass,  // a pane of glass with a reflection on its upper half
-        FrostedGlass2 // frosted glass tinted with the row's color (Agents.md 12.107)
+        FrostedGlass2, // frosted glass tinted with the row's color (Agents.md 12.107)
+        Inset          // pressed in: a darker body with a shadow inside its upper and left edges (Agents.md 12.115)
     }
 
     // The mark of the active sheet (Agents.md 12.110), drawn with every look of SelectStyle.
@@ -25,7 +26,8 @@ namespace VerticalSheetTabs
     {
         None,
         Underline, // a line under the name
-        Triangle   // a small triangle at each end
+        Triangle,  // a small triangle at each end
+        EdgeBars   // a thick bar at each end (Agents.md 12.116)
     }
 
     public enum TabSide
@@ -46,8 +48,8 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
-        public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" (default "Underline")
-        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2"
+        public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" (default "Underline")
+        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset"
 
         // Office.MsoDocProperties values.
         private const int PropTypeNumber = 1;
@@ -119,7 +121,7 @@ namespace VerticalSheetTabs
                 if (marker != null)
                 {
                     string v = (string)marker.Value;
-                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : ActiveMarker.Underline;
+                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : v == "EdgeBars" ? ActiveMarker.EdgeBars : ActiveMarker.Underline;
                 }
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)
@@ -152,7 +154,7 @@ namespace VerticalSheetTabs
                 Write(props, OutlineLevelName, PropTypeNumber, OutlineLevel);
                 Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
                 Write(props, SelectStyleName, PropTypeString, SelectStyleToString(SelectStyle));
-                Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : "Triangle");
+                Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : ActiveMarker == ActiveMarker.EdgeBars ? "EdgeBars" : "Triangle");
             }
             catch (Exception)
             {
@@ -168,6 +170,7 @@ namespace VerticalSheetTabs
                 case "FrostedGlass": return SelectStyle.FrostedGlass;
                 case "GlossyGlass": return SelectStyle.GlossyGlass;
                 case "FrostedGlass2": return SelectStyle.FrostedGlass2;
+                case "Inset": return SelectStyle.Inset;
                 default: return SelectStyle.Standard;
             }
         }
@@ -180,6 +183,7 @@ namespace VerticalSheetTabs
                 case SelectStyle.FrostedGlass: return "FrostedGlass";
                 case SelectStyle.GlossyGlass: return "GlossyGlass";
                 case SelectStyle.FrostedGlass2: return "FrostedGlass2";
+                case SelectStyle.Inset: return "Inset";
                 default: return "Standard";
             }
         }

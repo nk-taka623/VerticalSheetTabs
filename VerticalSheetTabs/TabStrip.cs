@@ -65,6 +65,9 @@ namespace VerticalSheetTabs
         // The triangles at the ends of a selected row: distance of their center from the edge of the body, size,
         // and the room the text keeps free at each end.
         private const double MarkerInset = 13, MarkerHalfHeight = 5, MarkerBack = 4, MarkerFront = 3, MarkerRoom = 15;
+        // The bars at the ends of the active sheet: width, distance from the ends of the body and from its top and
+        // bottom, and the room the text keeps free at each end.
+        private const double BarWidth = 8, BarInset = 3, BarMargin = 4, BarRoom = 9;
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -487,6 +490,8 @@ namespace VerticalSheetTabs
 
         private bool DoubleFrame { get { return _selectStyle == SelectStyle.DoubleFrame; } }
 
+        private bool Inset { get { return _selectStyle == SelectStyle.Inset; } }
+
         // The mark of the active sheet, with every look (Agents.md 12.110).
         private ActiveMarker _activeMarker = ActiveMarker.Underline;
 
@@ -694,6 +699,11 @@ namespace VerticalSheetTabs
                 DrawSelectionFrame(g, body, radius, LineColorFor(color, colored), false); // a folder has no triangles
                 if (colored) textColor = TextOn(color);
             }
+            else if (selected && Inset)
+            {
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                textColor = DrawInset(g, body, radius, colored, color);
+            }
             else if (selected && Glass)
             {
                 if (colored) FillColoredBox(g, left, right, row, radius, color);
@@ -830,6 +840,7 @@ namespace VerticalSheetTabs
             Color textColor = selected ? TextColor : Theme.InactiveText;
             bool underline = active && _activeMarker == ActiveMarker.Underline;
             bool triangles = active && _activeMarker == ActiveMarker.Triangle;
+            bool bars = active && _activeMarker == ActiveMarker.EdgeBars;
 
             // A colored tab that is not selected is a filled, rounded box; every other tab is white
             // when selected and has no background otherwise.
@@ -845,7 +856,16 @@ namespace VerticalSheetTabs
                 }
                 DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored), triangles);
                 if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
+                if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
                 if (colored) textColor = TextOn(tabColor);
+            }
+            else if (selected && Inset)
+            {
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                textColor = DrawInset(g, body, radius, colored, tabColor);
+                if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
+                if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
+                if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
             }
             else if (selected && Glass)
             {
@@ -856,6 +876,7 @@ namespace VerticalSheetTabs
                 textColor = GlassText(colored);
                 if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
                 if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
+                if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
             }
             else if (selected)
             {
@@ -864,6 +885,7 @@ namespace VerticalSheetTabs
                 // Excel's own look: its green underline, whatever the color of the tab
                 if (underline) DrawUnderline(g, body, Underline);
                 if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
+                if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
             }
             else if (colored)
             {
@@ -884,12 +906,12 @@ namespace VerticalSheetTabs
             // text: left aligned; the text of a selected tab sits a little higher (the lines above and below)
             // an underline needs room below the text, so the text sits higher
             int lift = underline ? Px(StandardTextLift) : DoubleFrame && selected ? Px(ActiveTextLift) : 0;
-            int room = triangles ? Px(MarkerRoom) : 0; // room for the triangles at both ends of the active sheet
+            int room = triangles ? Px(MarkerRoom) : bars ? Px(BarRoom) : 0; // room for the triangles or the bars at both ends of the active sheet
             var textRect = new Rectangle(left + room + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - 2 * room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                using (var font = selected && (DoubleFrame || Glass) ? new Font(TabFont, FontStyle.Bold) : null)
+                using (var font = selected && (DoubleFrame || Glass || Inset) ? new Font(TabFont, FontStyle.Bold) : null)
                 using (var brush = new SolidBrush(textColor))
                 using (var format = new StringFormat(StringFormat.GenericDefault))
                 {
@@ -921,6 +943,39 @@ namespace VerticalSheetTabs
                 }
                 using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
             }
+        }
+
+        // The inset type (Agents.md 12.115): the row looks pressed in. The body is a little darker than the bar
+        // (a colored row a little darker than its color), with a shadow that fades inward from its upper and
+        // left edges and a thin light line along its bottom. Returns the color of the text on it.
+        private Color DrawInset(Graphics g, Rectangle body, int radius, bool colored, Color color)
+        {
+            bool dark = Theme.BarBack.GetBrightness() < 0.4f;
+            Color fill = colored ? Mix(color, Color.Black, 0.12) : Mix(Theme.BarBack, Color.Black, dark ? 0.30 : 0.10);
+            using (GraphicsPath path = RoundedRect(body, radius))
+            {
+                using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
+                Region clip = g.Clip;
+                g.SetClip(path, CombineMode.Intersect);
+                var mode = g.SmoothingMode;
+                g.SmoothingMode = SmoothingMode.None;
+                int depth = Math.Max(3, Px(4));
+                for (int i = 0; i < depth; i++)
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(55 * (depth - i) / depth, 0, 0, 0)))
+                    {
+                        g.FillRectangle(brush, body.X, body.Y + i, body.Width, 1);
+                        g.FillRectangle(brush, body.X + i, body.Y, 1, body.Height);
+                    }
+                }
+                g.SmoothingMode = mode;
+                g.Clip = clip;
+                using (var pen = new Pen(Color.FromArgb(dark ? 70 : 200, 255, 255, 255), 1f))
+                {
+                    g.DrawLine(pen, body.X + radius, body.Bottom, body.Right - radius, body.Bottom);
+                }
+            }
+            return TextOn(fill);
         }
 
         // The colored box of a row that is not selected (the glass of a selected row lies over it).
@@ -1081,6 +1136,23 @@ namespace VerticalSheetTabs
                 }
             }
             if (markers) DrawMarkers(g, body, 0, marker);
+        }
+
+        // The bars at both ends of the active sheet (Agents.md 12.116): thick rounded bars in the color of the other
+        // marks, with a white edge so that they can be seen on any color of the row and on the dark Office themes.
+        private void DrawEdgeBars(Graphics g, Rectangle body, Color color)
+        {
+            int width = Px(BarWidth), inset = Px(BarInset), margin = Px(BarMargin);
+            float edge = Math.Max(1f, Px(1.2));
+            foreach (int x in new[] { body.Left + inset, body.Right - inset - width })
+            {
+                var bar = new Rectangle(x, body.Top + margin, width, Math.Max(1, body.Height - 2 * margin));
+                using (GraphicsPath path = RoundedRect(bar, Math.Max(1, Px(2.5))))
+                {
+                    using (var pen = new Pen(Color.White, edge * 2)) g.DrawPath(pen, path);
+                    using (var brush = new SolidBrush(color)) g.FillPath(brush, path);
+                }
+            }
         }
 
         // The underline of the active sheet (Excel's measures: 8 DIP in from both ends, 1.6 DIP thick, 3.2 DIP above
