@@ -303,7 +303,7 @@ namespace VerticalSheetTabs
             _nameRule.AutoSize = true;
             var note = new Label
             {
-                Text = "横タブのシート名が「A | B」のとき、縦タブでは、フォルダ A の中の\r\nシート B として表示します。縦タブでの、フォルダの作成、移動、\r\n名前の変更も、横タブのシート名に反映します。",
+                Text = "横タブのシート名が「A | B」のとき、縦タブでは、フォルダ A の中のシート B として表示します。\r\n縦タブでの、フォルダの作成、移動、名前の変更も、横タブのシート名に反映します。",
                 AutoSize = true,
                 Margin = new Padding(3, 6, 3, 0)
             };
