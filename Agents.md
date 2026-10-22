@@ -1871,6 +1871,6 @@ gitGraph
 
 ### 12.122 インストーラの更新 (バージョン1.1.45.0)
 
-- 12.121 (選択デザインの選択肢の名前から「タイプ」を外す) を含めて、バージョンを 1.1.45.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)
+- 12.121 (選択デザインの選択肢の名前から「タイプ」を外す) を含めて、バージョンを 1.1.45.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.45` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.45.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_45_0\`)。インストールの実機確認は、未実施
 
