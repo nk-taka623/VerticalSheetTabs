@@ -14,7 +14,9 @@ namespace VerticalSheetTabs
     public enum SelectStyle
     {
         Standard,   // Excel's own look: white, with a thin border and (the active sheet) an underline
-        DoubleFrame // a shadow, a double frame and, on the active sheet, a triangle at each end
+        DoubleFrame, // a shadow, a double frame and, on the active sheet, a triangle at each end
+        FrostedGlass, // a pane of frosted glass whose edges glow from inside (Agents.md 12.105)
+        GlossyGlass  // a pane of glass with a reflection on its upper half
     }
 
     public enum TabSide
@@ -35,7 +37,7 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
-        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame"
+        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass"
 
         // Office.MsoDocProperties values.
         private const int PropTypeNumber = 1;
@@ -99,7 +101,7 @@ namespace VerticalSheetTabs
                 dynamic nameRule = Find(props, NameRuleName);
                 if (nameRule != null) s.NameRule = (string)nameRule.Value == "On";
                 dynamic selectStyle = Find(props, SelectStyleName);
-                if (selectStyle != null) s.SelectStyle = (string)selectStyle.Value == "DoubleFrame" ? SelectStyle.DoubleFrame : SelectStyle.Standard;
+                if (selectStyle != null) s.SelectStyle = ParseSelectStyle((string)selectStyle.Value);
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)
                 {
@@ -130,11 +132,33 @@ namespace VerticalSheetTabs
                 Write(props, OutlineName, PropTypeString, OutlineVisible ? "On" : "Off");
                 Write(props, OutlineLevelName, PropTypeNumber, OutlineLevel);
                 Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
-                Write(props, SelectStyleName, PropTypeString, SelectStyle == SelectStyle.DoubleFrame ? "DoubleFrame" : "Standard");
+                Write(props, SelectStyleName, PropTypeString, SelectStyleToString(SelectStyle));
             }
             catch (Exception)
             {
                 // Read-only or protected workbook: skip silently, nothing else depends on it.
+            }
+        }
+
+        private static SelectStyle ParseSelectStyle(string value)
+        {
+            switch (value)
+            {
+                case "DoubleFrame": return SelectStyle.DoubleFrame;
+                case "FrostedGlass": return SelectStyle.FrostedGlass;
+                case "GlossyGlass": return SelectStyle.GlossyGlass;
+                default: return SelectStyle.Standard;
+            }
+        }
+
+        private static string SelectStyleToString(SelectStyle style)
+        {
+            switch (style)
+            {
+                case SelectStyle.DoubleFrame: return "DoubleFrame";
+                case SelectStyle.FrostedGlass: return "FrostedGlass";
+                case SelectStyle.GlossyGlass: return "GlossyGlass";
+                default: return "Standard";
             }
         }
 

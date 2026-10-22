@@ -487,6 +487,8 @@ namespace VerticalSheetTabs
 
         private bool DoubleFrame { get { return _selectStyle == SelectStyle.DoubleFrame; } }
 
+        private bool Glass { get { return _selectStyle == SelectStyle.FrostedGlass || _selectStyle == SelectStyle.GlossyGlass; } }
+
         // A sample (in the settings dialog): the same drawing, three fixed rows, no "+" button, no operation.
         public bool IsSample { get; private set; }
 
@@ -682,6 +684,13 @@ namespace VerticalSheetTabs
                 DrawSelectionFrame(g, body, radius, LineColorFor(color, colored), false); // a folder has no triangles
                 if (colored) textColor = TextOn(color);
             }
+            else if (selected && Glass)
+            {
+                if (colored) FillColoredBox(g, left, right, row, radius, color);
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                DrawGlass(g, body, radius, true);
+                textColor = GlassText(colored);
+            }
             else if (selected)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
@@ -825,6 +834,14 @@ namespace VerticalSheetTabs
                 DrawSelectionFrame(g, body, radius, LineColorFor(tabColor, colored), active); // triangles only on the active sheet
                 if (colored) textColor = TextOn(tabColor);
             }
+            else if (selected && Glass)
+            {
+                if (colored) FillColoredBox(g, left, right, row, radius, tabColor);
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                // the active sheet behind thicker glass than the other sheets of a group
+                DrawGlass(g, body, radius, active);
+                textColor = GlassText(colored);
+            }
             else if (selected)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
@@ -855,13 +872,13 @@ namespace VerticalSheetTabs
             DrawSeparator(g, row);
 
             // text: left aligned; the text of a selected tab sits a little higher (the lines above and below)
-            int lift = DoubleFrame ? (selected ? Px(ActiveTextLift) : 0) : (active ? Px(StandardTextLift) : 0);
+            int lift = DoubleFrame ? (selected ? Px(ActiveTextLift) : 0) : Glass ? 0 : (active ? Px(StandardTextLift) : 0);
             int room = DoubleFrame && active ? Px(MarkerRoom) : 0; // room for the triangles at both ends of the active sheet
             var textRect = new Rectangle(left + room + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - 2 * room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                using (var font = selected && DoubleFrame ? new Font(TabFont, FontStyle.Bold) : null)
+                using (var font = selected && (DoubleFrame || Glass) ? new Font(TabFont, FontStyle.Bold) : null)
                 using (var brush = new SolidBrush(textColor))
                 using (var format = new StringFormat(StringFormat.GenericDefault))
                 {
@@ -893,6 +910,103 @@ namespace VerticalSheetTabs
                 }
                 using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
             }
+        }
+
+        // The colored box of a row that is not selected (the glass of a selected row lies over it).
+        private void FillColoredBox(Graphics g, int left, int right, Rectangle row, int radius, Color color)
+        {
+            var box = new Rectangle(left, row.Top + Px(ColoredTop), right - left, row.Height - Px(ColoredTop) - Px(BottomInset));
+            using (GraphicsPath path = RoundedRect(box, radius))
+            using (var brush = new SolidBrush(color))
+            {
+                g.FillPath(brush, path);
+            }
+        }
+
+        // Text on glass: the glass makes a colored row lighter, so dark text; on the dark bars of the dark
+        // Office themes the glass stays dark enough for white text.
+        private Color GlassText(bool colored)
+        {
+            if (colored) return TextColor;
+            return Theme.BarBack.GetBrightness() < 0.4f ? Color.White : TextColor;
+        }
+
+        // The glass types (Agents.md 12.105): a pane of glass over the row, through which the row (its color,
+        // the separator line) shows. Frosted: a fine grain, and edges that glow from inside. Glossy: a reflection
+        // on the upper half. GDI+ has no blur: the glass is translucent white, the grain a fixed texture and the
+        // glow a few rings of growing inset. The shadow is drawn outside the glass only (it would show through).
+        // On the dark bars of the dark Office themes the glass is less white.
+        private void DrawGlass(Graphics g, Rectangle body, int radius, bool strong)
+        {
+            double k = strong ? 1.0 : 0.7;
+            double wk = Theme.BarBack.GetBrightness() < 0.4f ? 0.55 : 1.0;
+            int rad = radius + Px(1.6);
+            using (GraphicsPath path = RoundedRect(body, rad))
+            {
+                Region clip = g.Clip;
+                g.SetClip(path, CombineMode.Exclude);
+                DrawShadow(g, body, rad, strong ? 1.0 : 0.6);
+                g.Clip = clip;
+
+                if (_selectStyle == SelectStyle.GlossyGlass)
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb((int)(95 * k * wk), 255, 255, 255))) g.FillPath(brush, path);
+                    var top = new Rectangle(body.X, body.Y, body.Width, (int)(body.Height * 0.48));
+                    using (GraphicsPath topPath = RoundedRect(top, rad))
+                    using (var brush = new LinearGradientBrush(new Rectangle(top.X, top.Y - 1, top.Width, top.Height + 2),
+                        Color.FromArgb((int)(200 * k * wk), 255, 255, 255), Color.FromArgb((int)(90 * k * wk), 255, 255, 255), LinearGradientMode.Vertical))
+                    {
+                        g.FillPath(brush, topPath);
+                    }
+                    using (var pen = new Pen(Color.FromArgb(240, 255, 255, 255), Math.Max(1f, (float)(1.1 * Dpi / 96.0)))) g.DrawPath(pen, path);
+                    return;
+                }
+
+                using (var brush = new SolidBrush(Color.FromArgb((int)(105 * k * wk), 255, 255, 255))) g.FillPath(brush, path);
+                using (var brush = new TextureBrush(GrainTexture((int)(55 * wk), 9)))
+                {
+                    g.FillPath(brush, path);
+                }
+                float step = (float)(1.0 * Dpi / 96.0);
+                for (int i = 0; i < 6; i++)
+                {
+                    int inset = (int)Math.Round(1 + i * step);
+                    var ring = Rectangle.Inflate(body, -inset, -inset);
+                    if (ring.Height < 4) break;
+                    using (GraphicsPath ringPath = RoundedRect(ring, Math.Max(1, rad - inset)))
+                    using (var pen = new Pen(Color.FromArgb((int)((150 - i * 24) * wk), 255, 255, 255), Math.Max(1f, (float)(1.1 * Dpi / 96.0))))
+                    {
+                        g.DrawPath(pen, ringPath);
+                    }
+                }
+                using (var pen = new Pen(Color.FromArgb((int)(70 * k), 0, 0, 0), 1f)) g.DrawPath(pen, path);
+            }
+        }
+
+        // The grain of the frosted glass: white and a few dark dots, always the same pattern (a fixed seed), so
+        // that it does not flicker when the list is drawn again.
+        private static Bitmap _grain;
+        private static int _grainKey;
+
+        private static Bitmap GrainTexture(int whiteAlpha, int darkAlpha)
+        {
+            int key = whiteAlpha * 1000 + darkAlpha;
+            if (_grain != null && _grainKey == key) return _grain;
+            if (_grain != null) _grain.Dispose();
+            var bmp = new Bitmap(97, 97, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            var rnd = new Random(20261022);
+            Color white = Color.FromArgb(whiteAlpha, 255, 255, 255), dark = Color.FromArgb(darkAlpha, 0, 0, 0);
+            for (int y = 0; y < bmp.Height; y++)
+            {
+                for (int x = 0; x < bmp.Width; x++)
+                {
+                    double v = rnd.NextDouble();
+                    bmp.SetPixel(x, y, v < 0.30 ? white : v > 0.93 ? dark : Color.Transparent);
+                }
+            }
+            _grain = bmp;
+            _grainKey = key;
+            return bmp;
         }
 
         // A selected row looks raised: a soft shadow below and at the right of its body, made of a few
