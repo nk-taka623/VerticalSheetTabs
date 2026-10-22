@@ -1738,6 +1738,6 @@ gitGraph
 
 ### 12.104 インストーラの更新 (バージョン1.1.38.0)
 
-- 12.103 (開いて何もせずに閉じたときに、保存の確認が出る経路の修正) を含めて、バージョンを 1.1.38.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映済み。`master` への反映とタグは、未実施)
+- 12.103 (開いて何もせずに閉じたときに、保存の確認が出る経路の修正) を含めて、バージョンを 1.1.38.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.38` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.38.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_38_0\`)。インストールの実機確認は、未実施
 
