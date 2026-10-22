@@ -487,6 +487,8 @@ namespace VerticalSheetTabs
 
         private bool DoubleFrame { get { return _selectStyle == SelectStyle.DoubleFrame; } }
 
+        private bool Inset { get { return _selectStyle == SelectStyle.Inset; } }
+
         // The mark of the active sheet, with every look (Agents.md 12.110).
         private ActiveMarker _activeMarker = ActiveMarker.Underline;
 
@@ -694,6 +696,11 @@ namespace VerticalSheetTabs
                 DrawSelectionFrame(g, body, radius, LineColorFor(color, colored), false); // a folder has no triangles
                 if (colored) textColor = TextOn(color);
             }
+            else if (selected && Inset)
+            {
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                textColor = DrawInset(g, body, radius, colored, color);
+            }
             else if (selected && Glass)
             {
                 if (colored) FillColoredBox(g, left, right, row, radius, color);
@@ -847,6 +854,13 @@ namespace VerticalSheetTabs
                 if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
                 if (colored) textColor = TextOn(tabColor);
             }
+            else if (selected && Inset)
+            {
+                var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                textColor = DrawInset(g, body, radius, colored, tabColor);
+                if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
+                if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
+            }
             else if (selected && Glass)
             {
                 if (colored) FillColoredBox(g, left, right, row, radius, tabColor);
@@ -889,7 +903,7 @@ namespace VerticalSheetTabs
             if (_editor == null || name != _editingSheet)
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                using (var font = selected && (DoubleFrame || Glass) ? new Font(TabFont, FontStyle.Bold) : null)
+                using (var font = selected && (DoubleFrame || Glass || Inset) ? new Font(TabFont, FontStyle.Bold) : null)
                 using (var brush = new SolidBrush(textColor))
                 using (var format = new StringFormat(StringFormat.GenericDefault))
                 {
@@ -921,6 +935,39 @@ namespace VerticalSheetTabs
                 }
                 using (var pen = new Pen(Theme.TabBorder, 1)) g.DrawPath(pen, path);
             }
+        }
+
+        // The inset type (Agents.md 12.115): the row looks pressed in. The body is a little darker than the bar
+        // (a colored row a little darker than its color), with a shadow that fades inward from its upper and
+        // left edges and a thin light line along its bottom. Returns the color of the text on it.
+        private Color DrawInset(Graphics g, Rectangle body, int radius, bool colored, Color color)
+        {
+            bool dark = Theme.BarBack.GetBrightness() < 0.4f;
+            Color fill = colored ? Mix(color, Color.Black, 0.12) : Mix(Theme.BarBack, Color.Black, dark ? 0.30 : 0.10);
+            using (GraphicsPath path = RoundedRect(body, radius))
+            {
+                using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
+                Region clip = g.Clip;
+                g.SetClip(path, CombineMode.Intersect);
+                var mode = g.SmoothingMode;
+                g.SmoothingMode = SmoothingMode.None;
+                int depth = Math.Max(3, Px(4));
+                for (int i = 0; i < depth; i++)
+                {
+                    using (var brush = new SolidBrush(Color.FromArgb(55 * (depth - i) / depth, 0, 0, 0)))
+                    {
+                        g.FillRectangle(brush, body.X, body.Y + i, body.Width, 1);
+                        g.FillRectangle(brush, body.X + i, body.Y, 1, body.Height);
+                    }
+                }
+                g.SmoothingMode = mode;
+                g.Clip = clip;
+                using (var pen = new Pen(Color.FromArgb(dark ? 70 : 200, 255, 255, 255), 1f))
+                {
+                    g.DrawLine(pen, body.X + radius, body.Bottom, body.Right - radius, body.Bottom);
+                }
+            }
+            return TextOn(fill);
         }
 
         // The colored box of a row that is not selected (the glass of a selected row lies over it).
