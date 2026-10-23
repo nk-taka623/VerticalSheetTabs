@@ -27,6 +27,8 @@ namespace VerticalSheetTabs
         private readonly RadioButton _styleGlossy = new RadioButton();
         private readonly RadioButton _styleFrosted2 = new RadioButton();
         private readonly RadioButton _styleInset = new RadioButton();
+        private readonly RadioButton _styleStripes = new RadioButton();
+        private readonly RadioButton _styleRaised = new RadioButton();
         private GroupBox _styleGroup;
         private readonly RadioButton _markerNone = new RadioButton();
         private readonly RadioButton _markerUnderline = new RadioButton();
@@ -140,8 +142,10 @@ namespace VerticalSheetTabs
             _styleGlossy.Checked = selectStyle == SelectStyle.GlossyGlass;
             _styleFrosted2.Checked = selectStyle == SelectStyle.FrostedGlass2;
             _styleInset.Checked = selectStyle == SelectStyle.Inset;
+            _styleStripes.Checked = selectStyle == SelectStyle.Stripes;
+            _styleRaised.Checked = selectStyle == SelectStyle.RaisedBadge;
             // the buttons sit in different panels (each next to its samples), so the form keeps them exclusive
-            RadioButton[] styles = { _styleStandard, _styleDouble, _styleGlossy, _styleFrosted, _styleFrosted2, _styleInset };
+            RadioButton[] styles = { _styleStandard, _styleDouble, _styleGlossy, _styleStripes, _styleFrosted, _styleFrosted2, _styleInset, _styleRaised };
             foreach (RadioButton r in styles)
             {
                 RadioButton self = r;
@@ -183,7 +187,9 @@ namespace VerticalSheetTabs
                     : _styleFrosted.Checked ? SelectStyle.FrostedGlass
                     : _styleGlossy.Checked ? SelectStyle.GlossyGlass
                     : _styleFrosted2.Checked ? SelectStyle.FrostedGlass2
-                    : _styleInset.Checked ? SelectStyle.Inset : SelectStyle.Standard;
+                    : _styleInset.Checked ? SelectStyle.Inset
+                    : _styleStripes.Checked ? SelectStyle.Stripes
+                    : _styleRaised.Checked ? SelectStyle.RaisedBadge : SelectStyle.Standard;
             }
         }
 
@@ -212,7 +218,7 @@ namespace VerticalSheetTabs
                 : SystemColors.Control;
         }
 
-        // The look of selected folders and sheets: the six types in three columns and two rows. One "not selected" sample (the same for every type) stands at the left, centered over both rows; each type
+        // The look of selected folders and sheets: the eight types in four columns and two rows. One "not selected" sample (the same for every type) stands at the left, centered over both rows; each type
         // has two samples (a folder and a plain sheet selected, a colored sheet selected), all drawn by the tab strip itself.
         private GroupBox CreateStyleGroup()
         {
@@ -223,9 +229,11 @@ namespace VerticalSheetTabs
             _styleFrosted.Text = "フロストグラス１ (縁が光る磨りガラス)";
             _styleFrosted2.Text = "フロストグラス２ (行の色を帯びた磨りガラス)";
             _styleInset.Text = "インセット (押し込まれたように凹む)";
+            _styleStripes.Text = "ストライプ (ななめの縞で、目立たせる)";
+            _styleRaised.Text = "チェックバッジ (浮き出た丸い帯に、チェックの印)";
             var panel = new TableLayoutPanel
             {
-                ColumnCount = 4,
+                ColumnCount = 5,
                 RowCount = 2,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -238,9 +246,11 @@ namespace VerticalSheetTabs
             panel.Controls.Add(CreateStyleBlock(_styleStandard, SelectStyle.Standard), 1, 0);
             panel.Controls.Add(CreateStyleBlock(_styleDouble, SelectStyle.DoubleFrame), 2, 0);
             panel.Controls.Add(CreateStyleBlock(_styleGlossy, SelectStyle.GlossyGlass), 3, 0);
+            panel.Controls.Add(CreateStyleBlock(_styleStripes, SelectStyle.Stripes), 4, 0);
             panel.Controls.Add(CreateStyleBlock(_styleFrosted, SelectStyle.FrostedGlass), 1, 1);
             panel.Controls.Add(CreateStyleBlock(_styleFrosted2, SelectStyle.FrostedGlass2), 2, 1);
             panel.Controls.Add(CreateStyleBlock(_styleInset, SelectStyle.Inset), 3, 1);
+            panel.Controls.Add(CreateStyleBlock(_styleRaised, SelectStyle.RaisedBadge), 4, 1);
             group.Controls.Add(panel);
             panel.Location = group.DisplayRectangle.Location;
             Size content = panel.PreferredSize;

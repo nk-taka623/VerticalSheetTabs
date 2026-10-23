@@ -18,7 +18,9 @@ namespace VerticalSheetTabs
         FrostedGlass, // a pane of frosted glass whose edges glow from inside (Agents.md 12.105)
         GlossyGlass,  // a pane of glass with a reflection on its upper half
         FrostedGlass2, // frosted glass tinted with the row's color (Agents.md 12.107)
-        Inset          // pressed in: a darker body with a shadow inside its upper and left edges (Agents.md 12.115)
+        Inset,         // pressed in: a darker body with a shadow inside its upper and left edges (Agents.md 12.115)
+        Stripes,       // diagonal stripes with an outline (Agents.md 12.131)
+        RaisedBadge    // a soft raised pill with a check badge at its left (Agents.md 12.131)
     }
 
     // The mark of the active sheet (Agents.md 12.110), drawn with every look of SelectStyle.
@@ -49,7 +51,7 @@ namespace VerticalSheetTabs
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" (default "Underline")
-        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset"
+        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "RaisedBadge"
 
         // Office.MsoDocProperties values.
         private const int PropTypeNumber = 1;
@@ -172,6 +174,8 @@ namespace VerticalSheetTabs
                 case "GlossyGlass": return SelectStyle.GlossyGlass;
                 case "FrostedGlass2": return SelectStyle.FrostedGlass2;
                 case "Inset": return SelectStyle.Inset;
+                case "Stripes": return SelectStyle.Stripes;
+                case "RaisedBadge": return SelectStyle.RaisedBadge;
                 default: return SelectStyle.Standard;
             }
         }
@@ -185,6 +189,8 @@ namespace VerticalSheetTabs
                 case SelectStyle.GlossyGlass: return "GlossyGlass";
                 case SelectStyle.FrostedGlass2: return "FrostedGlass2";
                 case SelectStyle.Inset: return "Inset";
+                case SelectStyle.Stripes: return "Stripes";
+                case SelectStyle.RaisedBadge: return "RaisedBadge";
                 default: return "Standard";
             }
         }
