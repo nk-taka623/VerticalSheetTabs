@@ -2,7 +2,7 @@
 
 最終更新: 2026-10-22 (v1.1.24 の時点。随時更新)
 
-## 0. 現在の状態 (v1.1.61) と、この文書の読み方
+## 0. 現在の状態 (v1.1.62) と、この文書の読み方
 
 この文書は、相談と開発の経緯を、時系列で記録したものです。**後の章 (特に12章) の変更が、前の章の記述より優先**されます。前の章で、のちに変わった記述には、「(→ 12.x で変更)」の注記を付けています。利用者向けの説明は `README.md`、開発者向けの手順は `DEVELOPMENT.md` にあります。
 
@@ -10,9 +10,9 @@
 
 | 項目 | 内容 |
 |---|---|
-| 最新版 | v1.1.61 (`develop`、`master`、タグ `v1.1.61` は、同じコミット)。v1.1.4 は、`master` に反映せず、タグも無い (内容は v1.1.5 に含まれる) |
+| 最新版 | v1.1.62 (`develop`)。`master` とタグは、v1.1.61 のまま (v1.1.62 は、`master` への反映前)。v1.1.4 は、`master` に反映せず、タグも無い (内容は v1.1.5 に含まれる) |
 | 開発ステップ | Step0 から Step8 (フォルダ機能) まで完了。以降は、ユーザーの要望と不具合の修正を、`fix/...`、`feature/...` ブランチで行い、リリースごとにインストーラと配布用zipを作る (13章) |
-| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.1.61.zip`)。自己署名の証明書 |
+| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.1.61.zip`。v1.1.62 のzipは、`master` への反映時に作る)。自己署名の証明書 |
 | 実機の確認環境 | Windows 11、拡大率125%、Excel 365 (64bit、カラフルのテーマ)。ほかの拡大率、暗い配色は、未確認 (11.3) |
 
 ### 0.2 現在の仕様の要約 (最新の決定)
@@ -46,7 +46,7 @@
 | 8 | Step0 から Step5 の開発メモ |
 | 9 | Step6 見た目の再現 (採寸結果、テーマ、DPI) |
 | 10、11 | Step7 仕上げ、完了状況と残課題 |
-| 12 | Step8 フォルダ機能の設計と、その後の改善、不具合の修正、リリースの記録 (12.1 から 12.158) |
+| 12 | Step8 フォルダ機能の設計と、その後の改善、不具合の修正、リリースの記録 (12.1 から 12.160) |
 | 13 | リリースの定型作業 |
 
 ## 1. 目的
@@ -2112,3 +2112,15 @@ gitGraph
 
 - 12.157 (README の全画像の撮り直しと、アニメーションの説明、動く画像) を含めて、バージョンを 1.1.61.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.61` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.61.zip`)。アドイン本体の変更は無い (版数のみ)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_61_0\`)。インストールの実機確認は、未実施
+
+### 12.159 追加: 配布用zipに README.pdf を同梱する
+
+- ユーザーの要望により、`README.md` から PDF (`README.pdf`) を作って、配布用zipに入れるようにした。次のリリース (v1.1.62 を予定) から、zipに入る
+- `tools\make-readme-pdf.ps1`: `README.md` を、marked と github-markdown-css で、GitHub 風の HTML にして、mermaid の図を描き、Edge のヘッドレス (`--print-to-pdf`) で A4 の PDF にする。ライブラリは、`toolseadme-pdfendor` に同梱 (ネットワーク不要)。画像は、`README.md` と同じ相対パス (`docs\images`) から読む。GIF は、先頭の1コマが、静止画として載る
+- `tools\make-dist-zip.ps1` が、zip の作成時に、`README.pdf` を作って、`README.md` の隣に入れる (作れないときは、zip を作らずに止まる)
+- 確認: v1.1.61 の内容で作ると、25ページ、約2MB。表、画像、mermaid の4つの図が、表示される。zip は、約3.9MB から約5.6MB になる
+
+### 12.160 インストーラの更新 (バージョン1.1.62.0)
+
+- 12.159 (配布用zipに README.pdf を同梱する) を含めて、バージョンを 1.1.62.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映した。`master` への反映、配布用zip、タグ `v1.1.62` は、未実施)。アドイン本体の変更は無い (版数のみ)
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_62_0\`)。インストールの実機確認は、未実施
