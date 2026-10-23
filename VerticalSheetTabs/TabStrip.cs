@@ -452,34 +452,54 @@ namespace VerticalSheetTabs
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.Half;
 
-            // a newly selected sheet starts the wobble (the first sheet seen does not)
-            if (!IsSample && _active != _lastActive)
+            // a newly selected sheet, and the folders that have just been opened or closed, start the wobble (the first ones seen do not)
+            if (!IsSample)
             {
-                _lastActive = _active;
-                if (_active != null)
+                bool sheetChanged = false;
+                if (_active != _lastActive)
                 {
-                    if (_activeSeen) PlayWobble();
-                    _activeSeen = true;
+                    _lastActive = _active;
+                    if (_active != null)
+                    {
+                        sheetChanged = _activeSeen;
+                        _activeSeen = true;
+                    }
                 }
+                HashSet<string> toggled = null;
+                var seen = new Dictionary<string, bool>();
+                foreach (StripRow r in _rows)
+                {
+                    if (!r.IsFolder) continue;
+                    seen[r.FolderId] = r.Expanded;
+                    bool before;
+                    if (_folderOpen.TryGetValue(r.FolderId, out before) && before != r.Expanded)
+                    {
+                        if (toggled == null) toggled = new HashSet<string>();
+                        toggled.Add(r.FolderId);
+                    }
+                }
+                _folderOpen = seen;
+                if (sheetChanged || toggled != null) StartWobble(sheetChanged ? _active : null, toggled);
             }
 
             // the tabs scroll inside the area above the pinned "+" row
             g.SetClip(new Rectangle(0, 0, ClientSize.Width, ViewHeight));
             DrawFolderOutlines(g);
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
-            int wobbling = -1;
+            var wobbling = new List<int>();
             for (int i = first; i < _rows.Count; i++)
             {
                 Rectangle row = RowRect(i);
                 if (row.Top > ViewHeight) break;
                 if (row.Bottom < 0) continue;
-                if (_rows[i].IsFolder) DrawFolder(g, _rows[i], row);
-                else if (_animClock != null && _rows[i].Sheet == _animSheet) wobbling = i;
+                if (_animClock != null && (_rows[i].IsFolder ? (_animFolders != null && _animFolders.Contains(_rows[i].FolderId)) : _rows[i].Sheet == _animSheet)) wobbling.Add(i);
+                else if (_rows[i].IsFolder) DrawFolder(g, _rows[i], row);
                 else DrawTab(g, _rows[i], row);
             }
-            if (wobbling >= 0 && _animClock != null)
+            foreach (int index in wobbling)
             {
-                Rectangle row = RowRect(wobbling);
+                if (_animClock == null) break;
+                Rectangle row = RowRect(index);
                 WobbleFrame f = WobbleMotion.At(_animType, _animClock.ElapsedMilliseconds / (double)_wobbleDur, _wobbleAmp / 100.0);
                 var pivot = f.PivotTopLeft
                     ? new PointF(row.Left + Px(InsetLeft), row.Top + Px(PlainTop))
@@ -490,7 +510,7 @@ namespace VerticalSheetTabs
                 g.ScaleTransform((float)f.ScaleX, (float)f.ScaleY);
                 g.TranslateTransform(-pivot.X, -pivot.Y);
                 _transforming = true;
-                try { DrawTab(g, _rows[wobbling], row); }
+                try { if (_rows[index].IsFolder) DrawFolder(g, _rows[index], row); else DrawTab(g, _rows[index], row); }
                 finally { _transforming = false; g.Restore(state); }
             }
 
@@ -543,6 +563,8 @@ namespace VerticalSheetTabs
         private int _wobbleDur = WobbleMotion.DurDefault;
         private WobbleType _animType;
         private string _animSheet;
+        private HashSet<string> _animFolders;
+        private Dictionary<string, bool> _folderOpen = new Dictionary<string, bool>();
         private System.Diagnostics.Stopwatch _animClock;
         private System.Windows.Forms.Timer _animTimer;
         private string _lastActive;
@@ -560,9 +582,16 @@ namespace VerticalSheetTabs
         // Plays the wobble of the active sheet (a new random motion each time for WobbleType.Random).
         public void PlayWobble()
         {
-            if (_wobbleType == WobbleType.None || _active == null || !IsHandleCreated) return;
+            if (_active != null) StartWobble(_active, null);
+        }
+
+        // Starts the wobble of one sheet and/or some folders (all with the same motion).
+        private void StartWobble(string sheet, HashSet<string> folders)
+        {
+            if (_wobbleType == WobbleType.None || !IsHandleCreated) return;
             _animType = _wobbleType == WobbleType.Random ? WobbleMotion.PickRandom() : _wobbleType;
-            _animSheet = _active;
+            _animSheet = sheet;
+            _animFolders = folders;
             _animClock = System.Diagnostics.Stopwatch.StartNew();
             if (_animTimer == null)
             {
@@ -582,6 +611,7 @@ namespace VerticalSheetTabs
             if (_animTimer != null) _animTimer.Stop();
             _animClock = null;
             _animSheet = null;
+            _animFolders = null;
         }
 
         private bool Glass { get { return _selectStyle == SelectStyle.FrostedGlass || _selectStyle == SelectStyle.GlossyGlass || _selectStyle == SelectStyle.FrostedGlass2; } }
@@ -896,7 +926,7 @@ namespace VerticalSheetTabs
             int textLeft = left + markShift + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
             int roomRight = 0;
             var textRect = new Rectangle(textLeft, row.Top - (selected && DoubleFrame ? Px(ActiveTextLift) : 0) + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - roomRight - CheckReserve(folder)), row.Height);
-            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+            g.TextRenderingHint = _transforming ? TextRenderingHint.AntiAliasGridFit : TextRenderingHint.ClearTypeGridFit;
             if (_editor == null || _editingFolderId != folder.FolderId)
             {
                 using (var bold = new Font(TabFont, FontStyle.Bold))
