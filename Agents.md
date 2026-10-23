@@ -10,9 +10,9 @@
 
 | 項目 | 内容 |
 |---|---|
-| 最新版 | v1.1.60 (`develop`。`master` への反映とタグは、未実施)。v1.1.59 は `master`、タグ `v1.1.59`。v1.1.4 は、`master` に反映せず、タグも無い (内容は v1.1.5 に含まれる) |
+| 最新版 | v1.1.60 (`develop`、`master`、タグ `v1.1.60` は、同じコミット)。v1.1.4 は、`master` に反映せず、タグも無い (内容は v1.1.5 に含まれる) |
 | 開発ステップ | Step0 から Step8 (フォルダ機能) まで完了。以降は、ユーザーの要望と不具合の修正を、`fix/...`、`feature/...` ブランチで行い、リリースごとにインストーラと配布用zipを作る (13章) |
-| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.1.59.zip`。v1.1.60 のzipは、`master` 反映時に作る)。自己署名の証明書 |
+| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.1.60.zip`)。自己署名の証明書 |
 | 実機の確認環境 | Windows 11、拡大率125%、Excel 365 (64bit、カラフルのテーマ)。ほかの拡大率、暗い配色は、未確認 (11.3) |
 
 ### 0.2 現在の仕様の要約 (最新の決定)
@@ -2093,5 +2093,5 @@ gitGraph
 
 ### 12.155 インストーラの更新 (バージョン1.1.60.0)
 
-- 12.153 (「全開」「全閉」ボタンは、フォルダが1つでもあれば表示する)、12.154 (README.md の見直し、設定画面の画像の撮り直し) を含めて、バージョンを 1.1.60.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映した。`master` への反映とタグは、未実施)
+- 12.153 (「全開」「全閉」ボタンは、フォルダが1つでもあれば表示する)、12.154 (README.md の見直し、設定画面の画像の撮り直し) を含めて、バージョンを 1.1.60.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.60` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.60.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_60_0\`)。インストールの実機確認は、未実施
