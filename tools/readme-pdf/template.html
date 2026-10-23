@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<base href="__BASE__">
+<title>縦並びシートタブ README</title>
+<link rel="stylesheet" href="__VENDOR__/github-markdown.css">
+<style>
+  @page { size: A4; margin: 14mm 12mm; }
+  body { margin: 0; font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif; }
+  .markdown-body { box-sizing: border-box; max-width: 980px; margin: 0 auto; padding: 0; font-size: 13px;
+    font-family: "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif; }
+  .markdown-body img { max-width: 100%; height: auto; }
+  .markdown-body img, .markdown-body table, .markdown-body pre, .markdown-body blockquote, .markdown-body .mermaid { break-inside: avoid; }
+  .markdown-body h2 { break-before: auto; }
+  .markdown-body h2, .markdown-body h3, .markdown-body h4 { break-after: avoid; }
+  .mermaid { text-align: center; }
+</style>
+</head>
+<body>
+<article class="markdown-body" id="out"></article>
+<script src="__VENDOR__/marked.min.js"></script>
+<script src="__VENDOR__/mermaid.min.js"></script>
+<script>
+  var md = __MARKDOWN__;
+  marked.setOptions({ gfm: true, mangle: false, headerIds: true });
+  var out = document.getElementById('out');
+  out.innerHTML = marked.parse(md);
+  // mermaid code blocks -> diagrams
+  var blocks = out.querySelectorAll('pre > code.language-mermaid');
+  blocks.forEach(function (c) {
+    var d = document.createElement('div');
+    d.className = 'mermaid';
+    d.textContent = c.textContent;
+    c.parentNode.replaceWith(d);
+  });
+  mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { useMaxWidth: true } });
+  mermaid.run({ querySelector: '.mermaid' }).then(function () { document.title = 'READY'; }, function () { document.title = 'READY'; });
+</script>
+</body>
+</html>

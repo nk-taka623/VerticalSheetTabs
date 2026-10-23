@@ -1,6 +1,7 @@
 ﻿# 配布用zipを作る: 公開済みのインストーラ (VerticalSheetTabs\bin\Release\app.publish) から、
 # 配布用zip\VerticalSheetTabs_vX.Y.Z.zip を作り、古いzipを削除する (Agents.md 13章)。
 # 使い方: powershell -File tools\make-dist-zip.ps1 -Version 1.1.20
+# README.pdf は、README.md から、`tools\make-readme-pdf.ps1` で作る。
 # 証明書、証明書を信頼するスクリプト、手順書は、いまの配布用zipから引き継ぐ (手順書の版数は書き換える)。
 param([Parameter(Mandatory = $true)][string]$Version)
 $ErrorActionPreference = "Stop"
@@ -35,6 +36,9 @@ Copy-Item (Join-Path $pub "Application Files") $dir -Recurse
 Copy-Item (Join-Path $oldDir.FullName "VerticalSheetTabs.cer") $dir
 Copy-Item (Join-Path $oldDir.FullName "証明書を信頼する.ps1") $dir
 Copy-Item (Join-Path $repo "README.md") $dir
+# the same README as a PDF (Edge headless print; the GIFs appear as still images)
+& (Join-Path $PSScriptRoot "make-readme-pdf.ps1") -Output (Join-Path $dir "README.pdf") | Out-Null
+if (-not (Test-Path (Join-Path $dir "README.pdf"))) { throw "README.pdf を作れませんでした。" }
 # screenshots used by README.md (relative paths: docs\images\*.png)
 Copy-Item (Join-Path $repo "docs") $dir -Recurse
 # the license (BSD 3-Clause): the original English text and the Japanese translation
