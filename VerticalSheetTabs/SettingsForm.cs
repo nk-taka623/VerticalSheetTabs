@@ -284,7 +284,7 @@ namespace VerticalSheetTabs
             var ampBox = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 0, 24, 0) };
             ampBox.Controls.Add(ampLabel); ampBox.Controls.Add(_wobbleAmp); ampBox.Controls.Add(_wobbleAmpText);
             var durBox = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
-            durBox.Controls.Add(durLabel); durBox.Controls.Add(_wobbleDur); durBox.Controls.Add(_wobbleDurText);
+            durBox.Controls.Add(durLabel); durBox.Controls.Add(_wobbleDur); durBox.Controls.Add(_wobbleDurText); durBox.Controls.Add(_wobbleReset);
             var sliders = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
             sliders.Controls.Add(ampBox); sliders.Controls.Add(durBox);
             _wobbleUseStyle.Text = "選択したデザインとマーカー表示の見た目にする";
@@ -295,21 +295,15 @@ namespace VerticalSheetTabs
             radios.Margin = Padding.Empty;
             right.Controls.Add(radios);
             right.Controls.Add(sliders);
-            // under the two sliders: the check box below the size, the reset button below the length
-            _wobbleUseStyle.AutoSize = false;
-            _wobbleUseStyle.Size = new Size(ampBox.PreferredSize.Width + ampBox.Margin.Right, _wobbleUseStyle.PreferredSize.Height);
             _wobbleReset.Text = "揺れのリセット";
             _wobbleReset.AutoSize = true;
-            _wobbleReset.Margin = new Padding(3, 0, 3, 0);
+            _wobbleReset.Margin = new Padding(12, 4, 3, 0);
             _wobbleReset.Click += (s, e) =>
             {
                 _wobbleAmp.Value = WobbleMotion.AmpDefault;
                 _wobbleDur.Value = WobbleMotion.DurDefault;
             };
-            var bottomRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
-            bottomRow.Controls.Add(_wobbleUseStyle);
-            bottomRow.Controls.Add(_wobbleReset);
-            right.Controls.Add(bottomRow);
+            right.Controls.Add(_wobbleUseStyle);
             sampleBox.Margin = new Padding(3, 3, 12, 3);
             var stack = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
             // the sample stands in the middle of the group, top to bottom
