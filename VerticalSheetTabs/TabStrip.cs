@@ -466,6 +466,7 @@ namespace VerticalSheetTabs
                     }
                 }
                 HashSet<string> toggled = null;
+                HashSet<string> opened = null; // the sheets of the folders that have just been opened wobble with them
                 var seen = new Dictionary<string, bool>();
                 foreach (StripRow r in _rows)
                 {
@@ -476,10 +477,15 @@ namespace VerticalSheetTabs
                     {
                         if (toggled == null) toggled = new HashSet<string>();
                         toggled.Add(r.FolderId);
+                        if (r.Expanded)
+                        {
+                            if (opened == null) opened = new HashSet<string>();
+                            foreach (string m in r.Members) opened.Add(m);
+                        }
                     }
                 }
                 _folderOpen = seen;
-                if (sheetChanged || toggled != null) StartWobble(sheetChanged ? _active : null, toggled);
+                if (sheetChanged || toggled != null) StartWobble(sheetChanged ? _active : null, toggled, opened);
             }
 
             // the tabs scroll inside the area above the pinned "+" row
@@ -492,7 +498,7 @@ namespace VerticalSheetTabs
                 Rectangle row = RowRect(i);
                 if (row.Top > ViewHeight) break;
                 if (row.Bottom < 0) continue;
-                if (_animClock != null && (_rows[i].IsFolder ? (_animFolders != null && _animFolders.Contains(_rows[i].FolderId)) : _rows[i].Sheet == _animSheet)) wobbling.Add(i);
+                if (_animClock != null && (_rows[i].IsFolder ? (_animFolders != null && _animFolders.Contains(_rows[i].FolderId)) : (_rows[i].Sheet == _animSheet || (_animSheets != null && _rows[i].Sheet != null && _animSheets.Contains(_rows[i].Sheet))))) wobbling.Add(i);
                 else if (_rows[i].IsFolder) DrawFolder(g, _rows[i], row);
                 else DrawTab(g, _rows[i], row);
             }
@@ -564,6 +570,7 @@ namespace VerticalSheetTabs
         private WobbleType _animType;
         private string _animSheet;
         private HashSet<string> _animFolders;
+        private HashSet<string> _animSheets;
         private Dictionary<string, bool> _folderOpen = new Dictionary<string, bool>();
         private System.Diagnostics.Stopwatch _animClock;
         private System.Windows.Forms.Timer _animTimer;
@@ -582,16 +589,17 @@ namespace VerticalSheetTabs
         // Plays the wobble of the active sheet (a new random motion each time for WobbleType.Random).
         public void PlayWobble()
         {
-            if (_active != null) StartWobble(_active, null);
+            if (_active != null) StartWobble(_active, null, null);
         }
 
         // Starts the wobble of one sheet and/or some folders (all with the same motion).
-        private void StartWobble(string sheet, HashSet<string> folders)
+        private void StartWobble(string sheet, HashSet<string> folders, HashSet<string> sheets)
         {
             if (_wobbleType == WobbleType.None || !IsHandleCreated) return;
             _animType = _wobbleType == WobbleType.Random ? WobbleMotion.PickRandom() : _wobbleType;
             _animSheet = sheet;
             _animFolders = folders;
+            _animSheets = sheets;
             _animClock = System.Diagnostics.Stopwatch.StartNew();
             if (_animTimer == null)
             {
@@ -612,6 +620,7 @@ namespace VerticalSheetTabs
             _animClock = null;
             _animSheet = null;
             _animFolders = null;
+            _animSheets = null;
         }
 
         private bool Glass { get { return _selectStyle == SelectStyle.FrostedGlass || _selectStyle == SelectStyle.GlossyGlass || _selectStyle == SelectStyle.FrostedGlass2; } }
