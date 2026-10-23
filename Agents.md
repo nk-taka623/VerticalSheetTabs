@@ -2111,4 +2111,4 @@ gitGraph
 ### 12.158 インストーラの更新 (バージョン1.1.61.0)
 
 - 12.157 (README の全画像の撮り直しと、アニメーションの説明、動く画像) を含めて、バージョンを 1.1.61.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映した。`master` への反映、配布用zip、タグ `v1.1.61` は、未実施)。アドイン本体の変更は無い (版数のみ)
-- 成果物: `VerticalSheetTabsin\Releasepp.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_61_0\`)。インストールの実機確認は、未実施
+- 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_61_0\`)。インストールの実機確認は、未実施
