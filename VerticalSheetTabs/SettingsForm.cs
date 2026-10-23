@@ -212,7 +212,7 @@ namespace VerticalSheetTabs
                 : SystemColors.Control;
         }
 
-        // The look of selected folders and sheets: the six types in three columns and two rows. Each row starts with one "not selected" sample (the same for every type); each type
+        // The look of selected folders and sheets: the six types in three columns and two rows. One "not selected" sample (the same for every type) stands at the left, centered over both rows; each type
         // has two samples (a folder and a plain sheet selected, a colored sheet selected), all drawn by the tab strip itself.
         private GroupBox CreateStyleGroup()
         {
@@ -231,11 +231,13 @@ namespace VerticalSheetTabs
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Margin = Padding.Empty
             };
-            panel.Controls.Add(CreateNoneBlock(), 0, 0);
+            var none = CreateNoneBlock();
+            none.Anchor = AnchorStyles.None;
+            panel.Controls.Add(none, 0, 0);
+            panel.SetRowSpan(none, 2);
             panel.Controls.Add(CreateStyleBlock(_styleStandard, SelectStyle.Standard), 1, 0);
             panel.Controls.Add(CreateStyleBlock(_styleDouble, SelectStyle.DoubleFrame), 2, 0);
             panel.Controls.Add(CreateStyleBlock(_styleGlossy, SelectStyle.GlossyGlass), 3, 0);
-            panel.Controls.Add(CreateNoneBlock(), 0, 1);
             panel.Controls.Add(CreateStyleBlock(_styleFrosted, SelectStyle.FrostedGlass), 1, 1);
             panel.Controls.Add(CreateStyleBlock(_styleFrosted2, SelectStyle.FrostedGlass2), 2, 1);
             panel.Controls.Add(CreateStyleBlock(_styleInset, SelectStyle.Inset), 3, 1);
@@ -246,8 +248,7 @@ namespace VerticalSheetTabs
             return group;
         }
 
-        // The "not selected" sample shown once at the start of each row; it looks the same for every type. It is aligned with the samples of the type blocks to its right
-        // (an invisible label stands in for the radio button above them).
+        // The "not selected" sample, shown once at the left of the grid and centered vertically over both rows; it looks the same for every type.
         private FlowLayoutPanel CreateNoneBlock()
         {
             var block = new FlowLayoutPanel
@@ -258,7 +259,6 @@ namespace VerticalSheetTabs
                 WrapContents = false,
                 Margin = new Padding(0, 0, 8, 8)
             };
-            block.Controls.Add(new Label { Text = " ", AutoSize = true, Height = _styleStandard.PreferredSize.Height, Margin = _styleStandard.Margin });
             var strip = new TabStrip();
             strip.SetSample(SelectStyle.Standard, "none", ActiveMarker);
             _samples.Add(strip);
