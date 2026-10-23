@@ -274,7 +274,7 @@ namespace VerticalSheetTabs
             _wobbleSample = new TabStrip();
             _wobbleSample.TabStop = false;
             _wobbleSample.SampleClicked += PlayWobbleSample;
-            _wobbleSample.Size = _wobbleSample.SampleSize(140);
+            _wobbleSample.Size = _wobbleSample.SingleSampleSize(204);
             var sampleBox = new Panel { Size = _wobbleSample.Size + new Size(24, 8), Margin = new Padding(16, 0, 3, 0) };
             _wobbleSample.Location = new Point(12, 4);
             sampleBox.Controls.Add(_wobbleSample);
@@ -286,7 +286,7 @@ namespace VerticalSheetTabs
             durBox.Controls.Add(durLabel); durBox.Controls.Add(_wobbleDur); durBox.Controls.Add(_wobbleDurText);
             var sliders = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
             sliders.Controls.Add(ampBox); sliders.Controls.Add(durBox);
-            _wobbleUseStyle.Text = "選択したデザインの見た目にする";
+            _wobbleUseStyle.Text = "選択したデザインとマーカー表示の見た目にする";
             _wobbleUseStyle.AutoSize = true;
             _wobbleUseStyle.Margin = new Padding(3, 2, 3, 3);
             _wobbleUseStyle.CheckedChanged += (s, e) => { RefreshWobbleSample(); PlayWobbleSample(); };
@@ -297,6 +297,9 @@ namespace VerticalSheetTabs
             right.Controls.Add(_wobbleUseStyle);
             sampleBox.Margin = new Padding(3, 3, 12, 3);
             var stack = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            // the sample stands in the middle of the group, top to bottom
+            sampleBox.Height = Math.Max(sampleBox.Height, right.PreferredSize.Height);
+            _wobbleSample.Location = new Point(12, (sampleBox.Height - _wobbleSample.Height) / 2);
             stack.Controls.Add(sampleBox);
             stack.Controls.Add(right);
             group.Controls.Add(stack);
@@ -336,7 +339,7 @@ namespace VerticalSheetTabs
         private void RefreshWobbleSample()
         {
             if (_wobbleSample == null || !_wobbleSample.IsHandleCreated) return;
-            _wobbleSample.SetSample(_wobbleUseStyle.Checked ? SelectStyle : SelectStyle.Standard, "colored", _wobbleUseStyle.Checked ? ActiveMarker : ActiveMarker.Underline);
+            _wobbleSample.SetSingleSample(_wobbleUseStyle.Checked ? SelectStyle : SelectStyle.Standard, _wobbleUseStyle.Checked ? ActiveMarker : ActiveMarker.Underline, "サンプル");
             _wobbleSample.SetWobble(Wobble, _wobbleAmp.Value, _wobbleDur.Value);
         }
 

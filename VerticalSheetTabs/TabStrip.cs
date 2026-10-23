@@ -595,8 +595,28 @@ namespace VerticalSheetTabs
             return new Size(Px(widthDip), 3 * RowPx + Px(2));
         }
 
+        // The size of a one-row sample of the given width (in DIP).
+        public Size SingleSampleSize(int widthDip)
+        {
+            return new Size(Px(widthDip), RowPx + Px(2));
+        }
+
         // A click on a sample.
         public event Action SampleClicked;
+
+        // One row, the active sheet in orange with the given name: the sample of the wobble (Agents.md 12.141).
+        public void SetSingleSample(SelectStyle style, ActiveMarker marker, string name)
+        {
+            _activeMarker = marker;
+            IsSample = true;
+            TabStop = false;
+            _selectStyle = style;
+            var rows = new List<StripRow> { new StripRow { Sheet = name } };
+            var colors = new Dictionary<string, int> { { name, 0x3A80E9 } };
+            SetSheets(new List<string> { name }, name, new List<string> { name }, colors, rows);
+            _selFolders.Clear();
+            Invalidate();
+        }
 
         // Three rows: a folder, Sheet1, and Sheet2 in orange. What is selected: "none", "plain" (the folder, and
         // Sheet1 as the active sheet) or "colored" (Sheet2 as the active sheet).
