@@ -1056,7 +1056,7 @@ namespace VerticalSheetTabs
         }
 
         // The stripes look (Agents.md 12.131): a white body (a colored row: its color) with fine diagonal stripes
-        // (green on white, white on a color) and an outline in the green (a colored row: a dark shade of its color).
+        // (green on white, white on a dark color, dark on a light one) and an outline in the green (a colored row: a dark shade of its color).
         // Returns the color of the text on it.
         private Color DrawStripes(Graphics g, Rectangle body, int radius, bool colored, Color color)
         {
@@ -1067,7 +1067,10 @@ namespace VerticalSheetTabs
                 using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
                 Region clip = g.Clip;
                 g.SetClip(path, CombineMode.Intersect);
-                using (var pen = new Pen(colored ? Color.FromArgb(70, 255, 255, 255) : Color.FromArgb(55, Underline.R, Underline.G, Underline.B), Math.Max(2f, Px(2.6))))
+                // white stripes on a dark color, dark ones (the color, 55% darker) on a light color (Agents.md 12.137)
+                Color stripe = !colored ? Color.FromArgb(55, Underline.R, Underline.G, Underline.B)
+                    : TextOn(color) == TextColor ? Color.FromArgb(95, Mix(color, Color.Black, 0.55)) : Color.FromArgb(70, 255, 255, 255);
+                using (var pen = new Pen(stripe, Math.Max(2f, Px(2.6))))
                 {
                     int step = Math.Max(4, Px(7));
                     for (int x = body.Left - body.Height; x < body.Right; x += step)
