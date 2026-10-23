@@ -46,7 +46,7 @@
 | 8 | Step0 から Step5 の開発メモ |
 | 9 | Step6 見た目の再現 (採寸結果、テーマ、DPI) |
 | 10、11 | Step7 仕上げ、完了状況と残課題 |
-| 12 | Step8 フォルダ機能の設計と、その後の改善、不具合の修正、リリースの記録 (12.1 から 12.158) |
+| 12 | Step8 フォルダ機能の設計と、その後の改善、不具合の修正、リリースの記録 (12.1 から 12.159) |
 | 13 | リリースの定型作業 |
 
 ## 1. 目的
@@ -2112,3 +2112,10 @@ gitGraph
 
 - 12.157 (README の全画像の撮り直しと、アニメーションの説明、動く画像) を含めて、バージョンを 1.1.61.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.61` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.61.zip`)。アドイン本体の変更は無い (版数のみ)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_61_0\`)。インストールの実機確認は、未実施
+
+### 12.159 追加: 配布用zipに README.pdf を同梱する
+
+- ユーザーの要望により、`README.md` から PDF (`README.pdf`) を作って、配布用zipに入れるようにした。次のリリース (v1.1.62 を予定) から、zipに入る
+- `tools\make-readme-pdf.ps1`: `README.md` を、marked と github-markdown-css で、GitHub 風の HTML にして、mermaid の図を描き、Edge のヘッドレス (`--print-to-pdf`) で A4 の PDF にする。ライブラリは、`toolseadme-pdfendor` に同梱 (ネットワーク不要)。画像は、`README.md` と同じ相対パス (`docs\images`) から読む。GIF は、先頭の1コマが、静止画として載る
+- `tools\make-dist-zip.ps1` が、zip の作成時に、`README.pdf` を作って、`README.md` の隣に入れる (作れないときは、zip を作らずに止まる)
+- 確認: v1.1.61 の内容で作ると、25ページ、約2MB。表、画像、mermaid の4つの図が、表示される。zip は、約3.9MB から約5.6MB になる
