@@ -68,7 +68,7 @@ namespace VerticalSheetTabs
         // The bars at the ends of the active sheet: width, distance from the ends of the body and from its top and
         // bottom, and the room the text keeps free at each end.
         private const double BarWidth = 8, BarInset = 3, BarMargin = 4, BarRoom = 9;
-        // the check badge at the left end of a row of the raised-badge look: the room it takes before the text (Agents.md 12.131)
+        // the check badge marker at the left of the name of the active sheet: the room it takes before the text (Agents.md 12.131)
         private const double BadgeRoom = 18;
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
@@ -496,7 +496,7 @@ namespace VerticalSheetTabs
 
         private bool Stripes { get { return _selectStyle == SelectStyle.Stripes; } }
 
-        private bool Raised { get { return _selectStyle == SelectStyle.RaisedBadge; } }
+        private bool Gradient { get { return _selectStyle == SelectStyle.GradientFrame; } }
 
         // The mark of the active sheet, with every look (Agents.md 12.110).
         private ActiveMarker _activeMarker = ActiveMarker.Underline;
@@ -715,10 +715,10 @@ namespace VerticalSheetTabs
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
                 textColor = DrawStripes(g, body, radius, colored, color);
             }
-            else if (selected && Raised)
+            else if (selected && Gradient)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
-                textColor = DrawRaisedBadge(g, body, colored, color, 1.0);
+                textColor = DrawGradientFrame(g, body, colored, color, 1.0);
             }
             else if (selected && Glass)
             {
@@ -745,7 +745,7 @@ namespace VerticalSheetTabs
             }
 
             // closed: a right-pointing chevron; open: the same turned down
-            int markShift = selected && Raised ? Px(BadgeRoom + 3) : 0; // (a selected folder has no triangles, so its mark and its name keep their place; only the badge pushes them)
+            int markShift = 0; // (a selected folder has no marker, so its mark and its name keep their place)
             int cx = left + markShift + Px(TextPadLeft) / 2 + Px(FolderMarkWidth) / 2;
             int cy = row.Top + row.Height / 2 - (selected && DoubleFrame ? Px(ActiveTextLift) : 0);
             int w = Px(FolderMarkWidth), h = Px(FolderMarkHeight);
@@ -857,6 +857,7 @@ namespace VerticalSheetTabs
             bool underline = active && _activeMarker == ActiveMarker.Underline;
             bool triangles = active && _activeMarker == ActiveMarker.Triangle;
             bool bars = active && _activeMarker == ActiveMarker.EdgeBars;
+            bool badge = active && _activeMarker == ActiveMarker.CheckBadge;
 
             // A colored tab that is not selected is a filled, rounded box; every other tab is white
             // when selected and has no background otherwise.
@@ -891,14 +892,13 @@ namespace VerticalSheetTabs
                 if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
                 if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
             }
-            else if (selected && Raised)
+            else if (selected && Gradient)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
-                textColor = DrawRaisedBadge(g, body, colored, tabColor, active ? 1.0 : 0.6);
-                // the badge takes the left end, so the triangles and the bars of the active sheet stand at the right end only
+                textColor = DrawGradientFrame(g, body, colored, tabColor, active ? 1.0 : 0.6);
                 if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
-                if (triangles) DrawMarker(g, body.Right - Px(MarkerInset), body.Top + body.Height / 2, -1, LineColorFor(tabColor, colored));
-                if (bars) DrawEdgeBar(g, body, body.Right - Px(BarInset) - Px(BarWidth), LineColorFor(tabColor, colored));
+                if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
+                if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
             }
             else if (selected && Glass)
             {
@@ -933,6 +933,9 @@ namespace VerticalSheetTabs
                 textColor = luma >= 150 ? TextColor : Color.White;
             }
 
+            // the check badge marker (Agents.md 12.131), over whichever look the row has
+            if (badge) DrawCheckBadge(g, new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset)), colored, tabColor);
+
             // the separator between tabs: Excel's thin line, turned to lie across the stack
             DrawSeparator(g, row);
 
@@ -940,12 +943,12 @@ namespace VerticalSheetTabs
             // an underline needs room below the text, so the text sits higher
             int lift = underline ? Px(StandardTextLift) : DoubleFrame && selected ? Px(ActiveTextLift) : 0;
             int room = triangles ? Px(MarkerRoom) : bars ? Px(BarRoom) : 0; // room for the triangles or the bars at both ends of the active sheet
-            int roomLeft = selected && Raised ? Px(BadgeRoom) : room; // (the raised-badge look has its badge at the left end, the marks only at the right)
+            int roomLeft = badge ? Px(BadgeRoom) : room; // (the check badge takes the left end; it is the only mark then)
             var textRect = new Rectangle(left + roomLeft + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - roomLeft - room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                using (var font = selected && (DoubleFrame || Glass || Inset || Stripes || Raised) ? new Font(TabFont, FontStyle.Bold) : null)
+                using (var font = selected && (DoubleFrame || Glass || Inset || Stripes || Gradient) ? new Font(TabFont, FontStyle.Bold) : null)
                 using (var brush = new SolidBrush(textColor))
                 using (var format = new StringFormat(StringFormat.GenericDefault))
                 {
@@ -1038,21 +1041,24 @@ namespace VerticalSheetTabs
             return TextOn(fill);
         }
 
-        // The raised-badge look (Agents.md 12.131): a soft raised pill (a half of the shadow of the neumorphic sketch: a light
-        // shadow at the lower right, a white glow at the upper left; GDI+ has no blur, so a few translucent shapes of growing size
-        // stand for each) with a round check badge at its left end: a green badge with a white check, on a colored row a white
-        // badge with a check in its color. Returns the color of the text on it.
-        private Color DrawRaisedBadge(Graphics g, Rectangle body, bool colored, Color color, double strength)
+        // The gradient-frame look (Agents.md 12.131): a pale chip (a tint of the row's color; a row without color: of Excel's green)
+        // that is a little raised (half of the shadow of the neumorphic sketch: a light shadow at the lower right, a white glow at
+        // the upper left; GDI+ has no blur, so a few translucent shapes of growing size stand for each), inside a ring whose color
+        // runs from left to right: a dark shade of the row's color to a light one (Excel's green to a teal for a row without color).
+        // Returns the color of the text on it.
+        private Color DrawGradientFrame(Graphics g, Rectangle body, bool colored, Color color, double strength)
         {
             bool dark = Theme.BarBack.GetBrightness() < 0.4f;
-            Color face = colored ? color : Mix(Theme.BarBack, Color.White, dark ? 0.10 : 0.15);
-            int radius = body.Height / 2;
+            int radius = Px(8);
+            Color tint = colored ? Mix(color, Color.White, 0.72) : Mix(Underline, Color.White, 0.88);
+            Color left = colored ? Mix(color, Color.Black, 0.35) : Underline;
+            Color right = colored ? Mix(color, Color.White, 0.15) : Color.FromArgb(0, 176, 160);
             for (int k = 3; k >= 1; k--)
             {
                 var r = Rectangle.Inflate(body, Px(0.5 * k), Px(0.5 * k));
                 r.Offset(Px(1), Px(1.25));
-                using (GraphicsPath path = RoundedRect(r, Math.Min(r.Height / 2, radius + Px(0.5 * k))))
-                using (var brush = new SolidBrush(Color.FromArgb((int)Math.Round((dark ? 40 : 30) * strength), dark ? Color.Black : Color.FromArgb(120, 112, 128))))
+                using (GraphicsPath path = RoundedRect(r, radius + Px(0.5 * k)))
+                using (var brush = new SolidBrush(Color.FromArgb((int)Math.Round((dark ? 40 : 22) * strength), dark ? Color.Black : Color.FromArgb(120, 112, 128))))
                 {
                     g.FillPath(brush, path);
                 }
@@ -1061,19 +1067,34 @@ namespace VerticalSheetTabs
             {
                 var r = Rectangle.Inflate(body, Px(0.5 * k), Px(0.5 * k));
                 r.Offset(-Px(1), -Px(1));
-                using (GraphicsPath path = RoundedRect(r, Math.Min(r.Height / 2, radius + Px(0.5 * k))))
+                using (GraphicsPath path = RoundedRect(r, radius + Px(0.5 * k)))
                 using (var brush = new SolidBrush(Color.FromArgb((int)Math.Round((dark ? 10 : 70) * strength), Color.White)))
                 {
                     g.FillPath(brush, path);
                 }
             }
             using (GraphicsPath path = RoundedRect(body, radius))
-            using (var brush = new SolidBrush(face))
+            using (var brush = new SolidBrush(tint))
             {
                 g.FillPath(brush, path);
             }
+            float ring = Math.Max(2f, Px(2.6));
+            Rectangle ringRect = Rectangle.Inflate(body, -(int)Math.Ceiling(ring / 2), -(int)Math.Ceiling(ring / 2));
+            using (GraphicsPath path = RoundedRect(ringRect, Math.Max(1, radius - (int)Math.Ceiling(ring / 2))))
+            using (var brush = new LinearGradientBrush(new Rectangle(body.X, body.Y, Math.Max(2, body.Width), Math.Max(2, body.Height)), left, right, LinearGradientMode.Horizontal))
+            using (var pen = new Pen(brush, ring))
+            {
+                g.DrawPath(pen, path);
+            }
+            return TextColor;
+        }
+
+        // The check badge marker (Agents.md 12.131): a round badge at the left end of the active sheet, with a check mark: a green
+        // badge with a white check; on a colored row a white badge with a check in the color of the row.
+        private void DrawCheckBadge(Graphics g, Rectangle body, bool colored, Color color)
+        {
             int d = Math.Max(6, body.Height - Px(8));
-            var badge = new Rectangle(body.Left + (body.Height - d) / 2, body.Top + (body.Height - d) / 2, d, d);
+            var badge = new Rectangle(body.Left + (body.Height - d) / 2 + Px(1), body.Top + (body.Height - d) / 2, d, d);
             using (var brush = new SolidBrush(colored ? Color.White : Underline)) g.FillEllipse(brush, badge);
             int cx = badge.Left + d / 2, cy = badge.Top + d / 2;
             var check = new[]
@@ -1087,7 +1108,6 @@ namespace VerticalSheetTabs
                 pen.EndCap = LineCap.Round;
                 g.DrawLines(pen, check);
             }
-            return TextOn(face);
         }
 
         // The colored box of a row that is not selected (the glass of a selected row lies over it).

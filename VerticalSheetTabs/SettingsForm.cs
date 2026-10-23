@@ -28,12 +28,13 @@ namespace VerticalSheetTabs
         private readonly RadioButton _styleFrosted2 = new RadioButton();
         private readonly RadioButton _styleInset = new RadioButton();
         private readonly RadioButton _styleStripes = new RadioButton();
-        private readonly RadioButton _styleRaised = new RadioButton();
+        private readonly RadioButton _styleGradient = new RadioButton();
         private GroupBox _styleGroup;
         private readonly RadioButton _markerNone = new RadioButton();
         private readonly RadioButton _markerUnderline = new RadioButton();
         private readonly RadioButton _markerTriangle = new RadioButton();
         private readonly RadioButton _markerBars = new RadioButton();
+        private readonly RadioButton _markerBadge = new RadioButton();
         private GroupBox _markerGroup;
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
@@ -67,13 +68,15 @@ namespace VerticalSheetTabs
             _markerUnderline.Text = "下線マーカー (名前の下に線)";
             _markerTriangle.Text = "三角マーカー (左右の端に三角)";
             _markerBars.Text = "両端バーマーカー (左右の端に帯)";
-            _markerGroup = CreateRowGroup("アクティブシートのマーカー表示", _markerUnderline, _markerTriangle, _markerBars, _markerNone);
+            _markerBadge.Text = "チェックバッジマーカー (名前の左に印)";
+            _markerGroup = CreateRowGroup("アクティブシートのマーカー表示", _markerUnderline, _markerTriangle, _markerBars, _markerBadge, _markerNone);
             _markerNone.Checked = activeMarker == ActiveMarker.None;
             _markerUnderline.Checked = activeMarker == ActiveMarker.Underline;
             _markerTriangle.Checked = activeMarker == ActiveMarker.Triangle;
             _markerBars.Checked = activeMarker == ActiveMarker.EdgeBars;
+            _markerBadge.Checked = activeMarker == ActiveMarker.CheckBadge;
             _styleGroup = CreateStyleGroup();
-            foreach (RadioButton r in new[] { _markerNone, _markerUnderline, _markerTriangle, _markerBars })
+            foreach (RadioButton r in new[] { _markerNone, _markerUnderline, _markerTriangle, _markerBars, _markerBadge })
             {
                 r.CheckedChanged += (s, e) => { foreach (TabStrip sample in _samples) sample.ActiveMarker = ActiveMarker; };
             }
@@ -143,9 +146,9 @@ namespace VerticalSheetTabs
             _styleFrosted2.Checked = selectStyle == SelectStyle.FrostedGlass2;
             _styleInset.Checked = selectStyle == SelectStyle.Inset;
             _styleStripes.Checked = selectStyle == SelectStyle.Stripes;
-            _styleRaised.Checked = selectStyle == SelectStyle.RaisedBadge;
+            _styleGradient.Checked = selectStyle == SelectStyle.GradientFrame;
             // the buttons sit in different panels (each next to its samples), so the form keeps them exclusive
-            RadioButton[] styles = { _styleStandard, _styleDouble, _styleGlossy, _styleStripes, _styleFrosted, _styleFrosted2, _styleInset, _styleRaised };
+            RadioButton[] styles = { _styleStandard, _styleDouble, _styleGlossy, _styleStripes, _styleFrosted, _styleFrosted2, _styleInset, _styleGradient };
             foreach (RadioButton r in styles)
             {
                 RadioButton self = r;
@@ -189,7 +192,7 @@ namespace VerticalSheetTabs
                     : _styleFrosted2.Checked ? SelectStyle.FrostedGlass2
                     : _styleInset.Checked ? SelectStyle.Inset
                     : _styleStripes.Checked ? SelectStyle.Stripes
-                    : _styleRaised.Checked ? SelectStyle.RaisedBadge : SelectStyle.Standard;
+                    : _styleGradient.Checked ? SelectStyle.GradientFrame : SelectStyle.Standard;
             }
         }
 
@@ -198,7 +201,7 @@ namespace VerticalSheetTabs
             get
             {
                 return _markerNone.Checked ? ActiveMarker.None : _markerUnderline.Checked ? ActiveMarker.Underline
-                    : _markerBars.Checked ? ActiveMarker.EdgeBars : ActiveMarker.Triangle;
+                    : _markerBars.Checked ? ActiveMarker.EdgeBars : _markerBadge.Checked ? ActiveMarker.CheckBadge : ActiveMarker.Triangle;
             }
         }
 
@@ -230,7 +233,7 @@ namespace VerticalSheetTabs
             _styleFrosted2.Text = "フロストグラス２ (行の色を帯びた磨りガラス)";
             _styleInset.Text = "インセット (押し込まれたように凹む)";
             _styleStripes.Text = "ストライプ (ななめの縞で、目立たせる)";
-            _styleRaised.Text = "チェックバッジ (浮き出た丸い帯に、チェックの印)";
+            _styleGradient.Text = "グラデーション枠 (行の色の輪を持つ、浮き出た面)";
             var panel = new TableLayoutPanel
             {
                 ColumnCount = 5,
@@ -250,7 +253,7 @@ namespace VerticalSheetTabs
             panel.Controls.Add(CreateStyleBlock(_styleFrosted, SelectStyle.FrostedGlass), 1, 1);
             panel.Controls.Add(CreateStyleBlock(_styleFrosted2, SelectStyle.FrostedGlass2), 2, 1);
             panel.Controls.Add(CreateStyleBlock(_styleInset, SelectStyle.Inset), 3, 1);
-            panel.Controls.Add(CreateStyleBlock(_styleRaised, SelectStyle.RaisedBadge), 4, 1);
+            panel.Controls.Add(CreateStyleBlock(_styleGradient, SelectStyle.GradientFrame), 4, 1);
             group.Controls.Add(panel);
             panel.Location = group.DisplayRectangle.Location;
             Size content = panel.PreferredSize;

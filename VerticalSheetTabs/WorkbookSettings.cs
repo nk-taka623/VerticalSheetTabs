@@ -20,7 +20,7 @@ namespace VerticalSheetTabs
         FrostedGlass2, // frosted glass tinted with the row's color (Agents.md 12.107)
         Inset,         // pressed in: a darker body with a shadow inside its upper and left edges (Agents.md 12.115)
         Stripes,       // diagonal stripes with an outline (Agents.md 12.131)
-        RaisedBadge    // a soft raised pill with a check badge at its left (Agents.md 12.131)
+        GradientFrame  // a pale raised chip with a gradient ring made of the row's color (Agents.md 12.131)
     }
 
     // The mark of the active sheet (Agents.md 12.110), drawn with every look of SelectStyle.
@@ -29,7 +29,8 @@ namespace VerticalSheetTabs
         None,
         Underline, // a line under the name
         Triangle,  // a small triangle at each end
-        EdgeBars   // a thick bar at each end (Agents.md 12.116)
+        EdgeBars,  // a thick bar at each end (Agents.md 12.116)
+        CheckBadge // a round check mark at the left of the name (Agents.md 12.131)
     }
 
     public enum TabSide
@@ -50,8 +51,8 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
-        public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" (default "Underline")
-        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "RaisedBadge"
+        public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
+        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "GradientFrame"
 
         // Office.MsoDocProperties values.
         private const int PropTypeNumber = 1;
@@ -124,7 +125,7 @@ namespace VerticalSheetTabs
                 if (marker != null)
                 {
                     string v = (string)marker.Value;
-                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : v == "EdgeBars" ? ActiveMarker.EdgeBars : ActiveMarker.Underline;
+                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : v == "EdgeBars" ? ActiveMarker.EdgeBars : v == "CheckBadge" ? ActiveMarker.CheckBadge : ActiveMarker.Underline;
                 }
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)
@@ -157,7 +158,7 @@ namespace VerticalSheetTabs
                 Write(props, OutlineLevelName, PropTypeNumber, OutlineLevel);
                 Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
                 Write(props, SelectStyleName, PropTypeString, SelectStyleToString(SelectStyle));
-                Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : ActiveMarker == ActiveMarker.EdgeBars ? "EdgeBars" : "Triangle");
+                Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : ActiveMarker == ActiveMarker.EdgeBars ? "EdgeBars" : ActiveMarker == ActiveMarker.CheckBadge ? "CheckBadge" : "Triangle");
             }
             catch (Exception)
             {
@@ -175,7 +176,7 @@ namespace VerticalSheetTabs
                 case "FrostedGlass2": return SelectStyle.FrostedGlass2;
                 case "Inset": return SelectStyle.Inset;
                 case "Stripes": return SelectStyle.Stripes;
-                case "RaisedBadge": return SelectStyle.RaisedBadge;
+                case "GradientFrame": return SelectStyle.GradientFrame;
                 default: return SelectStyle.Standard;
             }
         }
@@ -190,7 +191,7 @@ namespace VerticalSheetTabs
                 case SelectStyle.FrostedGlass2: return "FrostedGlass2";
                 case SelectStyle.Inset: return "Inset";
                 case SelectStyle.Stripes: return "Stripes";
-                case SelectStyle.RaisedBadge: return "RaisedBadge";
+                case SelectStyle.GradientFrame: return "GradientFrame";
                 default: return "Standard";
             }
         }
