@@ -257,7 +257,7 @@ namespace VerticalSheetTabs
             {
                 _wobbleTypes[i] = new RadioButton { Text = names[i], Checked = (int)wobble == i };
             }
-            GroupBox group = CreateRowGroup("選択したシートのアニメーション", _wobbleTypes);
+            GroupBox group = CreateRowGroup("開閉したフォルダ＆選択したシートのアニメーション", _wobbleTypes);
             Control radios = group.Controls[0];
             group.Controls.Clear();
 
