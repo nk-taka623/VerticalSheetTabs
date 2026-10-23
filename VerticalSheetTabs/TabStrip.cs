@@ -67,9 +67,9 @@ namespace VerticalSheetTabs
         private const double MarkerInset = 13, MarkerHalfHeight = 5, MarkerBack = 4, MarkerFront = 3, MarkerRoom = 15;
         // The bars at the ends of the active sheet: width, distance from the ends of the body and from its top and
         // bottom, and the room the text keeps free at each end.
-        private const double BarWidth = 8, BarInset = 3, BarMargin = 4, BarRoom = 9;
+        private const double BarWidth = 6, BarInset = 9, BarMargin = 4, BarRoom = 12, BarScale = 0.75; // 0.75 times the first size (8 wide); moved in by one bar width (Agents.md 12.132)
         // the check badge marker at the left of the name of the active sheet: the room it takes before the text (Agents.md 12.131)
-        private const double BadgeRoom = 18;
+        private const double BadgeRoom = 12, BadgeScale = 0.75; // the badge is 0.75 times the first size (Agents.md 12.132)
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -904,12 +904,14 @@ namespace VerticalSheetTabs
             {
                 if (colored) FillColoredBox(g, left, right, row, radius, tabColor);
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
-                // the active sheet behind thicker glass than the other sheets of a group
-                DrawGlass(g, body, radius, active, colored, tabColor);
-                textColor = GlassText(colored);
+                // the marks of the active sheet lie under the glass (it covers them as well as the row)
                 if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
                 if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
                 if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
+                if (badge) DrawCheckBadge(g, body, colored, tabColor);
+                // the active sheet behind thicker glass than the other sheets of a group
+                DrawGlass(g, body, radius, active, colored, tabColor);
+                textColor = GlassText(colored);
             }
             else if (selected)
             {
@@ -934,7 +936,7 @@ namespace VerticalSheetTabs
             }
 
             // the check badge marker (Agents.md 12.131), over whichever look the row has
-            if (badge) DrawCheckBadge(g, new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset)), colored, tabColor);
+            if (badge && !(selected && Glass)) DrawCheckBadge(g, new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset)), colored, tabColor);
 
             // the separator between tabs: Excel's thin line, turned to lie across the stack
             DrawSeparator(g, row);
@@ -1093,8 +1095,9 @@ namespace VerticalSheetTabs
         // badge with a white check; on a colored row a white badge with a check in the color of the row.
         private void DrawCheckBadge(Graphics g, Rectangle body, bool colored, Color color)
         {
-            int d = Math.Max(6, body.Height - Px(8));
-            var badge = new Rectangle(body.Left + (body.Height - d) / 2 + Px(1), body.Top + (body.Height - d) / 2, d, d);
+            int full = Math.Max(6, body.Height - Px(8)); // the first size; the badge keeps its left edge and is 0.75 times as large
+            int d = Math.Max(5, (int)Math.Round(full * BadgeScale));
+            var badge = new Rectangle(body.Left + (body.Height - full) / 2 + Px(1), body.Top + (body.Height - d) / 2, d, d);
             using (var brush = new SolidBrush(colored ? Color.White : Underline)) g.FillEllipse(brush, badge);
             int cx = badge.Left + d / 2, cy = badge.Top + d / 2;
             var check = new[]
@@ -1283,7 +1286,8 @@ namespace VerticalSheetTabs
         {
             int width = Px(BarWidth), margin = Px(BarMargin);
             float edge = Math.Max(1f, Px(1.2));
-            var bar = new Rectangle(x, body.Top + margin, width, Math.Max(1, body.Height - 2 * margin));
+            int height = Math.Max(2, (int)Math.Round((body.Height - 2 * margin) * BarScale));
+            var bar = new Rectangle(x, body.Top + (body.Height - height) / 2, width, height);
             using (GraphicsPath path = RoundedRect(bar, Math.Max(1, Px(2.5))))
             {
                 using (var pen = new Pen(Color.White, edge * 2)) g.DrawPath(pen, path);
