@@ -36,10 +36,19 @@ namespace VerticalSheetTabs
         private readonly RadioButton _markerBars = new RadioButton();
         private readonly RadioButton _markerBadge = new RadioButton();
         private GroupBox _markerGroup;
+        private readonly RadioButton[] _wobbleTypes = new RadioButton[8]; // index = WobbleType (None, 1 to 6, Random)
+        private readonly TrackBar _wobbleAmp = new TrackBar();
+        private readonly TrackBar _wobbleDur = new TrackBar();
+        private readonly Label _wobbleAmpText = new Label();
+        private readonly Label _wobbleDurText = new Label();
+        private TabStrip _wobbleSample;
+        private System.Windows.Forms.Timer _wobbleTimer;
+        private GroupBox _wobbleGroup;
+        private readonly CheckBox _wobbleUseStyle = new CheckBox(); // the sample shows the chosen look and marker, or the plain one
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker)
+        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -76,9 +85,10 @@ namespace VerticalSheetTabs
             _markerBars.Checked = activeMarker == ActiveMarker.EdgeBars;
             _markerBadge.Checked = activeMarker == ActiveMarker.CheckBadge;
             _styleGroup = CreateStyleGroup();
+            _wobbleGroup = CreateWobbleGroup(wobble, wobbleAmp, wobbleDur);
             foreach (RadioButton r in new[] { _markerNone, _markerUnderline, _markerTriangle, _markerBars, _markerBadge })
             {
-                r.CheckedChanged += (s, e) => { foreach (TabStrip sample in _samples) sample.ActiveMarker = ActiveMarker; };
+                r.CheckedChanged += (s, e) => { foreach (TabStrip sample in _samples) sample.ActiveMarker = ActiveMarker; RefreshWobbleSample(); };
             }
 
             var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(88, 0) };
@@ -111,10 +121,22 @@ namespace VerticalSheetTabs
             _styleGroup.Dock = DockStyle.Fill;
             _styleGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(_styleGroup);
-            layout.Controls.Add(_outlineGroup);
-            _ruleGroup.Dock = DockStyle.Fill;
-            _ruleGroup.Margin = new Padding(3, 8, 3, 3);
-            layout.Controls.Add(_ruleGroup);
+            _wobbleGroup.Dock = DockStyle.Fill;
+            _wobbleGroup.Margin = new Padding(3, 8, 3, 3);
+            layout.Controls.Add(_wobbleGroup);
+            // the dotted outline and the sheet-name rule stand side by side, each half the width of the groups above, both as high as the higher one
+            _outlineGroup.Dock = DockStyle.None;
+            _ruleGroup.Dock = DockStyle.None;
+            int half = (_styleGroup.Width - 12) / 2;
+            int pairHeight = Math.Max(_outlineGroup.Height, _ruleGroup.Height);
+            _outlineGroup.Size = new Size(half, pairHeight);
+            _ruleGroup.Size = new Size(half, pairHeight);
+            _outlineGroup.Margin = new Padding(3);
+            _ruleGroup.Margin = new Padding(3);
+            var pair = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 5, 0, 0) };
+            pair.Controls.Add(_outlineGroup);
+            pair.Controls.Add(_ruleGroup);
+            layout.Controls.Add(pair);
             // The bottom row: the add-in's version (the same as the release tag), copyright and license at the left, the buttons at the right.
             var version = new Label
             {
@@ -156,6 +178,7 @@ namespace VerticalSheetTabs
                 {
                     if (!self.Checked) return;
                     foreach (RadioButton other in styles) if (other != self) other.Checked = false;
+                    RefreshWobbleSample();
                 };
             }
             _outlineShow.Checked = outlineVisible;
@@ -203,6 +226,126 @@ namespace VerticalSheetTabs
                 return _markerNone.Checked ? ActiveMarker.None : _markerUnderline.Checked ? ActiveMarker.Underline
                     : _markerBars.Checked ? ActiveMarker.EdgeBars : _markerBadge.Checked ? ActiveMarker.CheckBadge : ActiveMarker.Triangle;
             }
+        }
+
+        public WobbleType Wobble
+        {
+            get
+            {
+                for (int i = 0; i < _wobbleTypes.Length; i++) if (_wobbleTypes[i].Checked) return (WobbleType)i;
+                return WobbleType.None;
+            }
+        }
+
+        public int WobbleAmp { get { return _wobbleAmp.Value; } }
+
+        public int WobbleDur { get { return _wobbleDur.Value; } }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            if (_wobbleTimer != null) _wobbleTimer.Stop();
+            base.OnFormClosed(e);
+        }
+
+        // The wobble of the selected sheet (Agents.md 12.141): the motion (none, 1 to 6, random), its size and length, and one live sample that
+        // plays the chosen motion again and again (a new random one each time for "7 ランダム"). The sample follows the chosen look and marker.
+        private GroupBox CreateWobbleGroup(WobbleType wobble, int amp, int dur)
+        {
+            string[] names = { "なし", "1 シェイク", "2 ウォブル", "3 ジェリー", "4 バウンス", "5 パルス", "6 スイング", "7 ランダム" };
+            for (int i = 0; i < _wobbleTypes.Length; i++)
+            {
+                _wobbleTypes[i] = new RadioButton { Text = names[i], Checked = (int)wobble == i };
+            }
+            GroupBox group = CreateRowGroup("選択したシートのアニメーション", _wobbleTypes);
+            Control radios = group.Controls[0];
+            group.Controls.Clear();
+
+            _wobbleAmp.Minimum = WobbleMotion.AmpMin; _wobbleAmp.Maximum = WobbleMotion.AmpMax;
+            _wobbleAmp.TickFrequency = 20; _wobbleAmp.SmallChange = 10; _wobbleAmp.LargeChange = 20;
+            _wobbleAmp.Value = Math.Max(WobbleMotion.AmpMin, Math.Min(WobbleMotion.AmpMax, amp));
+            _wobbleDur.Minimum = WobbleMotion.DurMin; _wobbleDur.Maximum = WobbleMotion.DurMax;
+            _wobbleDur.TickFrequency = 100; _wobbleDur.SmallChange = 50; _wobbleDur.LargeChange = 100;
+            _wobbleDur.Value = Math.Max(WobbleMotion.DurMin, Math.Min(WobbleMotion.DurMax, dur));
+            foreach (TrackBar t in new[] { _wobbleAmp, _wobbleDur }) { t.AutoSize = false; t.Size = new Size(240, 36); t.Margin = new Padding(3, 0, 3, 0); }
+            foreach (Label l in new[] { _wobbleAmpText, _wobbleDurText }) { l.AutoSize = false; l.Size = new Size(70, 36); l.TextAlign = ContentAlignment.MiddleLeft; }
+            var ampLabel = new Label { Text = "揺れの大きさ", AutoSize = false, Size = new Size(100, 36), TextAlign = ContentAlignment.MiddleLeft };
+            var durLabel = new Label { Text = "揺れの長さ", AutoSize = false, Size = new Size(100, 36), TextAlign = ContentAlignment.MiddleLeft };
+
+            _wobbleSample = new TabStrip();
+            _wobbleSample.TabStop = false;
+            _wobbleSample.SampleClicked += PlayWobbleSample;
+            _wobbleSample.Size = _wobbleSample.SingleSampleSize(120);
+            var sampleBox = new Panel { Size = _wobbleSample.Size + new Size(24, 8), Margin = new Padding(16, 0, 3, 0) };
+            _wobbleSample.Location = new Point(12, 4);
+            sampleBox.Controls.Add(_wobbleSample);
+
+            // right of the sample: the motions, below them the two sliders side by side, below those the check box
+            var ampBox = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 0, 24, 0) };
+            ampBox.Controls.Add(ampLabel); ampBox.Controls.Add(_wobbleAmp); ampBox.Controls.Add(_wobbleAmpText);
+            var durBox = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            durBox.Controls.Add(durLabel); durBox.Controls.Add(_wobbleDur); durBox.Controls.Add(_wobbleDurText);
+            var sliders = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            sliders.Controls.Add(ampBox); sliders.Controls.Add(durBox);
+            _wobbleUseStyle.Text = "選択したデザインとマーカー表示の見た目にする";
+            _wobbleUseStyle.AutoSize = true;
+            _wobbleUseStyle.Margin = new Padding(3, 2, 3, 3);
+            _wobbleUseStyle.CheckedChanged += (s, e) => { RefreshWobbleSample(); PlayWobbleSample(); };
+            var right = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            radios.Margin = Padding.Empty;
+            right.Controls.Add(radios);
+            right.Controls.Add(sliders);
+            right.Controls.Add(_wobbleUseStyle);
+            sampleBox.Margin = new Padding(3, 3, 12, 3);
+            var stack = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            // the sample stands in the middle of the group, top to bottom
+            sampleBox.Height = Math.Max(sampleBox.Height, right.PreferredSize.Height);
+            _wobbleSample.Location = new Point(12, (sampleBox.Height - _wobbleSample.Height) / 2);
+            stack.Controls.Add(sampleBox);
+            stack.Controls.Add(right);
+            group.Controls.Add(stack);
+            stack.Location = group.DisplayRectangle.Location;
+            Size content = stack.PreferredSize;
+            group.Size = new Size(content.Width + group.Padding.Horizontal + 8, stack.Top + content.Height + group.Padding.Bottom + 2);
+
+            EventHandler changed = (s, e) =>
+            {
+                UpdateWobbleTexts();
+                RefreshWobbleSample();
+                PlayWobbleSample();
+            };
+            foreach (RadioButton r in _wobbleTypes) r.CheckedChanged += (s, e) => { if (((RadioButton)s).Checked) changed(s, e); };
+            _wobbleAmp.ValueChanged += changed;
+            _wobbleDur.ValueChanged += changed;
+            UpdateWobbleTexts();
+            _wobbleSample.HandleCreated += (s, e) =>
+            {
+                RefreshWobbleSample();
+                BeginInvoke(new Action(PlayWobbleSample));
+            };
+            _wobbleTimer = new System.Windows.Forms.Timer { Interval = 2200 };
+            _wobbleTimer.Tick += (s, e) => PlayWobbleSample();
+            _wobbleTimer.Start();
+            return group;
+        }
+
+        private void UpdateWobbleTexts()
+        {
+            _wobbleAmpText.Text = _wobbleAmp.Value + " %";
+            _wobbleDurText.Text = (_wobbleDur.Value / 1000.0).ToString("0.0#") + " 秒";
+            _wobbleAmp.Enabled = _wobbleDur.Enabled = Wobble != WobbleType.None;
+        }
+
+        // The look and marker may be chosen later than the sample is made: the sample is set up again whenever it changes.
+        private void RefreshWobbleSample()
+        {
+            if (_wobbleSample == null || !_wobbleSample.IsHandleCreated) return;
+            _wobbleSample.SetSingleSample(_wobbleUseStyle.Checked ? SelectStyle : SelectStyle.Standard, _wobbleUseStyle.Checked ? ActiveMarker : ActiveMarker.Underline, "サンプル");
+            _wobbleSample.SetWobble(Wobble, _wobbleAmp.Value, _wobbleDur.Value);
+        }
+
+        private void PlayWobbleSample()
+        {
+            if (_wobbleSample != null) _wobbleSample.PlayWobble();
         }
 
         public bool OutlineVisible { get { return _outlineShow.Checked; } }
