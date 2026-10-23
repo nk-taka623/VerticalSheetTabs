@@ -290,11 +290,11 @@ namespace VerticalSheetTabs
         // and can be pressed repeatedly. The tabs scroll above it when they do not fit.
         private bool NeedScroll { get { return _rows.Count * RowPx > AreaHeight; } }
 
-        // With two or more folders, a band at the top holds the "open all" and "close all" buttons (Agents.md 12.151); the rows start below it.
+        // With one or more folders, a band at the top holds the "open all" and "close all" buttons (Agents.md 12.151); the rows start below it.
         private const double HeaderHeight = 24, HeaderGap = 1.6, HeaderRadius = 3.2, HeaderTextShift = 1.5;
         private int _folderCount;
         private int _headerDown, _headerHot; // 0 none, 1 open all, 2 close all
-        private bool ShowAllButtons { get { return !IsSample && _folderCount >= 2; } }
+        private bool ShowAllButtons { get { return !IsSample && _folderCount >= 1; } }
         private int HeaderPx { get { return ShowAllButtons ? Px(HeaderHeight) : 0; } }
         private int AreaHeight { get { return Math.Max(0, ViewHeight - HeaderPx); } }
 
