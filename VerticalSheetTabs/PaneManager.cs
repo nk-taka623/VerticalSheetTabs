@@ -974,7 +974,7 @@ namespace VerticalSheetTabs
 
         // Runs a change of the folders: the sheets are read, the change is made in the model, the
         // sheet order of Excel follows, and the list is redrawn.
-        private void ChangeFolders(Entry entry, Func<bool> change, IList<string> selectedNames, string activeName)
+        private void ChangeFolders(Entry entry, Func<bool> change, IList<string> selectedNames, string activeName, string activateKey = null)
         {
             if (entry.Busy) return;
             entry.Busy = true;
@@ -995,7 +995,22 @@ namespace VerticalSheetTabs
                         return;
                     }
                 }
+                if (activateKey != null)
+                {
+                    // the sheet that was dragged is selected and active at the end of the move, not the one that was active before
+                    // (otherwise the old one would show for a moment); its name may have changed with its folder
+                    // (read straight from Excel: RefreshKeys would take the model back to the old sheet order)
+                    List<string> keysNow = FolderStore.SheetKeys(entry.Workbook, true);
+                    List<string> namesNow = ReadNames(entry);
+                    int at = keysNow.IndexOf(activateKey);
+                    if (at >= 0 && at < namesNow.Count)
+                    {
+                        activeName = namesNow[at];
+                        selectedNames = new List<string> { activeName };
+                    }
+                }
                 ApplyExcelOrder(entry, selectedNames, activeName);
+                if (activateKey != null && activeName != null) SelectSheets(entry, selectedNames, activeName);
                 MarkChanged(entry);
             }
             catch (Exception)
@@ -1057,21 +1072,7 @@ namespace VerticalSheetTabs
                 List<string> keys = KeysOf(entry, sheets);
                 string beforeKey = beforeSheet == null ? null : KeyOf(entry, beforeSheet);
                 return entry.Folders.Move(keys, folders, into, beforeKey, beforeFolder);
-            }, selected, active);
-            if (draggedKey == null) return;
-            try
-            {
-                RefreshKeys(entry);
-                int at = entry.Keys.IndexOf(draggedKey);
-                if (at < 0) return;
-                string name = entry.AllNames[at];
-                SelectSheets(entry, new List<string> { name }, name);
-                entry.KeySignature = null;
-            }
-            catch (Exception)
-            {
-                // the sheet is gone or Excel is busy: the next sync shows the real state
-            }
+            }, selected, active, draggedKey);
         }
 
         // Ctrl+drag: copies the sheets (and the sheets of dragged folders) to the drop position. A
@@ -2080,7 +2081,21 @@ namespace VerticalSheetTabs
                 var ws = sheet as Excel.Worksheet;
                 if (ws != null)
                 {
-                    if (copy) ws.Copy(before, after); else { ws.Move(before, after); SelectSheets(entry, names, names[0]); }
+                    if (copy) { ws.Copy(before, after); return; }
+                    // the moved sheet becomes the active one without the old one showing in between (no sync until it is selected)
+                    bool wasBusy = entry.Busy;
+                    entry.Busy = true;
+                    try
+                    {
+                        ws.Move(before, after);
+                        SelectSheets(entry, names, names[0]);
+                    }
+                    finally
+                    {
+                        entry.Busy = wasBusy;
+                    }
+                    entry.KeySignature = null;
+                    SyncSheets(entry);
                     return;
                 }
                 var ch = sheet as Excel.Chart;
