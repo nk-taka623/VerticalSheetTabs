@@ -452,17 +452,46 @@ namespace VerticalSheetTabs
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.Half;
 
+            // a newly selected sheet starts the wobble (the first sheet seen does not)
+            if (!IsSample && _active != _lastActive)
+            {
+                _lastActive = _active;
+                if (_active != null)
+                {
+                    if (_activeSeen) PlayWobble();
+                    _activeSeen = true;
+                }
+            }
+
             // the tabs scroll inside the area above the pinned "+" row
             g.SetClip(new Rectangle(0, 0, ClientSize.Width, ViewHeight));
             DrawFolderOutlines(g);
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
+            int wobbling = -1;
             for (int i = first; i < _rows.Count; i++)
             {
                 Rectangle row = RowRect(i);
                 if (row.Top > ViewHeight) break;
                 if (row.Bottom < 0) continue;
                 if (_rows[i].IsFolder) DrawFolder(g, _rows[i], row);
+                else if (_animClock != null && _rows[i].Sheet == _animSheet) wobbling = i;
                 else DrawTab(g, _rows[i], row);
+            }
+            if (wobbling >= 0 && _animClock != null)
+            {
+                Rectangle row = RowRect(wobbling);
+                WobbleFrame f = WobbleMotion.At(_animType, _animClock.ElapsedMilliseconds / (double)_wobbleDur, _wobbleAmp / 100.0);
+                var pivot = f.PivotTopLeft
+                    ? new PointF(row.Left + Px(InsetLeft), row.Top + Px(PlainTop))
+                    : new PointF(row.Left + row.Width / 2f, row.Top + row.Height / 2f);
+                GraphicsState state = g.Save();
+                g.TranslateTransform(pivot.X + Px(f.Dx), pivot.Y + Px(f.Dy));
+                g.RotateTransform((float)f.Angle);
+                g.ScaleTransform((float)f.ScaleX, (float)f.ScaleY);
+                g.TranslateTransform(-pivot.X, -pivot.Y);
+                _transforming = true;
+                try { DrawTab(g, _rows[wobbling], row); }
+                finally { _transforming = false; g.Restore(state); }
             }
 
             if (_dropIndex >= 0 && _rows.Count > 0)
@@ -505,6 +534,54 @@ namespace VerticalSheetTabs
         {
             get { return _activeMarker; }
             set { if (_activeMarker != value) { _activeMarker = value; Invalidate(); } }
+        }
+
+        // The wobble of the sheet that has just been selected (Agents.md 12.141): a timer repaints the strip while it runs, and the row of that
+        // sheet is drawn last (so it lies over its neighbors) through a move, a turn and a scale.
+        private WobbleType _wobbleType = WobbleType.None;
+        private int _wobbleAmp = WobbleMotion.AmpDefault;
+        private int _wobbleDur = WobbleMotion.DurDefault;
+        private WobbleType _animType;
+        private string _animSheet;
+        private System.Diagnostics.Stopwatch _animClock;
+        private System.Windows.Forms.Timer _animTimer;
+        private string _lastActive;
+        private bool _activeSeen;
+        private bool _transforming;
+
+        public void SetWobble(WobbleType type, int amp, int dur)
+        {
+            _wobbleType = type;
+            _wobbleAmp = Math.Max(WobbleMotion.AmpMin, Math.Min(WobbleMotion.AmpMax, amp));
+            _wobbleDur = Math.Max(WobbleMotion.DurMin, Math.Min(WobbleMotion.DurMax, dur));
+            if (type == WobbleType.None) StopWobble();
+        }
+
+        // Plays the wobble of the active sheet (a new random motion each time for WobbleType.Random).
+        public void PlayWobble()
+        {
+            if (_wobbleType == WobbleType.None || _active == null || !IsHandleCreated) return;
+            _animType = _wobbleType == WobbleType.Random ? WobbleMotion.PickRandom() : _wobbleType;
+            _animSheet = _active;
+            _animClock = System.Diagnostics.Stopwatch.StartNew();
+            if (_animTimer == null)
+            {
+                _animTimer = new System.Windows.Forms.Timer { Interval = 15 };
+                _animTimer.Tick += (s, e) =>
+                {
+                    if (_animClock == null || _animClock.ElapsedMilliseconds >= _wobbleDur) StopWobble();
+                    Invalidate();
+                };
+            }
+            _animTimer.Start();
+            Invalidate();
+        }
+
+        private void StopWobble()
+        {
+            if (_animTimer != null) _animTimer.Stop();
+            _animClock = null;
+            _animSheet = null;
         }
 
         private bool Glass { get { return _selectStyle == SelectStyle.FrostedGlass || _selectStyle == SelectStyle.GlossyGlass || _selectStyle == SelectStyle.FrostedGlass2; } }
@@ -987,7 +1064,7 @@ namespace VerticalSheetTabs
             var textRect = new Rectangle(left + roomLeft + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - roomLeft - room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
-                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                g.TextRenderingHint = _transforming ? TextRenderingHint.AntiAliasGridFit : TextRenderingHint.ClearTypeGridFit;
                 using (var font = selected && (DoubleFrame || Glass || Inset || Stripes || Crystal) ? new Font(TabFont, FontStyle.Bold) : null)
                 using (var brush = new SolidBrush(textColor))
                 using (var format = new StringFormat(StringFormat.GenericDefault))
@@ -2044,6 +2121,7 @@ namespace VerticalSheetTabs
             if (disposing)
             {
                 if (_font != null) _font.Dispose();
+                if (_animTimer != null) _animTimer.Dispose();
                 _tip.Dispose();
             }
             base.Dispose(disposing);

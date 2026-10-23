@@ -263,6 +263,8 @@ namespace VerticalSheetTabs
 
         public ActiveMarker ActiveMarker { get { return _strip.ActiveMarker; } set { _strip.ActiveMarker = value; } }
 
+        public void SetWobble(WobbleType type, int amp, int dur) { _strip.SetWobble(type, amp, dur); }
+
         public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors, IList<StripRow> rows)
         {
             _strip.StructureProtected = StructureProtected;

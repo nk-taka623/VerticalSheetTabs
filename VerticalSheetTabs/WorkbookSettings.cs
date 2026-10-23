@@ -51,6 +51,9 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
+        public const string WobbleName = "VTab.Wobble";       // string "None" / "Shake" / "Wobble" / "Jelly" / "Bounce" / "Pulse" / "Swing" / "Random" (default "None"; Agents.md 12.141)
+        public const string WobbleAmpName = "VTab.WobbleAmp"; // number, percent (40 to 200, default 100)
+        public const string WobbleDurName = "VTab.WobbleDur"; // number, milliseconds (300 to 1200, default 600)
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
         public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "Crystal"
 
@@ -77,6 +80,12 @@ namespace VerticalSheetTabs
         // The mark of the active sheet (default: the underline).
         public ActiveMarker ActiveMarker { get; set; }
 
+        public WobbleType Wobble { get; set; }
+
+        public int WobbleAmp { get; set; }
+
+        public int WobbleDur { get; set; }
+
         public WorkbookSettings()
         {
             IsFirstOpen = true;
@@ -88,6 +97,9 @@ namespace VerticalSheetTabs
             NameRule = false;
             SelectStyle = SelectStyle.Standard;
             ActiveMarker = ActiveMarker.Underline;
+            Wobble = WobbleType.None;
+            WobbleAmp = WobbleMotion.AmpDefault;
+            WobbleDur = WobbleMotion.DurDefault;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
@@ -127,6 +139,16 @@ namespace VerticalSheetTabs
                     string v = (string)marker.Value;
                     s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : v == "EdgeBars" ? ActiveMarker.EdgeBars : v == "CheckBadge" ? ActiveMarker.CheckBadge : ActiveMarker.Underline;
                 }
+                dynamic wobble = Find(props, WobbleName);
+                if (wobble != null)
+                {
+                    WobbleType t;
+                    if (Enum.TryParse((string)wobble.Value, out t) && Enum.IsDefined(typeof(WobbleType), t)) s.Wobble = t;
+                }
+                dynamic wobbleAmp = Find(props, WobbleAmpName);
+                if (wobbleAmp != null) s.WobbleAmp = Math.Max(WobbleMotion.AmpMin, Math.Min(WobbleMotion.AmpMax, Convert.ToInt32((object)wobbleAmp.Value)));
+                dynamic wobbleDur = Find(props, WobbleDurName);
+                if (wobbleDur != null) s.WobbleDur = Math.Max(WobbleMotion.DurMin, Math.Min(WobbleMotion.DurMax, Convert.ToInt32((object)wobbleDur.Value)));
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)
                 {
@@ -159,6 +181,9 @@ namespace VerticalSheetTabs
                 Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
                 Write(props, SelectStyleName, PropTypeString, SelectStyleToString(SelectStyle));
                 Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : ActiveMarker == ActiveMarker.EdgeBars ? "EdgeBars" : ActiveMarker == ActiveMarker.CheckBadge ? "CheckBadge" : "Triangle");
+                Write(props, WobbleName, PropTypeString, Wobble.ToString());
+                Write(props, WobbleAmpName, PropTypeNumber, WobbleAmp);
+                Write(props, WobbleDurName, PropTypeNumber, WobbleDur);
             }
             catch (Exception)
             {
