@@ -2095,3 +2095,8 @@ gitGraph
 
 - 12.153 (「全開」「全閉」ボタンは、フォルダが1つでもあれば表示する)、12.154 (README.md の見直し、設定画面の画像の撮り直し) を含めて、バージョンを 1.1.60.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.60` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.60.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_60_0\`)。インストールの実機確認は、未実施
+
+### 12.156 更新: README の画像 `hero.png`、`modes.png` の撮り直し
+
+- 12.154 で撮り直していなかった、`docs/images/hero.png` (Before / After) と `modes.png` (表示モード A、B、C、C + 右側) を、いまの縦タブで、撮り直した。フォルダが2つある縦タブ (売上は開、経費は閉) で、上端に「全開」「全閉」のボタンの帯が写る。撮影: Excel (リボンを畳んだ状態、拡大率125%)、アドインなし (A) / あり (B、C、C + 右側)、12枚のシート (概要、売上_東京など)、アクティブなシートは、Aが「概要」、ほかが「売上_大阪」。ウィンドウの端に、背景の画面が写り込むため、右と下の端を、少し切り落とした
+- 注意: `rule.png` (シート名のルール)、`menu_*.png`、`ribbon.png`、`designs.png`、`markers.png` は、撮り直していない (フォルダのある縦タブの帯は、`rule.png` に写っていない可能性がある。必要なら、撮り直す)
