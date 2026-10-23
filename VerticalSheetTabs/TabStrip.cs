@@ -1136,11 +1136,11 @@ namespace VerticalSheetTabs
             int full = Math.Max(6, body.Height - Px(8)); // the first size; the badge keeps its left edge and is 0.75 times as large
             int d = Math.Max(5, (int)Math.Round(full * BadgeScale));
             var badge = new Rectangle(body.Left + (body.Height - full) / 2 + Px(1), body.Top + (body.Height - d) / 2, d, d);
-            // a colored row: a white badge with a check in the row's color (a darker or lighter one when it is too near to white);
-            // when the row itself is too near to white for the badge to show, a dark badge with a white check
-            bool whiteBadge = colored && ColorDistance(Color.White, color) >= MinMarkerDistance;
-            Color fill = whiteBadge ? Color.White : colored ? Visible(Underline, color) : Underline;
-            Color mark = whiteBadge ? Visible(color, Color.White) : Color.White;
+            // a light colored row: a dark badge (the row's color, 60% darker) with a white check; a dark colored row: a white badge with
+            // a check in the row's color (a lighter or darker one when it is too near to white) (Agents.md 12.135)
+            bool lightRow = colored && TextOn(color) == TextColor;
+            Color fill = !colored ? Underline : lightRow ? Mix(color, Color.Black, 0.6) : Color.White;
+            Color mark = colored && !lightRow ? Visible(color, Color.White) : Color.White;
             using (var brush = new SolidBrush(fill)) g.FillEllipse(brush, badge);
             int cx = badge.Left + d / 2, cy = badge.Top + d / 2;
             var check = new[]
