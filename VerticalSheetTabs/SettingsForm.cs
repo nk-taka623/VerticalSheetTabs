@@ -212,11 +212,11 @@ namespace VerticalSheetTabs
                 : SystemColors.Control;
         }
 
-        // The look of selected folders and sheets: the six types in three columns and two rows, each with samples (not selected, a folder and a plain sheet selected, a colored
-        // sheet selected) drawn by the tab strip itself.
+        // The look of selected folders and sheets: the six types in three columns and two rows. One "not selected" sample (the same for every type) stands at the left, centered over both rows; each type
+        // has two samples (a folder and a plain sheet selected, a colored sheet selected), all drawn by the tab strip itself.
         private GroupBox CreateStyleGroup()
         {
-            var group = new GroupBox { Text = "フォルダ＆シートの選択デザイン", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6) };
+            var group = new GroupBox { Text = "フォルダ＆シート選択のデザイン", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6) };
             _styleStandard.Text = "標準 (Excelの横タブと同じ見た目)";
             _styleDouble.Text = "ダブルフレーム (二重の枠で、目立たせる)";
             _styleGlossy.Text = "グロッシーグラス (光沢のあるガラス)";
@@ -225,23 +225,51 @@ namespace VerticalSheetTabs
             _styleInset.Text = "インセット (押し込まれたように凹む)";
             var panel = new TableLayoutPanel
             {
-                ColumnCount = 3,
+                ColumnCount = 4,
                 RowCount = 2,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Margin = Padding.Empty
             };
-            panel.Controls.Add(CreateStyleBlock(_styleStandard, SelectStyle.Standard), 0, 0);
-            panel.Controls.Add(CreateStyleBlock(_styleDouble, SelectStyle.DoubleFrame), 1, 0);
-            panel.Controls.Add(CreateStyleBlock(_styleGlossy, SelectStyle.GlossyGlass), 2, 0);
-            panel.Controls.Add(CreateStyleBlock(_styleFrosted, SelectStyle.FrostedGlass), 0, 1);
-            panel.Controls.Add(CreateStyleBlock(_styleFrosted2, SelectStyle.FrostedGlass2), 1, 1);
-            panel.Controls.Add(CreateStyleBlock(_styleInset, SelectStyle.Inset), 2, 1);
+            var none = CreateNoneBlock();
+            none.Anchor = AnchorStyles.None;
+            panel.Controls.Add(none, 0, 0);
+            panel.SetRowSpan(none, 2);
+            panel.Controls.Add(CreateStyleBlock(_styleStandard, SelectStyle.Standard), 1, 0);
+            panel.Controls.Add(CreateStyleBlock(_styleDouble, SelectStyle.DoubleFrame), 2, 0);
+            panel.Controls.Add(CreateStyleBlock(_styleGlossy, SelectStyle.GlossyGlass), 3, 0);
+            panel.Controls.Add(CreateStyleBlock(_styleFrosted, SelectStyle.FrostedGlass), 1, 1);
+            panel.Controls.Add(CreateStyleBlock(_styleFrosted2, SelectStyle.FrostedGlass2), 2, 1);
+            panel.Controls.Add(CreateStyleBlock(_styleInset, SelectStyle.Inset), 3, 1);
             group.Controls.Add(panel);
             panel.Location = group.DisplayRectangle.Location;
             Size content = panel.PreferredSize;
             group.Size = new Size(content.Width + group.Padding.Horizontal + 8, panel.Top + content.Height + group.Padding.Bottom + 2);
             return group;
+        }
+
+        // The "not selected" sample, shown once at the left of the grid and centered vertically over both rows; it looks the same for every type.
+        private FlowLayoutPanel CreateNoneBlock()
+        {
+            var block = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.TopDown,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = false,
+                Margin = new Padding(0, 0, 8, 8)
+            };
+            var strip = new TabStrip();
+            strip.SetSample(SelectStyle.Standard, "none", ActiveMarker);
+            _samples.Add(strip);
+            strip.Size = strip.SampleSize(120);
+            strip.Margin = new Padding(0);
+            var caption = new Label { Text = "非選択", AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(0, 0, 0, 2) };
+            var one = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(16, 0, 0, 0) };
+            one.Controls.Add(caption);
+            one.Controls.Add(strip);
+            block.Controls.Add(one);
+            return block;
         }
 
         private FlowLayoutPanel CreateStyleBlock(RadioButton radio, SelectStyle style)
@@ -266,7 +294,6 @@ namespace VerticalSheetTabs
             };
             string[][] cells =
             {
-                new[] { "非選択", "none" },
                 new[] { "選択 (色なしのシート)", "plain" },
                 new[] { "選択 (色付きのシート)", "colored" }
             };
