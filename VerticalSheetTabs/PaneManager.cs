@@ -1050,12 +1050,28 @@ namespace VerticalSheetTabs
             }
             IList<string> selected = CurrentSelection(entry);
             string active = CurrentActive(entry);
+            // a single sheet that is dragged becomes the active sheet (as it does on Excel's own tabs); its name may change with its folder
+            string draggedKey = sheets.Count == 1 && folders.Count == 0 ? KeyOf(entry, sheets[0]) : null;
             ChangeFolders(entry, () =>
             {
                 List<string> keys = KeysOf(entry, sheets);
                 string beforeKey = beforeSheet == null ? null : KeyOf(entry, beforeSheet);
                 return entry.Folders.Move(keys, folders, into, beforeKey, beforeFolder);
             }, selected, active);
+            if (draggedKey == null) return;
+            try
+            {
+                RefreshKeys(entry);
+                int at = entry.Keys.IndexOf(draggedKey);
+                if (at < 0) return;
+                string name = entry.AllNames[at];
+                SelectSheets(entry, new List<string> { name }, name);
+                entry.KeySignature = null;
+            }
+            catch (Exception)
+            {
+                // the sheet is gone or Excel is busy: the next sync shows the real state
+            }
         }
 
         // Ctrl+drag: copies the sheets (and the sheets of dragged folders) to the drop position. A
@@ -2064,7 +2080,7 @@ namespace VerticalSheetTabs
                 var ws = sheet as Excel.Worksheet;
                 if (ws != null)
                 {
-                    if (copy) ws.Copy(before, after); else ws.Move(before, after);
+                    if (copy) ws.Copy(before, after); else { ws.Move(before, after); SelectSheets(entry, names, names[0]); }
                     return;
                 }
                 var ch = sheet as Excel.Chart;
