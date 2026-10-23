@@ -135,6 +135,7 @@ namespace VerticalSheetTabs
             control.MoveRequested += (names, before, copy) => MoveOrCopySheets(entry, names, before, copy);
             control.ExcelCommandRequested += command => RunExcelCommand(entry, command);
             control.FolderToggleRequested += id => ToggleFolder(entry, id);
+            control.AllFoldersRequested += open => FolderCommand(entry, open ? "openall" : "closeall", new List<string>());
             control.FolderMoveRequested += (sheets, folders, into, bs, bf, copy) =>
             {
                 if (copy) CopyItems(entry, sheets, folders, into, bs, bf);

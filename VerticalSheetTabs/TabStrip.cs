@@ -254,6 +254,7 @@ namespace VerticalSheetTabs
                 EndRename(false);
                 _names = new List<string>(names);
                 _rows = newRows;
+                _folderCount = newRows.Count(r => r.IsFolder);
                 _rowSignature = newSignature;
                 UpdateScrollBar();
             }
@@ -287,7 +288,31 @@ namespace VerticalSheetTabs
 
         // The "+" is fixed at the bottom of the pane, so that it does not move down as sheets are added
         // and can be pressed repeatedly. The tabs scroll above it when they do not fit.
-        private bool NeedScroll { get { return _rows.Count * RowPx > ViewHeight; } }
+        private bool NeedScroll { get { return _rows.Count * RowPx > AreaHeight; } }
+
+        // With two or more folders, a band at the top holds the "open all" and "close all" buttons (Agents.md 12.151); the rows start below it.
+        private const double HeaderHeight = 24, HeaderGap = 1.6, HeaderRadius = 3.2, HeaderTextShift = 1.5;
+        private int _folderCount;
+        private int _headerDown, _headerHot; // 0 none, 1 open all, 2 close all
+        private bool ShowAllButtons { get { return !IsSample && _folderCount >= 2; } }
+        private int HeaderPx { get { return ShowAllButtons ? Px(HeaderHeight) : 0; } }
+        private int AreaHeight { get { return Math.Max(0, ViewHeight - HeaderPx); } }
+
+        public event Action<bool> AllFoldersRequested;
+
+        // The two buttons fill the band with a gap of about 2 px between them and to the edges of the pane.
+        private Rectangle AllButtonRect(bool open)
+        {
+            int gap = Math.Max(1, Px(HeaderGap));
+            int w = Math.Max(1, (ClientSize.Width - 3 * gap) / 2);
+            return new Rectangle(open ? gap : 2 * gap + w, gap, w, Math.Max(1, HeaderPx - 2 * gap));
+        }
+
+        private int AllButtonAt(Point p)
+        {
+            if (!ShowAllButtons) return 0;
+            return AllButtonRect(true).Contains(p) ? 1 : AllButtonRect(false).Contains(p) ? 2 : 0;
+        }
 
         private int ViewHeight { get { return IsSample ? ClientSize.Height : Math.Max(0, ClientSize.Height - RowPx); } }
 
@@ -351,14 +376,14 @@ namespace VerticalSheetTabs
 
         public int IndexFromPoint(Point p)
         {
-            if (p.Y < 0 || p.Y >= ViewHeight || RowPx <= 0) return -1;
-            int i = (p.Y + _scrollY) / RowPx;
+            if (p.Y < HeaderPx || p.Y >= ViewHeight || RowPx <= 0) return -1;
+            int i = (p.Y - HeaderPx + _scrollY) / RowPx;
             return i >= 0 && i < _rows.Count ? i : -1;
         }
 
         private Rectangle RowRect(int index)
         {
-            return new Rectangle(0, index * RowPx - _scrollY, ContentWidth, RowPx);
+            return new Rectangle(0, HeaderPx + index * RowPx - _scrollY, ContentWidth, RowPx);
         }
 
         private int ContentWidth { get { return ClientSize.Width - (_scroll.Visible ? _scroll.Width : 0); } }
@@ -375,7 +400,7 @@ namespace VerticalSheetTabs
         // so the scroll bar is only touched with values that are valid for it.
         private void UpdateScrollBar()
         {
-            int view = ViewHeight;
+            int view = AreaHeight;
             int total = _rows.Count * RowPx;
             bool need = ClientSize.Height > 0 && NeedScroll && view > 0;
             _scroll.Visible = need;
@@ -386,7 +411,7 @@ namespace VerticalSheetTabs
             }
             try
             {
-                _scroll.SetBounds(ClientSize.Width - _scroll.Width, 0, _scroll.Width, view);
+                _scroll.SetBounds(ClientSize.Width - _scroll.Width, HeaderPx, _scroll.Width, view);
                 _scroll.Minimum = 0;
                 _scroll.LargeChange = view;
                 _scroll.SmallChange = RowPx;
@@ -403,7 +428,7 @@ namespace VerticalSheetTabs
         private void SetScroll(int y)
         {
             if (!_scroll.Visible) return;
-            int max = Math.Max(0, _rows.Count * RowPx - ViewHeight);
+            int max = Math.Max(0, _rows.Count * RowPx - AreaHeight);
             _scrollY = Math.Max(0, Math.Min(y, max));
             try
             {
@@ -420,7 +445,7 @@ namespace VerticalSheetTabs
         {
             if (index < 0 || !_scroll.Visible) return;
             Rectangle r = RowRect(index);
-            if (r.Top < 0) SetScroll(_scrollY + r.Top);
+            if (r.Top < HeaderPx) SetScroll(_scrollY + r.Top - HeaderPx);
             else if (r.Bottom > ViewHeight) SetScroll(_scrollY + r.Bottom - ViewHeight);
         }
 
@@ -489,7 +514,7 @@ namespace VerticalSheetTabs
             }
 
             // the tabs scroll inside the area above the pinned "+" row
-            g.SetClip(new Rectangle(0, 0, ClientSize.Width, ViewHeight));
+            g.SetClip(new Rectangle(0, HeaderPx, ClientSize.Width, Math.Max(0, ViewHeight - HeaderPx)));
             DrawFolderOutlines(g);
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
             var wobbling = new List<int>();
@@ -527,6 +552,7 @@ namespace VerticalSheetTabs
             }
             g.ResetClip();
 
+            if (ShowAllButtons) DrawAllButtons(g);
             if (!IsSample) DrawPlus(g);
         }
 
@@ -827,6 +853,29 @@ namespace VerticalSheetTabs
             int w = Px(MarkerWidth), h = Px(MarkerHeight);
             var points = new[] { new Point(x, y - h / 2), new Point(x + w, y), new Point(x, y + h / 2) };
             using (var brush = new SolidBrush(Theme.DropMarker)) g.FillPolygon(brush, points);
+        }
+
+        private void DrawAllButtons(Graphics g)
+        {
+            using (var font = new Font(TabFont.FontFamily, TabFont.Size * 0.8f, FontStyle.Regular, TabFont.Unit))
+            using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+            {
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                for (int k = 1; k <= 2; k++)
+                {
+                    Rectangle box = AllButtonRect(k == 1);
+                    bool hot = _headerHot == k, down = _headerDown == k;
+                    using (GraphicsPath path = RoundedRect(box, Px(HeaderRadius)))
+                    {
+                        using (var brush = new SolidBrush(down ? Theme.TabBorder : Theme.PlusHoverBack)) g.FillPath(brush, path);
+                        using (var pen = new Pen(hot || down ? Theme.PlusColor : Theme.Separator)) g.DrawPath(pen, path);
+                    }
+                    using (var brush = new SolidBrush(Theme.PlusColor))
+                    {
+                        g.DrawString(k == 1 ? "全開" : "全閉", font, brush, new RectangleF(box.Left, box.Top + Px(HeaderTextShift), box.Width, box.Height), format);
+                    }
+                }
+            }
         }
 
         private void DrawPlus(Graphics g)
@@ -1639,6 +1688,13 @@ namespace VerticalSheetTabs
             if (IsSample) { if (SampleClicked != null) SampleClicked(); return; }
             if (!_noFocusClick) Focus();
             _toggleOffFolder = null; // a drag swallows the button release, so nothing may be left over
+            int all = e.Button == MouseButtons.Left ? AllButtonAt(e.Location) : 0;
+            if (all != 0)
+            {
+                _headerDown = all;
+                Invalidate();
+                return;
+            }
             if (e.Button == MouseButtons.Left && !StructureProtected && PlusButtonRect().Contains(e.Location))
             {
                 _plusDown = true;
@@ -1792,6 +1848,14 @@ namespace VerticalSheetTabs
                 Invalidate();
                 return;
             }
+            if (_headerDown != 0)
+            {
+                int down = _headerDown;
+                _headerDown = 0;
+                Invalidate();
+                if (e.Button == MouseButtons.Left && AllButtonAt(e.Location) == down && AllFoldersRequested != null) AllFoldersRequested(down == 1);
+                return;
+            }
             if (_plusDown)
             {
                 _plusDown = false;
@@ -1857,6 +1921,7 @@ namespace VerticalSheetTabs
         {
             base.OnMouseLeave(e);
             SetPlusHot(false);
+            if (_headerHot != 0) { _headerHot = 0; Invalidate(); }
             _hoverIndex = -1;
             _tip.Hide(this);
         }
@@ -1901,6 +1966,8 @@ namespace VerticalSheetTabs
             base.OnMouseMove(e);
             if (IsSample) return;
             SetPlusHot(!StructureProtected && PlusButtonRect().Contains(e.Location));
+            int hotAll = AllButtonAt(e.Location);
+            if (hotAll != _headerHot) { _headerHot = hotAll; Invalidate(); }
             UpdateTip(e.Location);
             if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected) return;
             Size drag = SystemInformation.DragSize;
@@ -2074,6 +2141,7 @@ namespace VerticalSheetTabs
         private int InsertIndexAt(Point p)
         {
             int index = IndexFromPoint(p);
+            if (p.Y < HeaderPx) return 0;
             if (index < 0) return _rows.Count;
             Rectangle r = RowRect(index);
             return p.Y < r.Top + r.Height / 2 ? index : index + 1;
@@ -2083,7 +2151,7 @@ namespace VerticalSheetTabs
         private void ScrollNearEdge(Point p)
         {
             int edge = Math.Max(8, RowPx / 2);
-            if (p.Y < edge) SetScroll(_scrollY - RowPx / 2);
+            if (p.Y < HeaderPx + edge) SetScroll(_scrollY - RowPx / 2);
             else if (p.Y > ViewHeight - edge) SetScroll(_scrollY + RowPx / 2);
         }
 
