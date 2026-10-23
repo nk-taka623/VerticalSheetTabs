@@ -610,7 +610,45 @@ namespace VerticalSheetTabs
         // The color of the triangles: dark on a light color, light on a dark one (OppositeColor).
         private static Color LineColorFor(Color rowColor, bool colored)
         {
-            return HasHue(rowColor, colored) ? OppositeColor(rowColor) : Underline;
+            return Visible(HasHue(rowColor, colored) ? OppositeColor(rowColor) : Underline, colored ? rowColor : Color.White);
+        }
+
+        // Marks must stand out from the row they are on (Agents.md 12.134): when the color of a mark is too near to the color
+        // behind it (a color difference, CIE76 delta E, below MinMarkerDistance), the mark is made darker or lighter, by the smallest
+        // step that gives enough difference (the direction that gives more); when no shade of it does, black or white.
+        private const double MinMarkerDistance = 45;
+
+        private static Color Visible(Color mark, Color behind)
+        {
+            if (ColorDistance(mark, behind) >= MinMarkerDistance) return mark;
+            for (int i = 1; i <= 20; i++)
+            {
+                double t = i * 0.05;
+                Color dark = Mix(mark, Color.Black, t), light = Mix(mark, Color.White, t);
+                double dd = ColorDistance(dark, behind), dl = ColorDistance(light, behind);
+                if (dd >= MinMarkerDistance || dl >= MinMarkerDistance) return dd >= dl ? dark : light;
+            }
+            return ColorDistance(Color.Black, behind) >= ColorDistance(Color.White, behind) ? Color.Black : Color.White;
+        }
+
+        // CIE76 color difference (distance in CIE L*a*b*, D65).
+        private static double ColorDistance(Color a, Color b)
+        {
+            double[] la = Lab(a), lb = Lab(b);
+            double dl = la[0] - lb[0], da = la[1] - lb[1], db = la[2] - lb[2];
+            return Math.Sqrt(dl * dl + da * da + db * db);
+        }
+
+        private static double[] Lab(Color c)
+        {
+            Func<int, double> lin = v => { double x = v / 255.0; return x <= 0.04045 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4); };
+            double r = lin(c.R), g = lin(c.G), b = lin(c.B);
+            double x1 = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047;
+            double y1 = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b;
+            double z1 = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883;
+            Func<double, double> f = t => t > 0.008856 ? Math.Pow(t, 1.0 / 3.0) : 7.787 * t + 16.0 / 116.0;
+            double fx = f(x1), fy = f(y1), fz = f(z1);
+            return new[] { 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz) };
         }
 
         // An open folder and its sheets are enclosed by a dashed line, in the opposite color of the bar
@@ -918,7 +956,7 @@ namespace VerticalSheetTabs
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
                 DrawStandardSelected(g, body, radius, colored, tabColor);
                 // Excel's own look: its green underline, whatever the color of the tab
-                if (underline) DrawUnderline(g, body, Underline);
+                if (underline) DrawUnderline(g, body, Visible(Underline, colored ? Mix(Color.White, tabColor, 0.45) : Color.White));
                 if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
                 if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
             }
@@ -1098,13 +1136,18 @@ namespace VerticalSheetTabs
             int full = Math.Max(6, body.Height - Px(8)); // the first size; the badge keeps its left edge and is 0.75 times as large
             int d = Math.Max(5, (int)Math.Round(full * BadgeScale));
             var badge = new Rectangle(body.Left + (body.Height - full) / 2 + Px(1), body.Top + (body.Height - d) / 2, d, d);
-            using (var brush = new SolidBrush(colored ? Color.White : Underline)) g.FillEllipse(brush, badge);
+            // a light colored row: a dark badge (the row's color, 60% darker) with a white check; a dark colored row: a white badge with
+            // a check in the row's color (a lighter or darker one when it is too near to white) (Agents.md 12.135)
+            bool lightRow = colored && TextOn(color) == TextColor;
+            Color fill = !colored ? Underline : lightRow ? Mix(color, Color.Black, 0.6) : Color.White;
+            Color mark = colored && !lightRow ? Visible(color, Color.White) : Color.White;
+            using (var brush = new SolidBrush(fill)) g.FillEllipse(brush, badge);
             int cx = badge.Left + d / 2, cy = badge.Top + d / 2;
             var check = new[]
             {
                 new Point(cx - (int)(d * 0.25), cy), new Point(cx - (int)(d * 0.05), cy + (int)(d * 0.2)), new Point(cx + (int)(d * 0.28), cy - (int)(d * 0.2))
             };
-            using (var pen = new Pen(colored ? color : Color.White, Math.Max(1.5f, Px(1.7))))
+            using (var pen = new Pen(mark, Math.Max(1.5f, Px(1.7))))
             {
                 pen.LineJoin = LineJoin.Round;
                 pen.StartCap = LineCap.Round;
