@@ -274,7 +274,7 @@ namespace VerticalSheetTabs
             _wobbleSample = new TabStrip();
             _wobbleSample.TabStop = false;
             _wobbleSample.SampleClicked += PlayWobbleSample;
-            _wobbleSample.Size = _wobbleSample.SingleSampleSize(204);
+            _wobbleSample.Size = _wobbleSample.SingleSampleSize(120);
             var sampleBox = new Panel { Size = _wobbleSample.Size + new Size(24, 8), Margin = new Padding(16, 0, 3, 0) };
             _wobbleSample.Location = new Point(12, 4);
             sampleBox.Controls.Add(_wobbleSample);
