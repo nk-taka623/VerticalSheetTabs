@@ -44,6 +44,7 @@ namespace VerticalSheetTabs
         private TabStrip _wobbleSample;
         private System.Windows.Forms.Timer _wobbleTimer;
         private GroupBox _wobbleGroup;
+        private readonly Button _wobbleReset = new Button();
         private readonly CheckBox _wobbleUseStyle = new CheckBox(); // the sample shows the chosen look and marker, or the plain one
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
@@ -294,7 +295,21 @@ namespace VerticalSheetTabs
             radios.Margin = Padding.Empty;
             right.Controls.Add(radios);
             right.Controls.Add(sliders);
-            right.Controls.Add(_wobbleUseStyle);
+            // under the two sliders: the check box below the size, the reset button below the length
+            _wobbleUseStyle.AutoSize = false;
+            _wobbleUseStyle.Size = new Size(ampBox.PreferredSize.Width + ampBox.Margin.Right, _wobbleUseStyle.PreferredSize.Height);
+            _wobbleReset.Text = "揺れのリセット";
+            _wobbleReset.AutoSize = true;
+            _wobbleReset.Margin = new Padding(3, 0, 3, 0);
+            _wobbleReset.Click += (s, e) =>
+            {
+                _wobbleAmp.Value = WobbleMotion.AmpDefault;
+                _wobbleDur.Value = WobbleMotion.DurDefault;
+            };
+            var bottomRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            bottomRow.Controls.Add(_wobbleUseStyle);
+            bottomRow.Controls.Add(_wobbleReset);
+            right.Controls.Add(bottomRow);
             sampleBox.Margin = new Padding(3, 3, 12, 3);
             var stack = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
             // the sample stands in the middle of the group, top to bottom
@@ -332,7 +347,7 @@ namespace VerticalSheetTabs
         {
             _wobbleAmpText.Text = _wobbleAmp.Value + " %";
             _wobbleDurText.Text = (_wobbleDur.Value / 1000.0).ToString("0.0#") + " 秒";
-            _wobbleAmp.Enabled = _wobbleDur.Enabled = Wobble != WobbleType.None;
+            _wobbleAmp.Enabled = _wobbleDur.Enabled = _wobbleReset.Enabled = Wobble != WobbleType.None;
         }
 
         // The look and marker may be chosen later than the sample is made: the sample is set up again whenever it changes.
