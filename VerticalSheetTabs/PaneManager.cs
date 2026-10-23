@@ -107,6 +107,7 @@ namespace VerticalSheetTabs
             control.OutlineLevel = settings.OutlineLevel;
             control.SelectionStyle = settings.SelectStyle;
             control.ActiveMarker = settings.ActiveMarker;
+            control.SetWobble(settings.Wobble, settings.WobbleAmp, settings.WobbleDur);
 
             pane.VisibleChanged += (s, e) => OnPaneVisibleChanged(entry);
             control.IsExcelEditing = IsExcelEditing;
@@ -241,7 +242,7 @@ namespace VerticalSheetTabs
         private void ShowSettings(Entry entry)
         {
             bool nameRuleTurnedOn = false;
-            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker))
+            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
                 entry.Settings.Mode = form.Mode;
@@ -252,6 +253,9 @@ namespace VerticalSheetTabs
                 entry.Settings.NameRule = form.NameRule;
                 entry.Settings.SelectStyle = form.SelectStyle;
                 entry.Settings.ActiveMarker = form.ActiveMarker;
+                entry.Settings.Wobble = form.Wobble;
+                entry.Settings.WobbleAmp = form.WobbleAmp;
+                entry.Settings.WobbleDur = form.WobbleDur;
             }
             try
             {
@@ -259,6 +263,7 @@ namespace VerticalSheetTabs
                 entry.Control.OutlineLevel = entry.Settings.OutlineLevel;
                 entry.Control.SelectionStyle = entry.Settings.SelectStyle;
                 entry.Control.ActiveMarker = entry.Settings.ActiveMarker;
+                entry.Control.SetWobble(entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur);
             }
             catch (Exception)
             {

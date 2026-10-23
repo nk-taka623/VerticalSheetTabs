@@ -245,6 +245,7 @@
     <Compile Include="TabStrip.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Wobble.cs" />
     <Compile Include="WorkbookSettings.cs" />
     <Compile Include="TabPaneControl.cs">
       <SubType>UserControl</SubType>
