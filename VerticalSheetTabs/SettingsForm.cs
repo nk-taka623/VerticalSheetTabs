@@ -28,7 +28,7 @@ namespace VerticalSheetTabs
         private readonly RadioButton _styleFrosted2 = new RadioButton();
         private readonly RadioButton _styleInset = new RadioButton();
         private readonly RadioButton _styleStripes = new RadioButton();
-        private readonly RadioButton _styleGradient = new RadioButton();
+        private readonly RadioButton _styleCrystal = new RadioButton();
         private GroupBox _styleGroup;
         private readonly RadioButton _markerNone = new RadioButton();
         private readonly RadioButton _markerUnderline = new RadioButton();
@@ -146,9 +146,9 @@ namespace VerticalSheetTabs
             _styleFrosted2.Checked = selectStyle == SelectStyle.FrostedGlass2;
             _styleInset.Checked = selectStyle == SelectStyle.Inset;
             _styleStripes.Checked = selectStyle == SelectStyle.Stripes;
-            _styleGradient.Checked = selectStyle == SelectStyle.GradientFrame;
+            _styleCrystal.Checked = selectStyle == SelectStyle.Crystal;
             // the buttons sit in different panels (each next to its samples), so the form keeps them exclusive
-            RadioButton[] styles = { _styleStandard, _styleDouble, _styleGlossy, _styleStripes, _styleFrosted, _styleFrosted2, _styleInset, _styleGradient };
+            RadioButton[] styles = { _styleStandard, _styleDouble, _styleGlossy, _styleStripes, _styleFrosted, _styleFrosted2, _styleInset, _styleCrystal };
             foreach (RadioButton r in styles)
             {
                 RadioButton self = r;
@@ -192,7 +192,7 @@ namespace VerticalSheetTabs
                     : _styleFrosted2.Checked ? SelectStyle.FrostedGlass2
                     : _styleInset.Checked ? SelectStyle.Inset
                     : _styleStripes.Checked ? SelectStyle.Stripes
-                    : _styleGradient.Checked ? SelectStyle.GradientFrame : SelectStyle.Standard;
+                    : _styleCrystal.Checked ? SelectStyle.Crystal : SelectStyle.Standard;
             }
         }
 
@@ -233,7 +233,7 @@ namespace VerticalSheetTabs
             _styleFrosted2.Text = "フロストグラス２ (行の色を帯びた磨りガラス)";
             _styleInset.Text = "インセット (押し込まれたように凹む)";
             _styleStripes.Text = "ストライプ (ななめの縞で、目立たせる)";
-            _styleGradient.Text = "グラデーション枠 (行の色の輪を持つ、浮き出た面)";
+            _styleCrystal.Text = "クリスタル (斜めのカット面で、明るい色が消えていく)";
             var panel = new TableLayoutPanel
             {
                 ColumnCount = 5,
@@ -253,7 +253,7 @@ namespace VerticalSheetTabs
             panel.Controls.Add(CreateStyleBlock(_styleFrosted, SelectStyle.FrostedGlass), 1, 1);
             panel.Controls.Add(CreateStyleBlock(_styleFrosted2, SelectStyle.FrostedGlass2), 2, 1);
             panel.Controls.Add(CreateStyleBlock(_styleInset, SelectStyle.Inset), 3, 1);
-            panel.Controls.Add(CreateStyleBlock(_styleGradient, SelectStyle.GradientFrame), 4, 1);
+            panel.Controls.Add(CreateStyleBlock(_styleCrystal, SelectStyle.Crystal), 4, 1);
             group.Controls.Add(panel);
             panel.Location = group.DisplayRectangle.Location;
             Size content = panel.PreferredSize;
