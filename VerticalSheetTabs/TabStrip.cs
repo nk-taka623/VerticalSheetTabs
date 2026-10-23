@@ -496,7 +496,7 @@ namespace VerticalSheetTabs
 
         private bool Stripes { get { return _selectStyle == SelectStyle.Stripes; } }
 
-        private bool Gradient { get { return _selectStyle == SelectStyle.GradientFrame; } }
+        private bool Crystal { get { return _selectStyle == SelectStyle.Crystal; } }
 
         // The mark of the active sheet, with every look (Agents.md 12.110).
         private ActiveMarker _activeMarker = ActiveMarker.Underline;
@@ -753,10 +753,10 @@ namespace VerticalSheetTabs
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
                 textColor = DrawStripes(g, body, radius, colored, color);
             }
-            else if (selected && Gradient)
+            else if (selected && Crystal)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
-                textColor = DrawGradientFrame(g, body, colored, color, 1.0);
+                textColor = DrawCrystal(g, body, colored, color, 1.0);
             }
             else if (selected && Glass)
             {
@@ -930,10 +930,10 @@ namespace VerticalSheetTabs
                 if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
                 if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
             }
-            else if (selected && Gradient)
+            else if (selected && Crystal)
             {
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
-                textColor = DrawGradientFrame(g, body, colored, tabColor, active ? 1.0 : 0.6);
+                textColor = DrawCrystal(g, body, colored, tabColor, active ? 1.0 : 0.6);
                 if (underline) DrawUnderline(g, body, LineColorFor(tabColor, colored));
                 if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
                 if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
@@ -988,7 +988,7 @@ namespace VerticalSheetTabs
             if (_editor == null || name != _editingSheet)
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                using (var font = selected && (DoubleFrame || Glass || Inset || Stripes || Gradient) ? new Font(TabFont, FontStyle.Bold) : null)
+                using (var font = selected && (DoubleFrame || Glass || Inset || Stripes || Crystal) ? new Font(TabFont, FontStyle.Bold) : null)
                 using (var brush = new SolidBrush(textColor))
                 using (var format = new StringFormat(StringFormat.GenericDefault))
                 {
@@ -1084,18 +1084,18 @@ namespace VerticalSheetTabs
             return TextOn(fill);
         }
 
-        // The gradient-frame look (Agents.md 12.131): a pale chip (a tint of the row's color; a row without color: of Excel's green)
-        // that is a little raised (half of the shadow of the neumorphic sketch: a light shadow at the lower right, a white glow at
-        // the upper left; GDI+ has no blur, so a few translucent shapes of growing size stand for each), inside a ring whose color
-        // runs from left to right: a dark shade of the row's color to a light one (Excel's green to a teal for a row without color).
-        // Returns the color of the text on it.
-        private Color DrawGradientFrame(Graphics g, Rectangle body, bool colored, Color color, double strength)
+        // The crystal look (Agents.md 12.139): the row is cut by a diagonal line into a light face at the left (the color of the row made
+        // lighter, or a pale blue for a row without color) and a dark one at the right; the light color fades out into the dark one, going
+        // right from the cut (over about 40% of the width), and a white line marks the cut (with a faint light line along its left side).
+        // The body is a little raised: half of the shadow of the neumorphic sketch (a light shadow at the lower right, a white glow at the
+        // upper left; GDI+ has no blur, so a few translucent shapes of growing size stand for each), and it has a white edge. Returns the
+        // color of the text on it.
+        private Color DrawCrystal(Graphics g, Rectangle body, bool colored, Color color, double strength)
         {
             bool dark = Theme.BarBack.GetBrightness() < 0.4f;
-            int radius = Px(8);
-            Color tint = colored ? Mix(color, Color.White, 0.72) : Mix(Underline, Color.White, 0.88);
-            Color left = colored ? Mix(color, Color.Black, 0.35) : Underline;
-            Color right = colored ? Mix(color, Color.White, 0.15) : Color.FromArgb(0, 176, 160);
+            int radius = Px(6);
+            Color baseColor = colored ? color : Color.FromArgb(150, 185, 225);
+            Color light = Mix(baseColor, Color.White, 0.55), deep = Mix(baseColor, Color.Black, 0.12);
             for (int k = 3; k >= 1; k--)
             {
                 var r = Rectangle.Inflate(body, Px(0.5 * k), Px(0.5 * k));
@@ -1116,18 +1116,40 @@ namespace VerticalSheetTabs
                     g.FillPath(brush, path);
                 }
             }
+            // the cut: from (cutX + 8, top) to (cutX - 6, bottom), DIP
+            float cutX = body.Left + body.Width * 0.38f;
+            var top = new PointF(cutX + Px(8), body.Top);
+            var bottom = new PointF(cutX - Px(6), body.Bottom);
             using (GraphicsPath path = RoundedRect(body, radius))
-            using (var brush = new SolidBrush(tint))
             {
-                g.FillPath(brush, path);
-            }
-            float ring = Math.Max(2f, Px(2.6));
-            Rectangle ringRect = Rectangle.Inflate(body, -(int)Math.Ceiling(ring / 2), -(int)Math.Ceiling(ring / 2));
-            using (GraphicsPath path = RoundedRect(ringRect, Math.Max(1, radius - (int)Math.Ceiling(ring / 2))))
-            using (var brush = new LinearGradientBrush(new Rectangle(body.X, body.Y, Math.Max(2, body.Width), Math.Max(2, body.Height)), left, right, LinearGradientMode.Horizontal))
-            using (var pen = new Pen(brush, ring))
-            {
-                g.DrawPath(pen, path);
+                using (var brush = new SolidBrush(light)) g.FillPath(brush, path);
+                Region clip = g.Clip;
+                g.SetClip(path, CombineMode.Intersect);
+                // the dark face, with a gradient across the cut (its direction is at a right angle to the cut) from the light color to the dark one
+                float dx = bottom.X - top.X, dy = bottom.Y - top.Y, len = (float)Math.Sqrt(dx * dx + dy * dy);
+                float nx = dy / len, ny = -dx / len; // at a right angle to the cut, pointing to the right
+                if (nx < 0) { nx = -nx; ny = -ny; }
+                var p1 = new PointF((top.X + bottom.X) / 2, (top.Y + bottom.Y) / 2);
+                float span = body.Right - p1.X + Px(2);
+                var p2 = new PointF(p1.X + nx * span, p1.Y + ny * span);
+                float fade = Math.Min(1f, body.Width * 0.4f / span);
+                using (var brush = new LinearGradientBrush(p1, p2, light, deep))
+                {
+                    brush.InterpolationColors = new ColorBlend(3)
+                    {
+                        Colors = new[] { light, deep, deep },
+                        Positions = new[] { 0f, fade, 1f }
+                    };
+                    var face = new[] { top, new PointF(body.Right + Px(1), body.Top), new PointF(body.Right + Px(1), body.Bottom), bottom };
+                    g.FillPolygon(brush, face);
+                }
+                using (var pen = new Pen(Color.FromArgb(90, 120, 150, 200), Math.Max(1f, Px(1.0))))
+                {
+                    g.DrawLine(pen, top.X - Px(1.5), top.Y, bottom.X - Px(1.5), bottom.Y);
+                }
+                using (var pen = new Pen(Color.White, Math.Max(1.5f, Px(1.6)))) g.DrawLine(pen, top, bottom);
+                g.Clip = clip;
+                using (var pen = new Pen(Color.White, Math.Max(1.5f, Px(1.2)))) g.DrawPath(pen, path);
             }
             return TextColor;
         }

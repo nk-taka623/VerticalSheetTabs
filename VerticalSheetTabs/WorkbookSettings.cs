@@ -20,7 +20,7 @@ namespace VerticalSheetTabs
         FrostedGlass2, // frosted glass tinted with the row's color (Agents.md 12.107)
         Inset,         // pressed in: a darker body with a shadow inside its upper and left edges (Agents.md 12.115)
         Stripes,       // diagonal stripes with an outline (Agents.md 12.131)
-        GradientFrame  // a pale raised chip with a gradient ring made of the row's color (Agents.md 12.131)
+        Crystal        // diagonal cut faces: a light one and a dark one, the light color fading out into the dark one (Agents.md 12.139)
     }
 
     // The mark of the active sheet (Agents.md 12.110), drawn with every look of SelectStyle.
@@ -52,7 +52,7 @@ namespace VerticalSheetTabs
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
-        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "GradientFrame"
+        public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "Crystal"
 
         // Office.MsoDocProperties values.
         private const int PropTypeNumber = 1;
@@ -176,7 +176,8 @@ namespace VerticalSheetTabs
                 case "FrostedGlass2": return SelectStyle.FrostedGlass2;
                 case "Inset": return SelectStyle.Inset;
                 case "Stripes": return SelectStyle.Stripes;
-                case "GradientFrame": return SelectStyle.GradientFrame;
+                case "Crystal":
+                case "GradientFrame": return SelectStyle.Crystal; // (GradientFrame, in v1.1.50 to v1.1.52, became the crystal look)
                 default: return SelectStyle.Standard;
             }
         }
@@ -191,7 +192,7 @@ namespace VerticalSheetTabs
                 case SelectStyle.FrostedGlass2: return "FrostedGlass2";
                 case SelectStyle.Inset: return "Inset";
                 case SelectStyle.Stripes: return "Stripes";
-                case SelectStyle.GradientFrame: return "GradientFrame";
+                case SelectStyle.Crystal: return "Crystal";
                 default: return "Standard";
             }
         }
