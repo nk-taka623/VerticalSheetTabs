@@ -265,8 +265,8 @@ namespace VerticalSheetTabs
             bool sameSelection = userBusy || (_active == activeName && _selected.SetEquals(selected));
             if (sameNames && sameRows && sameSelection && sameColors) return;
 
-            // a sheet added or deleted: the row appears or shrinks away (looked at while the old state is still here)
-            RowAnimPending pending = sameNames ? null : PrepareRowAnim(names);
+            // a sheet or a folder added or deleted: the row appears or shrinks away (looked at while the old state is still here)
+            RowAnimPending pending = sameNames && sameRows ? null : PrepareRowAnim(names, newRows);
 
             if (!sameColors)
             {
@@ -1087,7 +1087,7 @@ namespace VerticalSheetTabs
                 _folderSel = selNow;
                 _folderSelSeen = true;
                 // (the row of a sheet that has just been added comes in with its own motion)
-                bool wobbleSheet = sheetChanged && !(_raAdded != null && _active != null && _raAdded.Contains(_active));
+                bool wobbleSheet = sheetChanged && !(_raAdded != null && _active != null && _raAdded.Contains("S:" + _active));
                 if ((wobbleSheet || toggled != null) && !_ghostOn) StartWobble(wobbleSheet ? _active : null, toggled, opened);
             }
 
@@ -1103,7 +1103,8 @@ namespace VerticalSheetTabs
                 row.Offset(0, RowAnimDy(i));
                 if (row.Top > ViewHeight) break;
                 if (row.Bottom < 0) continue;
-                if (_raAdded != null && !_rows[i].IsFolder && _rows[i].Sheet != null && _raAdded.Contains(_rows[i].Sheet)) comingIn.Add(i);
+                row = RowAnimIndent(row, _rows[i]);
+                if (_raAdded != null && _raAdded.Contains(RowKey(_rows[i]))) comingIn.Add(i);
                 else if (_animClock != null && (_rows[i].IsFolder ? (_animFolders != null && _animFolders.Contains(_rows[i].FolderId)) : (_rows[i].Sheet == _animSheet || (_animSheets != null && _rows[i].Sheet != null && _animSheets.Contains(_rows[i].Sheet))))) wobbling.Add(i);
                 else
                 {
@@ -1145,17 +1146,20 @@ namespace VerticalSheetTabs
             if (!IsSample) DrawPlus(g);
         }
 
-        // ---- the rows of added and deleted sheets (Agents.md 12.194) ----
-        // An added sheet: the rows below make room (they slide down), and the new row grows in with a little spring, fading in, with a
-        // ring of light around it. A deleted sheet: its row swells a little, shrinks and fades away, a few dots fly out, and the rows below
-        // slide up. It runs 0.4 seconds (the length is fixed) and makes no sound. It is off unless it is chosen in the settings.
+        // ---- the rows of added and deleted sheets and folders (Agents.md 12.194, 12.196) ----
+        // An added row: the rows below make room (they slide down), and the new row grows in with a little spring, fading in, with a
+        // ring of light around it. A deleted row: it swells a little, shrinks and fades away, a few dots fly out, and the rows below
+        // slide up. The sheets that move into a folder, or out of a deleted one, slide sideways to their new place. It runs 0.4 seconds
+        // (the length is fixed) and makes no sound. It is off unless it is chosen in the settings.
 
         private const int RowAnimMs = 400;
+        private const int RowAnimMaxRows = 14;
         private bool _rowAnimation;
         private System.Windows.Forms.Timer _raTimer;
         private System.Diagnostics.Stopwatch _raClock;
-        private HashSet<string> _raAdded;
+        private HashSet<string> _raAdded;                 // the keys ("S:name", "F:id") of the rows that come in
         private List<RowAnimGhost> _raGhosts;
+        private Dictionary<string, bool> _raIndent;       // sheet name -> whether it was indented before
 
         private class RowAnimGhost
         {
@@ -1166,8 +1170,9 @@ namespace VerticalSheetTabs
 
         private class RowAnimPending
         {
-            public List<string> Added = new List<string>();
+            public HashSet<string> Added = new HashSet<string>();
             public List<RowAnimGhost> Ghosts = new List<RowAnimGhost>();
+            public Dictionary<string, bool> OldIndented = new Dictionary<string, bool>();
         }
 
         public bool RowAnimation
@@ -1175,6 +1180,8 @@ namespace VerticalSheetTabs
             get { return _rowAnimation; }
             set { _rowAnimation = value; if (!value) EndRowAnim(); }
         }
+
+        private static string RowKey(StripRow r) { return r.IsFolder ? "F:" + r.FolderId : "S:" + r.Sheet; }
 
         private static double EaseOut(double t) { t = Math.Max(0, Math.Min(1, t)); return 1 - Math.Pow(1 - t, 3); }
 
@@ -1189,23 +1196,39 @@ namespace VerticalSheetTabs
 
         private double RowAnimT { get { return _raClock == null ? 1 : Math.Min(1.0, _raClock.ElapsedMilliseconds / (double)RowAnimMs); } }
 
-        // Called with the old state still in place: which sheets came and went, and (of those that went) a picture of their rows.
-        private RowAnimPending PrepareRowAnim(IList<string> names)
+        // How far the rows below (and the sheets that change their indent) have come on their way, 0 to 1.
+        private double RowAnimSlide()
+        {
+            double t = RowAnimT;
+            return _raAdded != null ? EaseOut(t / 0.5) : EaseOut((t - 0.35) / 0.6);
+        }
+
+        private Color RowAnimColor(StripRow r)
+        {
+            if (r.IsFolder) return r.ColorBgr >= 0 ? Color.FromArgb(r.ColorBgr & 0xFF, (r.ColorBgr >> 8) & 0xFF, (r.ColorBgr >> 16) & 0xFF) : Underline;
+            int bgr;
+            return r.Sheet != null && _colors.TryGetValue(r.Sheet, out bgr) ? Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF) : Underline;
+        }
+
+        // Called with the old state still in place: which rows came and went (sheets by name, folders by id), and (of those that went) a
+        // picture of their rows.
+        private RowAnimPending PrepareRowAnim(IList<string> names, IList<StripRow> newRows)
         {
             if (!_rowAnimation || IsSample || _names.Count == 0 || Filtering || !IsHandleCreated || !base.Visible || ClientSize.Width < 20 || RowPx <= 0) return null;
-            var added = names.Where(n => !_names.Contains(n)).ToList();
-            var removed = _names.Where(n => !names.Contains(n)).ToList();
-            // only a sheet that came, or only one that went (a rename or a regrouping does both; a bulk change is not shown)
-            if ((added.Count == 0) == (removed.Count == 0) || added.Count + removed.Count > 3) return null;
-            var p = new RowAnimPending { Added = added };
+            var oldFolders = new HashSet<string>(_rows.Where(r => r.IsFolder).Select(r => r.FolderId));
+            var newFolders = new HashSet<string>(newRows.Where(r => r.IsFolder).Select(r => r.FolderId));
+            var added = names.Where(n => !_names.Contains(n)).Select(n => "S:" + n).Concat(newFolders.Where(f => !oldFolders.Contains(f)).Select(f => "F:" + f)).ToList();
+            var removed = new HashSet<string>(_names.Where(n => !names.Contains(n)).Select(n => "S:" + n).Concat(oldFolders.Where(f => !newFolders.Contains(f)).Select(f => "F:" + f)));
+            // only rows that came, or only rows that went (a rename or a regrouping does both; a bulk change is not shown)
+            if ((added.Count == 0) == (removed.Count == 0) || added.Count + removed.Count > RowAnimMaxRows) return null;
+            var p = new RowAnimPending { Added = new HashSet<string>(added) };
+            foreach (StripRow r in _rows) if (!r.IsFolder && r.Sheet != null) p.OldIndented[r.Sheet] = r.Indented;
             int before = 0;
             for (int i = 0; i < _rows.Count; i++)
             {
                 StripRow r = _rows[i];
-                if (r.IsFolder || r.Sheet == null || !removed.Contains(r.Sheet)) continue;
-                int bgr;
-                Color c = _colors.TryGetValue(r.Sheet, out bgr) ? Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF) : Underline;
-                p.Ghosts.Add(new RowAnimGhost { Bmp = RenderRowBitmap(r, ContentWidth), At = i - before, Color = c });
+                if (!removed.Contains(RowKey(r))) continue;
+                p.Ghosts.Add(new RowAnimGhost { Bmp = RenderRowBitmap(r, ContentWidth), At = i - before, Color = RowAnimColor(r) });
                 before++;
             }
             if (added.Count == 0 && p.Ghosts.Count == 0) return null;
@@ -1219,7 +1242,7 @@ namespace VerticalSheetTabs
             EndRowAnim();
             if (p.Added.Count > 0)
             {
-                var set = new HashSet<string>(_rows.Where(r => !r.IsFolder && r.Sheet != null && p.Added.Contains(r.Sheet)).Select(r => r.Sheet));
+                var set = new HashSet<string>(_rows.Select(RowKey).Where(k => p.Added.Contains(k)));
                 if (set.Count == 0) return; // (the sheet is in a closed folder: no row)
                 _raAdded = set;
             }
@@ -1228,6 +1251,14 @@ namespace VerticalSheetTabs
                 foreach (RowAnimGhost g in p.Ghosts) g.At = Math.Min(g.At, _rows.Count);
                 _raGhosts = p.Ghosts;
             }
+            // the sheets whose indent changes (a folder came or went around them) slide to their new place
+            var indent = new Dictionary<string, bool>();
+            foreach (StripRow r in _rows)
+            {
+                bool was;
+                if (!r.IsFolder && r.Sheet != null && p.OldIndented.TryGetValue(r.Sheet, out was) && was != r.Indented) indent[r.Sheet] = was;
+            }
+            _raIndent = indent.Count > 0 ? indent : null;
             _raClock = System.Diagnostics.Stopwatch.StartNew();
             if (_raTimer == null)
             {
@@ -1247,6 +1278,7 @@ namespace VerticalSheetTabs
             bool was = _raClock != null;
             _raClock = null;
             _raAdded = null;
+            _raIndent = null;
             if (_raGhosts != null)
             {
                 foreach (RowAnimGhost g in _raGhosts) if (g.Bmp != null) g.Bmp.Dispose();
@@ -1259,19 +1291,28 @@ namespace VerticalSheetTabs
         private int RowAnimDy(int index)
         {
             if (_raClock == null) return 0;
-            double t = RowAnimT;
             if (_raAdded != null)
             {
                 int before = 0;
-                for (int j = 0; j < index && j < _rows.Count; j++) if (!_rows[j].IsFolder && _rows[j].Sheet != null && _raAdded.Contains(_rows[j].Sheet)) before++;
-                return -(int)Math.Round(RowPx * before * (1 - EaseOut(t / 0.5)));
+                for (int j = 0; j < index && j < _rows.Count; j++) if (_raAdded.Contains(RowKey(_rows[j]))) before++;
+                return -(int)Math.Round(RowPx * before * (1 - RowAnimSlide()));
             }
             if (_raGhosts != null)
             {
                 int before = _raGhosts.Count(g => g.At <= index);
-                return (int)Math.Round(RowPx * before * (1 - EaseOut((t - 0.35) / 0.6)));
+                return (int)Math.Round(RowPx * before * (1 - RowAnimSlide()));
             }
             return 0;
+        }
+
+        // A sheet that moves into a folder, or out of one: its left edge slides from the old indent to the new one.
+        private Rectangle RowAnimIndent(Rectangle row, StripRow r)
+        {
+            bool was;
+            if (_raClock == null || _raIndent == null || r.IsFolder || r.Sheet == null || !_raIndent.TryGetValue(r.Sheet, out was)) return row;
+            int dx = (was ? Px(FolderIndent) : 0) - (r.Indented ? Px(FolderIndent) : 0);
+            dx = (int)Math.Round(dx * (1 - RowAnimSlide()));
+            return new Rectangle(row.Left + dx, row.Top, row.Width - dx, row.Height);
         }
 
         // A picture of a row (transparent around it), as it looks now.
@@ -1327,8 +1368,7 @@ namespace VerticalSheetTabs
                 {
                     double k = (t - 0.1) / 0.6;
                     int grow = (int)(Px(10) * k);
-                    int bgr;
-                    Color c = _colors.TryGetValue(_rows[index].Sheet, out bgr) ? Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF) : Underline;
+                    Color c = RowAnimColor(_rows[index]);
                     var ring = new Rectangle(row.Left + Px(InsetLeft) - grow, row.Top + Px(PlainTop) - grow, row.Width - Px(InsetLeft + InsetRight) + grow * 2, row.Height - Px(PlainTop + BottomInset) + grow * 2);
                     using (GraphicsPath path = RoundedRect(ring, Px(CornerRadius) + grow))
                     using (var pen = new Pen(Color.FromArgb((int)(130 * (1 - k)), c), Math.Max(1.5f, Px(2))))

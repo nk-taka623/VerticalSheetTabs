@@ -83,7 +83,7 @@ namespace VerticalSheetTabs
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
-            _rowAnim.Text = "シートの追加・削除を、動きで見せる";
+            _rowAnim.Text = "フォルダ・シートの追加・削除を、動きで見せる";
             _rowAnim.Checked = rowAnim;
             _animGroup = CreateAnimGroup();
             _badgeError.Text = "数式エラー";

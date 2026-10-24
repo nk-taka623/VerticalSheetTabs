@@ -66,7 +66,7 @@ namespace VerticalSheetTabs
         public const string WobbleDurName = "VTab.WobbleDur"; // number, milliseconds (300 to 1200, default 600)
         public const string WobbleSoundName = "VTab.WobbleSound";   // string "On" / "Off" (default "Off"; Agents.md 12.172)
         public const string WobbleVolumeName = "VTab.WobbleVolume"; // number 0 to 100 (default 60)
-        public const string RowAnimName = "VTab.RowAnim";         // string "On" / "Off" (default "Off"; the add and delete animation of the rows, Agents.md 12.194)
+        public const string RowAnimName = "VTab.RowAnim";         // string "On" / "Off" (default "On"; the add and delete animation of the rows, Agents.md 12.194, 12.197)
         public const string WobbleSampleStyleName = "VTab.WobbleSampleStyle"; // string "On" / "Off" (default "Off"; Agents.md 12.178)
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
         public const string BadgesName = "VTab.Badges";           // string "None", or "Error", "Memo", "Protect" joined by commas (default "None"; Agents.md 12.190)
@@ -110,7 +110,7 @@ namespace VerticalSheetTabs
         // the sample of the wobble in the settings dialog follows the chosen look and marker
         public bool WobbleSampleStyle { get; set; }
 
-        // The rows of added sheets appear and the rows of deleted sheets shrink away (default: off).
+        // The rows of added sheets and folders appear and the rows of deleted ones shrink away (default: on).
         public bool RowAnim { get; set; }
 
         public WorkbookSettings()
@@ -131,7 +131,7 @@ namespace VerticalSheetTabs
             WobbleSound = false;
             WobbleVolume = WobbleSounds.VolumeDefault;
             WobbleSampleStyle = false;
-            RowAnim = false;
+            RowAnim = true;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
