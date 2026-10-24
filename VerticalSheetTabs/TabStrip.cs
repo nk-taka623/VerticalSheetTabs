@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace VerticalSheetTabs
@@ -1754,6 +1756,9 @@ namespace VerticalSheetTabs
         }
 
         private const double RowBadgePillWidth = 34, RowBadgePillHeight = 17;
+
+        // the done + lock mark and the count badge of a folder are a little larger than the others (Agents.md 12.203)
+        private const double BadgeBigScale = 1.2;
         private static readonly Color BadgeProgressGray = Color.FromArgb(150, 150, 155), BadgeProgressBlue = Color.FromArgb(58, 128, 233), BadgeProgressGreen = Color.FromArgb(16, 124, 65);
         private static readonly string[] ProgressNames = { "なし", "未着手", "作業中", "完了" };
 
@@ -1849,8 +1854,10 @@ namespace VerticalSheetTabs
             int x = right;
             foreach (RowBadgeSpec s in found)
             {
-                int w = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillWidth) : radius * 2;
-                int h = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillHeight) : radius * 2;
+                bool big = s.Kind == RowBadgeKind.Count || (s.Kind == RowBadgeKind.Progress && s.State == 4);
+                int side = big ? (int)Math.Round(radius * 2 * BadgeBigScale) : radius * 2;
+                int w = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillWidth) : side;
+                int h = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillHeight) : side;
                 s.Bounds = new Rectangle(x - w, cy - h / 2, w, h);
                 list.Add(s);
                 x -= w + gap;
@@ -1911,15 +1918,181 @@ namespace VerticalSheetTabs
 
         private void DrawRowBadges(Graphics g, StripRow r, Rectangle row)
         {
-            foreach (RowBadgeSpec s in RowBadges(r, row))
+            List<RowBadgeSpec> specs = RowBadges(r, row);
+            if (specs.Count == 0) return;
+            DrawBadgeGlows(g, specs);
+            foreach (RowBadgeSpec s in specs) DrawBadgeBody(g, s, false);
+        }
+
+        private void DrawBadgeBody(Graphics g, RowBadgeSpec s, bool outline)
+        {
+            if (s.Kind == RowBadgeKind.Progress) DrawProgressBadge(g, s.Bounds, s.State);
+            else if (s.Kind == RowBadgeKind.ProgressPill) DrawProgressPill(g, s.Bounds, s.Count, s.Total);
+            else if (s.Kind == RowBadgeKind.Error) DrawErrorBadge(g, s.Bounds, s.Color, outline);
+            else if (s.Kind == RowBadgeKind.Memo) DrawMemoBadge(g, s.Bounds, s.Color, outline);
+            else if (s.Kind == RowBadgeKind.Protect) DrawLockBadge(g, s.Bounds, s.Color, outline);
+            else DrawCountBadge(g, s.Bounds, s.Color, s.Count, outline);
+        }
+
+        // The white rim and the soft glow around every badge (Agents.md 12.203): the badges stand out on a dark row. The glows of the badges of a
+        // row are added up first (where they overlap they sum, up to white), the badges are drawn on top.
+        private sealed class GlowMask { public byte[] A; public int W, H, Pad; }
+
+        private static readonly Dictionary<string, GlowMask> GlowCache = new Dictionary<string, GlowMask>();
+        private const float GlowRim = 0.8f, GlowBlur = 2.0f;
+
+        private void DrawBadgeGlows(Graphics g, List<RowBadgeSpec> specs)
+        {
+            try
             {
-                if (s.Kind == RowBadgeKind.Progress) DrawProgressBadge(g, s.Bounds, s.State);
-                else if (s.Kind == RowBadgeKind.ProgressPill) DrawProgressPill(g, s.Bounds, s.Count, s.Total);
-                else if (s.Kind == RowBadgeKind.Error) DrawErrorBadge(g, s.Bounds, s.Color);
-                else if (s.Kind == RowBadgeKind.Memo) DrawMemoBadge(g, s.Bounds, s.Color);
-                else if (s.Kind == RowBadgeKind.Protect) DrawLockBadge(g, s.Bounds, s.Color);
-                else DrawCountBadge(g, s.Bounds, s.Color, s.Count);
+                var masks = new List<GlowMask>();
+                int l = int.MaxValue, t = int.MaxValue, rt = int.MinValue, bt = int.MinValue;
+                for (int i = 0; i < specs.Count; i++)
+                {
+                    GlowMask m = GlowFor(specs[i]);
+                    masks.Add(m);
+                    int x = specs[i].Bounds.Left - m.Pad, y = specs[i].Bounds.Top - m.Pad;
+                    l = Math.Min(l, x);
+                    t = Math.Min(t, y);
+                    rt = Math.Max(rt, x + m.W);
+                    bt = Math.Max(bt, y + m.H);
+                }
+                int w = rt - l, h = bt - t;
+                if (w <= 0 || h <= 0) return;
+                var acc = new int[w * h];
+                for (int i = 0; i < specs.Count; i++)
+                {
+                    GlowMask m = masks[i];
+                    int ox = specs[i].Bounds.Left - m.Pad - l, oy = specs[i].Bounds.Top - m.Pad - t;
+                    for (int y = 0; y < m.H; y++)
+                        for (int x = 0; x < m.W; x++)
+                            acc[(oy + y) * w + ox + x] += m.A[y * m.W + x];
+                }
+                for (int i = 0; i < acc.Length; i++) acc[i] = (Math.Min(255, acc[i]) << 24) | 0xFFFFFF;
+                using (var bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb))
+                {
+                    BitmapData data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                    try { Marshal.Copy(acc, 0, data.Scan0, acc.Length); }
+                    finally { bmp.UnlockBits(data); }
+                    g.DrawImage(bmp, new Rectangle(l, t, w, h));
+                }
             }
+            catch
+            {
+                // no glow is better than no badge
+            }
+        }
+
+        private GlowMask GlowFor(RowBadgeSpec s)
+        {
+            int bw = s.Bounds.Width, bh = s.Bounds.Height;
+            string key = s.Kind + "|" + s.State + "|" + bw + "|" + bh + "|" + Px(100);
+            GlowMask cached;
+            if (GlowCache.TryGetValue(key, out cached)) return cached;
+            float sc = Px(100) / 125f;
+            float rim = GlowRim * sc, grow = rim + 1.2f * sc, sigma = Math.Max(0.6f, GlowBlur * sc * 0.5f);
+            int pad = (int)Math.Ceiling(grow + 3 * sigma) + 1;
+            int W = bw + 2 * pad, H = bh + 2 * pad;
+            var alpha = new byte[W * H];
+            using (var bmp = new Bitmap(W, H, PixelFormat.Format32bppArgb))
+            {
+                using (Graphics gg = Graphics.FromImage(bmp))
+                {
+                    gg.Clear(Color.Transparent);
+                    var body = new RowBadgeSpec { Kind = s.Kind, State = s.State, Color = s.Color, Count = s.Count, Total = s.Total, Bounds = new Rectangle(pad, pad, bw, bh) };
+                    DrawBadgeBody(gg, body, false);
+                }
+                BitmapData data = bmp.LockBits(new Rectangle(0, 0, W, H), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                try
+                {
+                    var raw = new byte[Math.Abs(data.Stride) * H];
+                    Marshal.Copy(data.Scan0, raw, 0, raw.Length);
+                    for (int y = 0; y < H; y++)
+                        for (int x = 0; x < W; x++) alpha[y * W + x] = raw[y * data.Stride + x * 4 + 3];
+                }
+                finally { bmp.UnlockBits(data); }
+            }
+            // the hole inside a shape (the shackle of a padlock) stays open: what the outside cannot reach
+            var outside = new bool[W * H];
+            var stack = new Stack<int>();
+            stack.Push(0);
+            outside[0] = true;
+            while (stack.Count > 0)
+            {
+                int p = stack.Pop(), px = p % W, py = p / W;
+                if (px > 0 && !outside[p - 1] && alpha[p - 1] <= 16) { outside[p - 1] = true; stack.Push(p - 1); }
+                if (px < W - 1 && !outside[p + 1] && alpha[p + 1] <= 16) { outside[p + 1] = true; stack.Push(p + 1); }
+                if (py > 0 && !outside[p - W] && alpha[p - W] <= 16) { outside[p - W] = true; stack.Push(p - W); }
+                if (py < H - 1 && !outside[p + W] && alpha[p + W] <= 16) { outside[p + W] = true; stack.Push(p + W); }
+            }
+            float[] rimA = Dilate(alpha, W, H, rim);
+            float[] halo = Blur(Dilate(alpha, W, H, grow), W, H, sigma);
+            var result = new byte[W * H];
+            for (int i = 0; i < result.Length; i++)
+            {
+                bool hole = alpha[i] <= 16 && !outside[i];
+                float v = hole ? 0 : Math.Max(rimA[i], halo[i] * 0.6f);
+                result[i] = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(v)));
+            }
+            if (GlowCache.Count > 80) GlowCache.Clear();
+            var mask = new GlowMask { A = result, W = W, H = H, Pad = pad };
+            GlowCache[key] = mask;
+            return mask;
+        }
+
+        // the strongest alpha within a radius (a soft edge of one pixel)
+        private static float[] Dilate(byte[] a, int W, int H, float radius)
+        {
+            var o = new float[W * H];
+            int n = (int)Math.Ceiling(radius) + 1;
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    float best = 0;
+                    for (int dy = -n; dy <= n; dy++)
+                    {
+                        int yy = y + dy;
+                        if (yy < 0 || yy >= H) continue;
+                        for (int dx = -n; dx <= n; dx++)
+                        {
+                            int xx = x + dx;
+                            if (xx < 0 || xx >= W) continue;
+                            float d = (float)Math.Sqrt(dx * dx + dy * dy);
+                            float f = d <= radius ? 1f : d < radius + 1 ? radius + 1 - d : 0f;
+                            if (f <= 0) continue;
+                            float v = a[yy * W + xx] * f;
+                            if (v > best) best = v;
+                        }
+                    }
+                    o[y * W + x] = best;
+                }
+            return o;
+        }
+
+        private static float[] Blur(float[] src, int W, int H, float sigma)
+        {
+            int rad = (int)Math.Ceiling(sigma * 3);
+            var k = new float[rad * 2 + 1];
+            float sum = 0;
+            for (int i = -rad; i <= rad; i++) { k[i + rad] = (float)Math.Exp(-(i * i) / (2 * sigma * sigma)); sum += k[i + rad]; }
+            for (int i = 0; i < k.Length; i++) k[i] /= sum;
+            var tmp = new float[W * H];
+            var o = new float[W * H];
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    float v = 0;
+                    for (int i = -rad; i <= rad; i++) { int xx = x + i; if (xx >= 0 && xx < W) v += src[y * W + xx] * k[i + rad]; }
+                    tmp[y * W + x] = v;
+                }
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    float v = 0;
+                    for (int i = -rad; i <= rad; i++) { int yy = y + i; if (yy >= 0 && yy < H) v += tmp[yy * W + x] * k[i + rad]; }
+                    o[y * W + x] = v;
+                }
+            return o;
         }
 
         // the progress of a sheet: an empty ring (not started), a half filled ring (in progress), a green circle with a check (done)
@@ -2011,13 +2184,16 @@ namespace VerticalSheetTabs
         }
 
         // a red triangle with an exclamation mark, in a white rim
-        private static void DrawErrorBadge(Graphics g, Rectangle b, Color color)
+        private static void DrawErrorBadge(Graphics g, Rectangle b, Color color, bool outline = true)
         {
             var mode = g.SmoothingMode;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f * 1.05f;
-            using (var white = new SolidBrush(Color.White)) g.FillPolygon(white, TriangleAt(cx, cy, r, 1f));
-            using (var fill = new SolidBrush(color)) g.FillPolygon(fill, TriangleAt(cx, cy, r, 0.82f));
+            if (outline)
+            {
+                using (var white = new SolidBrush(Color.White)) g.FillPolygon(white, TriangleAt(cx, cy, r, 1f));
+            }
+            using (var fill = new SolidBrush(color)) g.FillPolygon(fill, TriangleAt(cx, cy, r, outline ? 0.82f : 0.92f));
             using (var white = new SolidBrush(Color.White))
             {
                 float w = Math.Max(1.5f, r * 0.2f);
@@ -2033,15 +2209,18 @@ namespace VerticalSheetTabs
         }
 
         // an amber note with three lines, in a white rim
-        private static void DrawMemoBadge(Graphics g, Rectangle b, Color color)
+        private static void DrawMemoBadge(Graphics g, Rectangle b, Color color, bool outline = true)
         {
             var mode = g.SmoothingMode;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f * 1.05f;
             var outer = Rectangle.Round(new RectangleF(cx - r * 0.85f, cy - r * 0.95f, r * 1.7f, r * 1.9f));
-            var inner = Rectangle.Round(new RectangleF(cx - r * 0.75f, cy - r * 0.84f, r * 1.5f, r * 1.68f));
-            using (GraphicsPath p = RoundedRect(outer, Math.Max(2, (int)(r * 0.25f))))
-            using (var white = new SolidBrush(Color.White)) g.FillPath(white, p);
+            var inner = outline ? Rectangle.Round(new RectangleF(cx - r * 0.75f, cy - r * 0.84f, r * 1.5f, r * 1.68f)) : Rectangle.Round(new RectangleF(cx - r * 0.8f, cy - r * 0.9f, r * 1.6f, r * 1.8f));
+            if (outline)
+            {
+                using (GraphicsPath p = RoundedRect(outer, Math.Max(2, (int)(r * 0.25f))))
+                using (var white = new SolidBrush(Color.White)) g.FillPath(white, p);
+            }
             using (GraphicsPath p = RoundedRect(inner, Math.Max(2, (int)(r * 0.2f))))
             using (var fill = new SolidBrush(color)) g.FillPath(fill, p);
             using (var pen = new Pen(Color.White, Math.Max(1.5f, r * 0.2f)))
@@ -2056,7 +2235,7 @@ namespace VerticalSheetTabs
         }
 
         // a padlock (a body and a shackle), in a white rim
-        private static void DrawLockBadge(Graphics g, Rectangle b, Color color)
+        private static void DrawLockBadge(Graphics g, Rectangle b, Color color, bool outline = true)
         {
             var mode = g.SmoothingMode;
             g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -2069,11 +2248,14 @@ namespace VerticalSheetTabs
             using (var pen = new Pen(color, r * 0.34f))
             {
                 rimPen.StartCap = rimPen.EndCap = LineCap.Round;
-                g.DrawArc(rimPen, cx - shackleW / 2, shackleTop, shackleW, r * 1.4f, 180, 180);
-                g.DrawLine(rimPen, cx - shackleW / 2, shackleTop + r * 0.7f, cx - shackleW / 2, bodyTop + r * 0.1f);
-                g.DrawLine(rimPen, cx + shackleW / 2, shackleTop + r * 0.7f, cx + shackleW / 2, bodyTop + r * 0.1f);
-                var outer = Rectangle.Round(new RectangleF(cx - bodyW / 2 - rim * 0.6f, bodyTop - rim * 0.6f, bodyW + rim * 1.2f, bodyH + rim * 1.2f));
-                using (GraphicsPath p = RoundedRect(outer, Math.Max(2, (int)(r * 0.3f)))) using (var white = new SolidBrush(Color.White)) g.FillPath(white, p);
+                if (outline)
+                {
+                    g.DrawArc(rimPen, cx - shackleW / 2, shackleTop, shackleW, r * 1.4f, 180, 180);
+                    g.DrawLine(rimPen, cx - shackleW / 2, shackleTop + r * 0.7f, cx - shackleW / 2, bodyTop + r * 0.1f);
+                    g.DrawLine(rimPen, cx + shackleW / 2, shackleTop + r * 0.7f, cx + shackleW / 2, bodyTop + r * 0.1f);
+                    var outer = Rectangle.Round(new RectangleF(cx - bodyW / 2 - rim * 0.6f, bodyTop - rim * 0.6f, bodyW + rim * 1.2f, bodyH + rim * 1.2f));
+                    using (GraphicsPath p = RoundedRect(outer, Math.Max(2, (int)(r * 0.3f)))) using (var white = new SolidBrush(Color.White)) g.FillPath(white, p);
+                }
                 pen.StartCap = pen.EndCap = LineCap.Round;
                 g.DrawArc(pen, cx - shackleW / 2, shackleTop, shackleW, r * 1.4f, 180, 180);
                 g.DrawLine(pen, cx - shackleW / 2, shackleTop + r * 0.7f, cx - shackleW / 2, bodyTop + r * 0.1f);
@@ -2100,12 +2282,15 @@ namespace VerticalSheetTabs
         }
 
         // a round badge with the number of the sheets of a closed folder that have something to tell
-        private void DrawCountBadge(Graphics g, Rectangle b, Color color, int count)
+        private void DrawCountBadge(Graphics g, Rectangle b, Color color, int count, bool outline = true)
         {
             var mode = g.SmoothingMode;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var white = new SolidBrush(Color.White)) g.FillEllipse(white, b);
-            using (var fill = new SolidBrush(color)) g.FillEllipse(fill, Rectangle.Inflate(b, -Math.Max(1, Px(1)), -Math.Max(1, Px(1))));
+            if (outline)
+            {
+                using (var white = new SolidBrush(Color.White)) g.FillEllipse(white, b);
+            }
+            using (var fill = new SolidBrush(color)) g.FillEllipse(fill, outline ? Rectangle.Inflate(b, -Math.Max(1, Px(1)), -Math.Max(1, Px(1))) : b);
             using (var font = new Font(TabFont.FontFamily, Math.Max(7f, b.Height * 0.52f), FontStyle.Bold, GraphicsUnit.Pixel))
             using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
             using (var brush = new SolidBrush(Color.White))
