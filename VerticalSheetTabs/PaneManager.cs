@@ -130,6 +130,7 @@ namespace VerticalSheetTabs
             control.ForwardRequested += () => NavigateHistory(entry, -1);
             control.HistoryProvider = () => HistoryItems(entry);
             control.HistoryJumpRequested += key => JumpToHistory(entry, key);
+            control.HistoryClearRequested += () => ClearHistory(entry);
             control.ViewCodeRequested += () => RunExcelCommand(entry, "ViewCode");
             control.ProtectSheetRequested += () => RunExcelCommand(entry, "SheetProtect");
             control.TabColorRequested += (names, choice) => ApplyTabColor(entry, names, choice);
@@ -760,6 +761,15 @@ namespace VerticalSheetTabs
             catch (Exception)
             {
             }
+        }
+
+        // "履歴をクリア": every sheet is taken out; the sheet shown now is entered again by the next sync, so "back" works from here on.
+        private void ClearHistory(Entry entry)
+        {
+            entry.History.Keys.Clear();
+            entry.History.Cursor = 0;
+            entry.HistActive = null;
+            entry.Control.SetNavigation(false, false);
         }
 
         private void JumpToHistory(Entry entry, string key)
