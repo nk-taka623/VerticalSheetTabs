@@ -122,6 +122,7 @@ namespace VerticalSheetTabs
             control.SelectionStyle = settings.SelectStyle;
             control.ActiveMarker = settings.ActiveMarker;
             control.ShownBadges = settings.Badges;
+            control.RowAnimation = settings.RowAnim;
             control.SetWobble(settings.Wobble, settings.WobbleAmp, settings.WobbleDur);
             control.SetWobbleSound(settings.WobbleSound, settings.WobbleVolume);
 
@@ -266,7 +267,7 @@ namespace VerticalSheetTabs
         {
             bool nameRuleTurnedOn = false;
             BadgeKinds oldBadges = entry.Settings.Badges;
-            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges))
+            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
                 entry.Settings.Mode = form.Mode;
@@ -278,6 +279,7 @@ namespace VerticalSheetTabs
                 entry.Settings.SelectStyle = form.SelectStyle;
                 entry.Settings.ActiveMarker = form.ActiveMarker;
                 entry.Settings.Badges = form.Badges;
+                entry.Settings.RowAnim = form.RowAnim;
                 if (oldBadges != form.Badges) { entry.Badges.Clear(); entry.BadgeDirty.Clear(); entry.BadgeScanned.Clear(); entry.BadgeCost.Clear(); } // (the sheets are looked at again for the new choice)
                 entry.Settings.Wobble = form.Wobble;
                 entry.Settings.WobbleAmp = form.WobbleAmp;
@@ -293,6 +295,7 @@ namespace VerticalSheetTabs
                 entry.Control.SelectionStyle = entry.Settings.SelectStyle;
                 entry.Control.ActiveMarker = entry.Settings.ActiveMarker;
                 entry.Control.ShownBadges = entry.Settings.Badges;
+                entry.Control.RowAnimation = entry.Settings.RowAnim;
                 entry.Control.SetWobble(entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur);
                 entry.Control.SetWobbleSound(entry.Settings.WobbleSound, entry.Settings.WobbleVolume);
             }

@@ -40,6 +40,8 @@ namespace VerticalSheetTabs
         private readonly CheckBox _badgeMemo = new CheckBox();
         private readonly CheckBox _badgeProtect = new CheckBox();
         private GroupBox _badgeGroup;
+        private readonly CheckBox _rowAnim = new CheckBox();
+        private GroupBox _animGroup;
         private readonly RadioButton[] _wobbleTypes = new RadioButton[8]; // index = WobbleType (None, 1 to 6, Random)
         private readonly TrackBar _wobbleAmp = new TrackBar();
         private readonly CheckBox _wobbleSound = new CheckBox();
@@ -56,7 +58,7 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges)
+        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -81,6 +83,9 @@ namespace VerticalSheetTabs
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
+            _rowAnim.Text = "シートの追加・削除を、動きで見せる";
+            _rowAnim.Checked = rowAnim;
+            _animGroup = CreateAnimGroup();
             _badgeError.Text = "数式エラー";
             _badgeMemo.Text = "メモ・コメント";
             _badgeProtect.Text = "シートの保護";
@@ -129,9 +134,6 @@ namespace VerticalSheetTabs
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             _outlineGroup.Dock = DockStyle.Fill;
             _outlineGroup.Margin = new Padding(3, 8, 3, 3);
-            _badgeGroup.Dock = DockStyle.Fill;
-            _badgeGroup.Margin = new Padding(3, 8, 3, 3);
-            layout.Controls.Add(_badgeGroup);
             _markerGroup.Dock = DockStyle.Fill;
             _markerGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(_markerGroup);
@@ -155,6 +157,20 @@ namespace VerticalSheetTabs
             top.Controls.Add(_sideGroup);
             layout.Controls.Add(top);
             layout.Controls.SetChildIndex(top, 0);
+            // the add and delete animation (left) and the badges (right) stand side by side, each half the width, both as high as the higher one
+            _animGroup.Dock = DockStyle.None;
+            _badgeGroup.Dock = DockStyle.None;
+            int halfWidth = (_styleGroup.Width - 12) / 2;
+            int halfHeight = Math.Max(_animGroup.Height, _badgeGroup.Height);
+            _animGroup.Size = new Size(halfWidth, halfHeight);
+            _badgeGroup.Size = new Size(halfWidth, halfHeight);
+            _animGroup.Margin = new Padding(3);
+            _badgeGroup.Margin = new Padding(3);
+            var animBadge = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 5, 0, 0) };
+            animBadge.Controls.Add(_animGroup);
+            animBadge.Controls.Add(_badgeGroup);
+            layout.Controls.Add(animBadge);
+            layout.Controls.SetChildIndex(animBadge, 1);
             // the dotted outline and the sheet-name rule stand side by side, each half the width of the groups above, both as high as the higher one
             _outlineGroup.Dock = DockStyle.None;
             _ruleGroup.Dock = DockStyle.None;
@@ -249,6 +265,8 @@ namespace VerticalSheetTabs
                     : _styleCrystal.Checked ? SelectStyle.Crystal : SelectStyle.Standard;
             }
         }
+
+        public bool RowAnim { get { return _rowAnim.Checked; } }
 
         public BadgeKinds Badges
         {
@@ -636,6 +654,37 @@ namespace VerticalSheetTabs
 
         // A group box with its radio buttons side by side, at equal steps: the widest one plus a gap of about
         // four half-width characters.
+        // The group of the add and delete animation of the rows: one check box and a note.
+        private GroupBox CreateAnimGroup()
+        {
+            var group = new GroupBox
+            {
+                Text = "追加・削除のアニメーション",
+                Font = SystemFonts.MessageBoxFont,
+                AutoSize = false,
+                Padding = new Padding(8, 4, 8, 6)
+            };
+            var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            _rowAnim.AutoSize = true;
+            _rowAnim.Font = group.Font;
+            _rowAnim.Margin = new Padding(3, 3, 12, 3);
+            var note = new Label
+            {
+                Text = "(追加: ぽんと現れる / 削除: 縮んで消える)",
+                AutoSize = true,
+                ForeColor = SystemColors.GrayText,
+                Font = group.Font,
+                Margin = new Padding(0, 6, 3, 3)
+            };
+            panel.Controls.Add(_rowAnim);
+            panel.Controls.Add(note);
+            group.Controls.Add(panel);
+            panel.Location = group.DisplayRectangle.Location;
+            Size content = panel.PreferredSize;
+            group.Size = new Size(content.Width + group.Padding.Horizontal + 8, panel.Top + content.Height + group.Padding.Bottom + 2);
+            return group;
+        }
+
         // The icon of a badge, drawn as it is on the rows.
         private class BadgeIcon : Control
         {
