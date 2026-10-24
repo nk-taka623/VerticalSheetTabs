@@ -750,8 +750,11 @@ namespace VerticalSheetTabs
                     panel.Controls.Add(line);
                 }
                 var item = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(3, 0, widest - boxes[i].PreferredSize.Width + gap, 0) };
-                var pic = new BadgeIcon(kinds[i], icon) { Margin = new Padding(0, 2, 0, 2) };
-                boxes[i].Margin = new Padding(0, 3, 0, 3);
+                // the icon and the check box stand on the same middle line, a few pixels apart
+                int rowH = Math.Max(icon, boxes[i].PreferredSize.Height) + 4;
+                var pic = new BadgeIcon(kinds[i], icon) { Margin = new Padding(0, (rowH - icon) / 2, 6, (rowH - icon) - (rowH - icon) / 2) };
+                int bh = boxes[i].PreferredSize.Height;
+                boxes[i].Margin = new Padding(0, (rowH - bh) / 2, 0, (rowH - bh) - (rowH - bh) / 2);
                 item.Controls.Add(pic);
                 item.Controls.Add(boxes[i]);
                 line.Controls.Add(item);
