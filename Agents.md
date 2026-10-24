@@ -22,7 +22,7 @@
 | 表示モードの初回の既定値 | A (横タブのみ)。縦タブは、設定画面で表示モードを変えると出る | 2章、12.119 |
 | 縦タブの初回の幅 | 半角12文字分 | 2章、11.5、12.40 |
 | ペインのタイトル | 「縦タブ」 | 10.3、11.6 |
-| ブック保存設定 | `VTab.Mode`、`VTab.Side`、`VTab.Width`、`VTab.Outline`、`VTab.OutlineLevel`、`VTab.NameRule`、`VTab.SelectStyle`、`VTab.ActiveMarker`、`VTab.Wobble`、`VTab.WobbleAmp`、`VTab.WobbleDur`、`VTab.WobbleSound`、`VTab.WobbleVolume` (2.2) | 12.50、12.56、12.99、12.110、12.141 |
+| ブック保存設定 | `VTab.Mode`、`VTab.Side`、`VTab.Width`、`VTab.Outline`、`VTab.OutlineLevel`、`VTab.NameRule`、`VTab.SelectStyle`、`VTab.ActiveMarker`、`VTab.Wobble`、`VTab.WobbleAmp`、`VTab.WobbleDur`、`VTab.WobbleSound`、`VTab.WobbleVolume`、`VTab.WobbleSampleStyle` (2.2) | 12.50、12.56、12.99、12.110、12.141 |
 | フォルダの保存 | ブックのカスタムXMLパート。シートの識別は、隠しカスタムプロパティ `VTab.Id` (`CodeName` は使わない) | 12.8 |
 | フォルダの選択 | フォルダの行のクリックで、フォルダだけを選択 / 解除する。中のシートは、Excelで選択されない | 12.19 |
 | フォルダの色 | フォルダの行全体に付ける (左端の帯ではない)。シートには反映しない | 12.19 |
@@ -46,7 +46,7 @@
 | 8 | Step0 から Step5 の開発メモ |
 | 9 | Step6 見た目の再現 (採寸結果、テーマ、DPI) |
 | 10、11 | Step7 仕上げ、完了状況と残課題 |
-| 12 | Step8 フォルダ機能の設計と、その後の改善、不具合の修正、リリースの記録 (12.1 から 12.177) |
+| 12 | Step8 フォルダ機能の設計と、その後の改善、不具合の修正、リリースの記録 (12.1 から 12.179) |
 | 13 | リリースの定型作業 |
 
 ## 1. 目的
@@ -117,6 +117,7 @@ Excelのシートタブは標準で横並びだが、シート数が増えると
 | `VTab.Wobble` | 文字列 | `None` / `Shake` / `Wobble` / `Jelly` / `Bounce` / `Pulse` / `Swing` / `Random` (選択したシートの揺れのアニメーション。12.141)。無いブックは `None` |
 | `VTab.WobbleAmp` | 数値 (整数) | 揺れの大きさ。40から200 (%)。無いブックは 100 (12.141) |
 | `VTab.WobbleDur` | 数値 (整数) | 揺れの長さ。300から1200 (ミリ秒)。無いブックは 600 (12.141) |
+| `VTab.WobbleSampleStyle` | 文字列 | `On` / `Off` (アニメーションの設定のサンプルの見た目を、選択デザインとマーカー表示に合わせる、のチェック。12.178)。無いブックは `Off` |
 | `VTab.WobbleSound` | 文字列 | `On` / `Off` (揺れの効果音。12.172)。無いブックは `Off` |
 | `VTab.WobbleVolume` | 数値 (整数) | 効果音の音量。0から100 (%)。無いブックは 60 (12.172) |
 | `VTab.ActiveMarker` | 文字列 | `None` / `Underline` / `Triangle` / `EdgeBars` / `CheckBadge` (アクティブなシートのマーカー。12.110、12.111、12.116、12.131)。無いブックは `Underline` |
@@ -2234,3 +2235,14 @@ gitGraph
 
 - 12.176 (設定画面のサンプルが、揺れるたびに、効果音も鳴らす) を含めて、バージョンを 1.1.70.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.70` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.70.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_70_0\`)。インストールの実機確認は、未実施
+
+### 12.178 変更: 「サンプルの見た目を、選択したデザインとマーカー表示に合わせる」のチェックを、ブックに保存する
+
+- ユーザーの要望により、アニメーションの設定の、「サンプルの見た目を、選択したデザインとマーカー表示に合わせる」(12.141、12.171) のチェックの状態を、ブックに保存し、開いたときに、復元するようにした (以前 (12.141) は、保存せず、画面を開くたびに、オフに戻っていた)。保存先は、カスタムドキュメントプロパティ `VTab.WobbleSampleStyle` (`On` / `Off`。無いブックは `Off`)。ほかの設定と同様に、ブックの保存時に、書き込む。初回オープンの判定には、使わない (`WorkbookSettings`、`SettingsForm`、`PaneManager`)
+- 確認 (実機): プロパティを `On` にしたブックで、設定画面を開くと、チェックが入り、サンプルが、選択デザイン (クリスタル) で描かれる。そのブックを保存すると、`VTab.WobbleSampleStyle` が、`On` のまま書き込まれる
+
+### 12.179 見直し: README の文章と画像
+
+- ユーザーの質問 (README の画像は、ソフトの最新の状態に合っているか) を受けて、画像の撮影時点を、コミットの履歴から調べた。画面の見た目が変わる変更 (設定画面の配置、効果音の行、ドラッグゴースト) の画像は、撮り直し済み、または、追加済みで、そのほかの画像は、v1.1.60 から v1.1.61 のときのままで、見た目は、変わっていなかった
+- 直した点: (1) 「フォルダを選択 / 解除したときも揺れる」(12.169) が、README に書かれていなかったため、1.2 の表、1.8、6章の表、8章の表に書き、短い GIF (`docs/images/folder_select.gif`、実機で撮影。フォルダを1回クリックして選択、もう1回クリックして解除) を、1.8 に足した。(2) `settings_full.png` の、左下のバージョン表示が、古かった (v1.1.67) ため、現在 (v1.1.70) の画面で、撮り直した。`settings_design.png`、`settings_anim.png` も、同じ画面から、切り出し直した
+- 画像にできないもの: 効果音 (文章だけ)
