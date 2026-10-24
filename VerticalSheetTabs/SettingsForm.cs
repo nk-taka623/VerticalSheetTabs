@@ -365,10 +365,10 @@ namespace VerticalSheetTabs
             _wobbleSample.HandleCreated += (s, e) =>
             {
                 RefreshWobbleSample();
-                BeginInvoke(new Action(PlayWobbleSampleSilently));
+                BeginInvoke(new Action(PlayWobbleSample));
             };
             _wobbleTimer = new System.Windows.Forms.Timer { Interval = 2200 };
-            _wobbleTimer.Tick += (s, e) => PlayWobbleSampleSilently();
+            _wobbleTimer.Tick += (s, e) => PlayWobbleSample();
             _wobbleTimer.Start();
             return group;
         }
@@ -391,15 +391,10 @@ namespace VerticalSheetTabs
             _wobbleSample.SetWobbleSound(_wobbleSound.Checked, _wobbleVolume.Value);
         }
 
-        // Plays the sample's wobble; the sound only when the user has just changed something (not at every round of the timer, nor when the dialog opens).
+        // Plays the sample's wobble, with its sound while the check box "効果音を鳴らす" is checked: every round of the timer sounds as well, so the sound can be heard properly.
         private void PlayWobbleSample()
         {
             if (_wobbleSample != null) _wobbleSample.PlayWobble(true);
-        }
-
-        private void PlayWobbleSampleSilently()
-        {
-            if (_wobbleSample != null) _wobbleSample.PlayWobble(false);
         }
 
         public bool OutlineVisible { get { return _outlineShow.Checked; } }
