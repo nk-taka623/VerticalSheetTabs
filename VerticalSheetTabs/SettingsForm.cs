@@ -41,6 +41,8 @@ namespace VerticalSheetTabs
         private readonly CheckBox _badgeProtect = new CheckBox();
         private GroupBox _badgeGroup;
         private readonly CheckBox _rowAnim = new CheckBox();
+        private readonly CheckBox _doneAnim = new CheckBox();
+        private readonly CheckBox _badgeProgress = new CheckBox();
         private GroupBox _animGroup;
         private readonly RadioButton[] _wobbleTypes = new RadioButton[8]; // index = WobbleType (None, 1 to 6, Random)
         private readonly TrackBar _wobbleAmp = new TrackBar();
@@ -58,7 +60,7 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim)
+        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -85,6 +87,10 @@ namespace VerticalSheetTabs
             _ruleGroup = CreateRuleGroup();
             _rowAnim.Text = "フォルダ・シートの追加・削除を、動きで見せる";
             _rowAnim.Checked = rowAnim;
+            _doneAnim.Text = "進捗を「完了」にしたとき、印をはじけさせる";
+            _doneAnim.Checked = doneAnim;
+            _badgeProgress.Text = "進捗 (未着手・作業中・完了)";
+            _badgeProgress.Checked = (badges & BadgeKinds.Progress) != 0;
             _animGroup = CreateAnimGroup();
             _badgeError.Text = "数式エラー";
             _badgeMemo.Text = "メモ・コメント";
@@ -92,8 +98,8 @@ namespace VerticalSheetTabs
             _badgeError.Checked = (badges & BadgeKinds.Error) != 0;
             _badgeMemo.Checked = (badges & BadgeKinds.Memo) != 0;
             _badgeProtect.Checked = (badges & BadgeKinds.Protect) != 0;
-            _badgeGroup = CreateBadgeGroup("表示するバッジ (閉じたフォルダには、中のシートの数を表示)", new[] { BadgeKinds.Error, BadgeKinds.Memo, BadgeKinds.Protect }, new[] { _badgeError, _badgeMemo, _badgeProtect });
-            foreach (CheckBox c in new[] { _badgeError, _badgeMemo, _badgeProtect })
+            _badgeGroup = CreateBadgeGroup("表示するバッジ (閉じたフォルダには、中のシートの数を表示)", new[] { BadgeKinds.Error, BadgeKinds.Memo, BadgeKinds.Protect, BadgeKinds.Progress }, new[] { _badgeError, _badgeMemo, _badgeProtect, _badgeProgress });
+            foreach (CheckBox c in new[] { _badgeError, _badgeMemo, _badgeProtect, _badgeProgress })
             {
                 c.CheckedChanged += (s, e) => { foreach (TabStrip sample in _samples) sample.ShownBadges = Badges; };
             }
@@ -268,9 +274,11 @@ namespace VerticalSheetTabs
 
         public bool RowAnim { get { return _rowAnim.Checked; } }
 
+        public bool DoneAnim { get { return _doneAnim.Checked; } }
+
         public BadgeKinds Badges
         {
-            get { return (_badgeError.Checked ? BadgeKinds.Error : BadgeKinds.None) | (_badgeMemo.Checked ? BadgeKinds.Memo : BadgeKinds.None) | (_badgeProtect.Checked ? BadgeKinds.Protect : BadgeKinds.None); }
+            get { return (_badgeError.Checked ? BadgeKinds.Error : BadgeKinds.None) | (_badgeMemo.Checked ? BadgeKinds.Memo : BadgeKinds.None) | (_badgeProtect.Checked ? BadgeKinds.Protect : BadgeKinds.None) | (_badgeProgress.Checked ? BadgeKinds.Progress : BadgeKinds.None); }
         }
 
         public ActiveMarker ActiveMarker
@@ -654,17 +662,18 @@ namespace VerticalSheetTabs
 
         // A group box with its radio buttons side by side, at equal steps: the widest one plus a gap of about
         // four half-width characters.
-        // The group of the add and delete animation of the rows: one check box and a note.
+        // The group of the animations: the add and delete animation of the rows (with a note), and the burst of a progress mark.
         private GroupBox CreateAnimGroup()
         {
             var group = new GroupBox
             {
-                Text = "追加・削除のアニメーション",
+                Text = "追加・削除・完了のアニメーション",
                 Font = SystemFonts.MessageBoxFont,
                 AutoSize = false,
                 Padding = new Padding(8, 4, 8, 6)
             };
-            var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            var row1 = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
             _rowAnim.AutoSize = true;
             _rowAnim.Font = group.Font;
             _rowAnim.Margin = new Padding(3, 3, 12, 3);
@@ -676,8 +685,13 @@ namespace VerticalSheetTabs
                 Font = group.Font,
                 Margin = new Padding(0, 6, 3, 3)
             };
-            panel.Controls.Add(_rowAnim);
-            panel.Controls.Add(note);
+            row1.Controls.Add(_rowAnim);
+            row1.Controls.Add(note);
+            _doneAnim.AutoSize = true;
+            _doneAnim.Font = group.Font;
+            _doneAnim.Margin = new Padding(3, 3, 3, 3);
+            panel.Controls.Add(row1);
+            panel.Controls.Add(_doneAnim);
             group.Controls.Add(panel);
             panel.Location = group.DisplayRectangle.Location;
             Size content = panel.PreferredSize;
@@ -706,7 +720,7 @@ namespace VerticalSheetTabs
             }
         }
 
-        // Like a row of radio buttons (CreateRowGroup), but each check box has the icon of its badge at its left.
+        // Like a row of radio buttons (CreateRowGroup), but each check box has the icon of its badge at its left; three in the first row, the rest below.
         private static GroupBox CreateBadgeGroup(string title, BadgeKinds[] kinds, CheckBox[] boxes)
         {
             var group = new GroupBox
@@ -716,7 +730,7 @@ namespace VerticalSheetTabs
                 AutoSize = false,
                 Padding = new Padding(8, 4, 8, 6)
             };
-            var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
             int widest = 0;
             foreach (CheckBox c in boxes)
             {
@@ -726,14 +740,21 @@ namespace VerticalSheetTabs
             }
             int icon = (int)(boxes[0].PreferredSize.Height * 1.1);
             int gap = TextRenderer.MeasureText("0000", group.Font).Width;
+            const int perRow = 3;
+            FlowLayoutPanel line = null;
             for (int i = 0; i < boxes.Length; i++)
             {
+                if (i % perRow == 0)
+                {
+                    line = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+                    panel.Controls.Add(line);
+                }
                 var item = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(3, 0, widest - boxes[i].PreferredSize.Width + gap, 0) };
                 var pic = new BadgeIcon(kinds[i], icon) { Margin = new Padding(0, 2, 0, 2) };
                 boxes[i].Margin = new Padding(0, 3, 0, 3);
                 item.Controls.Add(pic);
                 item.Controls.Add(boxes[i]);
-                panel.Controls.Add(item);
+                line.Controls.Add(item);
             }
             group.Controls.Add(panel);
             panel.Location = group.DisplayRectangle.Location;

@@ -123,6 +123,8 @@ namespace VerticalSheetTabs
             control.ActiveMarker = settings.ActiveMarker;
             control.ShownBadges = settings.Badges;
             control.RowAnimation = settings.RowAnim;
+            control.DoneAnimation = settings.DoneAnim;
+            control.ProgressRequested += (sheets, state) => SetProgress(entry, sheets, state);
             control.SetWobble(settings.Wobble, settings.WobbleAmp, settings.WobbleDur);
             control.SetWobbleSound(settings.WobbleSound, settings.WobbleVolume);
 
@@ -267,7 +269,7 @@ namespace VerticalSheetTabs
         {
             bool nameRuleTurnedOn = false;
             BadgeKinds oldBadges = entry.Settings.Badges;
-            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim))
+            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
                 entry.Settings.Mode = form.Mode;
@@ -280,6 +282,7 @@ namespace VerticalSheetTabs
                 entry.Settings.ActiveMarker = form.ActiveMarker;
                 entry.Settings.Badges = form.Badges;
                 entry.Settings.RowAnim = form.RowAnim;
+                entry.Settings.DoneAnim = form.DoneAnim;
                 if (oldBadges != form.Badges) { entry.Badges.Clear(); entry.BadgeDirty.Clear(); entry.BadgeScanned.Clear(); entry.BadgeCost.Clear(); } // (the sheets are looked at again for the new choice)
                 entry.Settings.Wobble = form.Wobble;
                 entry.Settings.WobbleAmp = form.WobbleAmp;
@@ -296,6 +299,7 @@ namespace VerticalSheetTabs
                 entry.Control.ActiveMarker = entry.Settings.ActiveMarker;
                 entry.Control.ShownBadges = entry.Settings.Badges;
                 entry.Control.RowAnimation = entry.Settings.RowAnim;
+                entry.Control.DoneAnimation = entry.Settings.DoneAnim;
                 entry.Control.SetWobble(entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur);
                 entry.Control.SetWobbleSound(entry.Settings.WobbleSound, entry.Settings.WobbleVolume);
             }
@@ -808,6 +812,63 @@ namespace VerticalSheetTabs
             entry.BadgeCost[name] = (int)clock.ElapsedMilliseconds;
         }
 
+        // ---- the progress of a sheet (Agents.md 12.199): a custom property of the sheet, "todo" / "doing" / "done" ----
+
+        private const string ProgressProperty = "VTab.Progress";
+
+        private static int ReadProgress(Excel.Worksheet ws)
+        {
+            try
+            {
+                foreach (Excel.CustomProperty cp in ws.CustomProperties)
+                {
+                    if (cp.Name != ProgressProperty) continue;
+                    string v = Convert.ToString(cp.Value);
+                    return v == "todo" ? 1 : v == "doing" ? 2 : v == "done" ? 3 : 0;
+                }
+            }
+            catch (Exception)
+            {
+            }
+            return 0;
+        }
+
+        private static void WriteProgress(Excel.Worksheet ws, int state)
+        {
+            for (int i = ws.CustomProperties.Count; i >= 1; i--)
+            {
+                Excel.CustomProperty cp = ws.CustomProperties[i];
+                if (cp.Name == ProgressProperty) cp.Delete();
+            }
+            if (state >= 1 && state <= 3) ws.CustomProperties.Add(ProgressProperty, state == 1 ? "todo" : state == 2 ? "doing" : "done");
+        }
+
+        // Sets the progress of sheets (0 = none): the workbook is changed (it is asked to be saved), and the mark shows at once.
+        private void SetProgress(Entry entry, List<string> sheets, int state)
+        {
+            try
+            {
+                bool changed = false;
+                foreach (string name in sheets)
+                {
+                    var ws = entry.Workbook.Sheets[name] as Excel.Worksheet;
+                    if (ws == null || ReadProgress(ws) == state) continue;
+                    WriteProgress(ws, state);
+                    changed = true;
+                    BadgeInfo info;
+                    if (!entry.Badges.TryGetValue(name, out info)) { info = new BadgeInfo(); entry.Badges[name] = info; }
+                    info.Progress = state;
+                }
+                if (!changed) return;
+                MarkChanged(entry);
+                entry.Control.SetBadges(entry.Badges);
+            }
+            catch (Exception)
+            {
+                // Excel is busy, or the sheet cannot take a property.
+            }
+        }
+
         // The number of notes and comments of a sheet; false when Excel could not answer now.
         private static bool ReadMemoCount(Excel.Workbook workbook, string sheetName, out int count)
         {
@@ -835,6 +896,7 @@ namespace VerticalSheetTabs
             try
             {
                 try { info.Protected = ws.ProtectContents; } catch (Exception) { }
+                if ((kinds & BadgeKinds.Progress) != 0) info.Progress = ReadProgress(ws);
                 Excel.Range errors = null;
                 try
                 {

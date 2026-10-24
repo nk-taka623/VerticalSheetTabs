@@ -40,7 +40,8 @@ namespace VerticalSheetTabs
         None = 0,
         Error = 1, // the sheet has formulas that show an error (#REF!, #DIV/0!, ...)
         Memo = 2,  // the sheet has notes or comments
-        Protect = 4 // the sheet is protected
+        Protect = 4, // the sheet is protected
+        Progress = 8 // the progress of the sheet (not started, in progress, done), set by the user (Agents.md 12.199)
     }
 
     public enum TabSide
@@ -66,6 +67,7 @@ namespace VerticalSheetTabs
         public const string WobbleDurName = "VTab.WobbleDur"; // number, milliseconds (300 to 1200, default 600)
         public const string WobbleSoundName = "VTab.WobbleSound";   // string "On" / "Off" (default "Off"; Agents.md 12.172)
         public const string WobbleVolumeName = "VTab.WobbleVolume"; // number 0 to 100 (default 60)
+        public const string DoneAnimName = "VTab.DoneAnim";       // string "On" / "Off" (default "On"; the burst when a sheet is marked done, Agents.md 12.199)
         public const string RowAnimName = "VTab.RowAnim";         // string "On" / "Off" (default "On"; the add and delete animation of the rows, Agents.md 12.194, 12.197)
         public const string WobbleSampleStyleName = "VTab.WobbleSampleStyle"; // string "On" / "Off" (default "Off"; Agents.md 12.178)
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
@@ -113,6 +115,9 @@ namespace VerticalSheetTabs
         // The rows of added sheets and folders appear and the rows of deleted ones shrink away (default: on).
         public bool RowAnim { get; set; }
 
+        // The progress mark bursts when a sheet is marked as done (default: on).
+        public bool DoneAnim { get; set; }
+
         public WorkbookSettings()
         {
             IsFirstOpen = true;
@@ -132,6 +137,7 @@ namespace VerticalSheetTabs
             WobbleVolume = WobbleSounds.VolumeDefault;
             WobbleSampleStyle = false;
             RowAnim = true;
+            DoneAnim = true;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
@@ -187,6 +193,8 @@ namespace VerticalSheetTabs
                 if (wobbleSound != null) s.WobbleSound = (string)wobbleSound.Value == "On";
                 dynamic wobbleVolume = Find(props, WobbleVolumeName);
                 if (wobbleVolume != null) s.WobbleVolume = Math.Max(0, Math.Min(100, Convert.ToInt32((object)wobbleVolume.Value)));
+                dynamic doneAnim = Find(props, DoneAnimName);
+                if (doneAnim != null) s.DoneAnim = (string)doneAnim.Value == "On";
                 dynamic rowAnim = Find(props, RowAnimName);
                 if (rowAnim != null) s.RowAnim = (string)rowAnim.Value == "On";
                 dynamic sampleStyle = Find(props, WobbleSampleStyleName);
@@ -231,6 +239,7 @@ namespace VerticalSheetTabs
                 Write(props, WobbleVolumeName, PropTypeNumber, WobbleVolume);
                 Write(props, WobbleSampleStyleName, PropTypeString, WobbleSampleStyle ? "On" : "Off");
                 Write(props, RowAnimName, PropTypeString, RowAnim ? "On" : "Off");
+                Write(props, DoneAnimName, PropTypeString, DoneAnim ? "On" : "Off");
             }
             catch (Exception)
             {
@@ -248,6 +257,7 @@ namespace VerticalSheetTabs
                 if (p == "Error") kinds |= BadgeKinds.Error;
                 else if (p == "Memo") kinds |= BadgeKinds.Memo;
                 else if (p == "Protect") kinds |= BadgeKinds.Protect;
+                else if (p == "Progress") kinds |= BadgeKinds.Progress;
             }
             return kinds;
         }
@@ -259,6 +269,7 @@ namespace VerticalSheetTabs
             if ((kinds & BadgeKinds.Error) != 0) parts.Add("Error");
             if ((kinds & BadgeKinds.Memo) != 0) parts.Add("Memo");
             if ((kinds & BadgeKinds.Protect) != 0) parts.Add("Protect");
+            if ((kinds & BadgeKinds.Progress) != 0) parts.Add("Progress");
             return string.Join(",", parts);
         }
 
