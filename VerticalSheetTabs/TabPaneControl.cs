@@ -36,6 +36,13 @@ namespace VerticalSheetTabs
         // A folder row was clicked (folder id): open or close it.
         public event Action<string> FolderToggleRequested;
         public event Action<bool> AllFoldersRequested;
+        // The back and forward buttons, and a sheet chosen in the history menu (its key).
+        public event Action BackRequested;
+        public event Action ForwardRequested;
+        public event Action<string> HistoryJumpRequested;
+        public event Action GridFocusForced;
+        public Func<List<HistoryItem>> HistoryProvider { set { _strip.HistoryProvider = value; } }
+        public void SetNavigation(bool canBack, bool canForward) { _strip.SetNavigation(canBack, canForward); }
         // An Excel command (idMso) for a key pressed in the pane, e.g. "FileSave" for Ctrl+S.
         public event Action<string> ExcelCommandRequested;
         public event Action<IList<string>, IList<string>, string, string, string, bool> FolderMoveRequested;
@@ -78,6 +85,10 @@ namespace VerticalSheetTabs
 
             _strip.ExcelCommandRequested += command => { if (ExcelCommandRequested != null) ExcelCommandRequested(command); };
             _strip.AllFoldersRequested += open => { if (AllFoldersRequested != null) AllFoldersRequested(open); };
+            _strip.GridFocusForced += () => { if (GridFocusForced != null) GridFocusForced(); };
+            _strip.BackRequested += () => { if (BackRequested != null) BackRequested(); };
+            _strip.ForwardRequested += () => { if (ForwardRequested != null) ForwardRequested(); };
+            _strip.HistoryJumpRequested += key => { if (HistoryJumpRequested != null) HistoryJumpRequested(key); };
             _strip.FolderToggleRequested += id => { if (FolderToggleRequested != null) FolderToggleRequested(id); };
             _strip.FolderMoveRequested += (sheets, folders, into, bs, bf, copy) => { if (FolderMoveRequested != null) FolderMoveRequested(sheets, folders, into, bs, bf, copy); };
             _strip.FolderRenameRequested += (id, name) => { if (FolderRenameRequested != null) FolderRenameRequested(id, name); };

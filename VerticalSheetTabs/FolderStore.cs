@@ -116,6 +116,31 @@ namespace VerticalSheetTabs
             return list;
         }
 
+        // The key of one sheet (a worksheet gets its id when it has none and assign is set; the key of a chart sheet is its name).
+        public static string KeyOf(object sheet, bool assign)
+        {
+            try
+            {
+                var ws = sheet as Excel.Worksheet;
+                if (ws != null)
+                {
+                    string id = ReadId(ws);
+                    if (id == null && assign)
+                    {
+                        id = Guid.NewGuid().ToString("N");
+                        ws.CustomProperties.Add(IdProperty, id);
+                    }
+                    return id;
+                }
+                var ch = sheet as Excel.Chart;
+                return ch != null ? "n:" + ch.Name : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         private static string ReadId(Excel.Worksheet ws)
         {
             foreach (Excel.CustomProperty p in ws.CustomProperties)
