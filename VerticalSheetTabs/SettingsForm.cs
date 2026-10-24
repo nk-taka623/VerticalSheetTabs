@@ -109,11 +109,6 @@ namespace VerticalSheetTabs
             // One column: both group boxes and the button row get the width of the widest one.
             var layout = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Fill };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            modeGroup.Dock = DockStyle.Fill;
-            _sideGroup.Dock = DockStyle.Fill;
-            _sideGroup.Margin = new Padding(3, 8, 3, 3);
-            layout.Controls.Add(modeGroup);
-            layout.Controls.Add(_sideGroup);
             _outlineGroup.Dock = DockStyle.Fill;
             _outlineGroup.Margin = new Padding(3, 8, 3, 3);
             _markerGroup.Dock = DockStyle.Fill;
@@ -125,6 +120,19 @@ namespace VerticalSheetTabs
             _wobbleGroup.Dock = DockStyle.Fill;
             _wobbleGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(_wobbleGroup);
+            // the display mode and the side of the vertical tabs stand side by side in the top row: the side group keeps its own width, the mode group takes the rest
+            modeGroup.Dock = DockStyle.None;
+            _sideGroup.Dock = DockStyle.None;
+            int topHeight = Math.Max(modeGroup.Height, _sideGroup.Height);
+            modeGroup.Size = new Size(_styleGroup.Width - _sideGroup.Width - 12, topHeight);
+            _sideGroup.Size = new Size(_sideGroup.Width, topHeight);
+            modeGroup.Margin = new Padding(3);
+            _sideGroup.Margin = new Padding(3);
+            var top = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            top.Controls.Add(modeGroup);
+            top.Controls.Add(_sideGroup);
+            layout.Controls.Add(top);
+            layout.Controls.SetChildIndex(top, 0);
             // the dotted outline and the sheet-name rule stand side by side, each half the width of the groups above, both as high as the higher one
             _outlineGroup.Dock = DockStyle.None;
             _ruleGroup.Dock = DockStyle.None;
