@@ -2040,9 +2040,13 @@ namespace VerticalSheetTabs
         {
             // The sync asks at every tick for the folders that are colored by a theme color; the workbook's theme is read again after a few seconds only
             if (entry.ThemeCache != null && DateTime.Now - entry.ThemeCacheAt < TimeSpan.FromSeconds(5)) return entry.ThemeCache;
-            var colors = ReadThemeColors(entry);
-            if (colors != null) { entry.ThemeCache = colors; entry.ThemeCacheAt = DateTime.Now; }
-            return colors ?? entry.ThemeCache;
+            // Excel gives no theme (Workbook.Theme is null) while any sheet of the workbook is protected (Agents.md 12.222): the theme
+            // is then read from the saved file, and, when the workbook was never saved, the Office theme stands for it. Never null,
+            // so that a folder colored with a theme color shows that color, and the palette shows the same colors as the folders get.
+            var colors = ReadThemeColors(entry) ?? ReadThemeColorsFromFile(entry) ?? TabColorPalette.DefaultTheme();
+            entry.ThemeCache = colors;
+            entry.ThemeCacheAt = DateTime.Now;
+            return colors;
         }
 
         private static System.Drawing.Color[] ReadThemeColors(Entry entry)
@@ -2059,6 +2063,51 @@ namespace VerticalSheetTabs
                     colors[i] = System.Drawing.Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF);
                 }
                 return colors;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        // The theme colors of the saved file (xl/theme/theme1.xml of the .xlsx): light1, dark1, light2, dark2, accent1..6; null when
+        // the workbook has no file of that kind or the file cannot be read.
+        private static System.Drawing.Color[] ReadThemeColorsFromFile(Entry entry)
+        {
+            try
+            {
+                string path = entry.Workbook.FullName;
+                if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return null;
+                using (var stream = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete))
+                using (var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Read))
+                {
+                    var item = zip.GetEntry("xl/theme/theme1.xml");
+                    if (item == null) return null;
+                    using (var reader = item.Open())
+                    {
+                        var doc = System.Xml.Linq.XDocument.Load(reader);
+                        System.Xml.Linq.XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+                        var scheme = doc.Descendants(a + "clrScheme").FirstOrDefault();
+                        if (scheme == null) return null;
+                        string[] order = { "lt1", "dk1", "lt2", "dk2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6" };
+                        var colors = new System.Drawing.Color[10];
+                        for (int i = 0; i < order.Length; i++)
+                        {
+                            var node = scheme.Element(a + order[i]);
+                            if (node == null) return null;
+                            var rgb = node.Element(a + "srgbClr");
+                            string hex = rgb != null ? (string)rgb.Attribute("val") : null;
+                            if (hex == null)
+                            {
+                                var sys = node.Element(a + "sysClr");
+                                hex = sys != null ? (string)sys.Attribute("lastClr") : null;
+                            }
+                            if (hex == null || hex.Length != 6) return null;
+                            colors[i] = System.Drawing.Color.FromArgb(Convert.ToInt32(hex.Substring(0, 2), 16), Convert.ToInt32(hex.Substring(2, 2), 16), Convert.ToInt32(hex.Substring(4, 2), 16));
+                        }
+                        return colors;
+                    }
+                }
             }
             catch (Exception)
             {
