@@ -982,6 +982,9 @@ namespace VerticalSheetTabs
             try
             {
                 RefreshKeys(entry);
+                // the selection and the active sheet are followed by their keys: the sheets may get new names with their folders
+                List<string> selectedKeys = selectedNames == null ? null : KeysOf(entry, selectedNames);
+                string activeKey = activeName == null ? null : KeyOf(entry, activeName);
                 string snapshot = entry.Folders.ToXml();
                 if (!change()) return;
                 if (RuleOn(entry))
@@ -1008,6 +1011,25 @@ namespace VerticalSheetTabs
                     {
                         activeName = namesNow[at];
                         selectedNames = new List<string> { activeName };
+                    }
+                }
+                else if (selectedKeys != null && selectedKeys.Count > 0 && activeKey != null)
+                {
+                    // the same sheets stay selected, and the same one active, under their names after the change
+                    // (read straight from Excel: RefreshKeys would take the model back to the old sheet order)
+                    List<string> keysNow = FolderStore.SheetKeys(entry.Workbook, true);
+                    List<string> namesNow = ReadNames(entry);
+                    var selectedNow = new List<string>();
+                    foreach (string k in selectedKeys)
+                    {
+                        int at = keysNow.IndexOf(k);
+                        if (at >= 0 && at < namesNow.Count) selectedNow.Add(namesNow[at]);
+                    }
+                    int activeAt = keysNow.IndexOf(activeKey);
+                    if (selectedNow.Count > 0 && activeAt >= 0 && activeAt < namesNow.Count)
+                    {
+                        selectedNames = selectedNow;
+                        activeName = namesNow[activeAt];
                     }
                 }
                 ApplyExcelOrder(entry, selectedNames, activeName);
