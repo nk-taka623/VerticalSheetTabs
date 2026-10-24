@@ -546,6 +546,8 @@ namespace VerticalSheetTabs
         private static bool SyncSheets(Entry entry)
         {
             if (entry.Busy) return true;
+            // While Excel's "Protect Sheet" dialog is open the sync stays out of Excel (Agents.md 12.214).
+            if (entry.ProtectAsking) return true;
             // A sync that is already running is not started again: the moves the sync makes itself (the
             // sheet-name rule) make Excel raise SheetActivate, whose handler would start a sync inside
             // the running one, which sees the sheets half moved and moves more; and Excel delivers timer
