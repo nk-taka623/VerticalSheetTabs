@@ -52,7 +52,7 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume)
+        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -89,7 +89,7 @@ namespace VerticalSheetTabs
             _markerBars.Checked = activeMarker == ActiveMarker.EdgeBars;
             _markerBadge.Checked = activeMarker == ActiveMarker.CheckBadge;
             _styleGroup = CreateStyleGroup();
-            _wobbleGroup = CreateWobbleGroup(wobble, wobbleAmp, wobbleDur, wobbleSound, wobbleVolume);
+            _wobbleGroup = CreateWobbleGroup(wobble, wobbleAmp, wobbleDur, wobbleSound, wobbleVolume, wobbleSampleStyle);
             foreach (RadioButton r in new[] { _markerNone, _markerUnderline, _markerTriangle, _markerBars, _markerBadge })
             {
                 r.CheckedChanged += (s, e) => { foreach (TabStrip sample in _samples) sample.ActiveMarker = ActiveMarker; RefreshWobbleSample(); };
@@ -254,6 +254,8 @@ namespace VerticalSheetTabs
 
         public bool WobbleSound { get { return _wobbleSound.Checked; } }
 
+        public bool WobbleSampleStyle { get { return _wobbleUseStyle.Checked; } }
+
         public int WobbleVolume { get { return _wobbleVolume.Value; } }
 
         public int WobbleDur { get { return _wobbleDur.Value; } }
@@ -266,7 +268,7 @@ namespace VerticalSheetTabs
 
         // The wobble of the selected sheet (Agents.md 12.141): the motion (none, 1 to 6, random), its size and length, and one live sample that
         // plays the chosen motion again and again (a new random one each time for "7 ランダム"). The sample follows the chosen look and marker.
-        private GroupBox CreateWobbleGroup(WobbleType wobble, int amp, int dur, bool sound, int volume)
+        private GroupBox CreateWobbleGroup(WobbleType wobble, int amp, int dur, bool sound, int volume, bool sampleStyle)
         {
             string[] names = { "なし", "1 シェイク", "2 ウォブル", "3 ジェリー", "4 バウンス", "5 パルス", "6 スイング", "7 ランダム" };
             for (int i = 0; i < _wobbleTypes.Length; i++)
@@ -305,6 +307,7 @@ namespace VerticalSheetTabs
             sliders.Controls.Add(ampBox); sliders.Controls.Add(durBox);
             _wobbleUseStyle.Text = "サンプルの見た目を、選択したデザインとマーカー表示に合わせる";
             _wobbleUseStyle.AutoSize = true;
+            _wobbleUseStyle.Checked = sampleStyle;
             _wobbleUseStyle.Margin = new Padding(3, 2, 3, 3);
             _wobbleUseStyle.CheckedChanged += (s, e) => { RefreshWobbleSample(); PlayWobbleSample(); };
             var right = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
