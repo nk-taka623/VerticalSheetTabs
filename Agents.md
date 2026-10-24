@@ -2578,5 +2578,5 @@ gitGraph
 
 ### 12.221 インストーラの更新 (バージョン1.1.89.0)
 
-- 12.220 (README の説明文と画像を、最新のアドインに合わせる。アドイン本体の変更は無い) を含めて、バージョンを 1.1.89.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映した。`master` への反映とタグ `v1.1.89` は、ユーザーの指示のあと)
+- 12.220 (README の説明文と画像を、最新のアドインに合わせる。アドイン本体の変更は無い) を含めて、バージョンを 1.1.89.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.89` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.89.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_89_0\`)。インストールの実機確認は、未実施
