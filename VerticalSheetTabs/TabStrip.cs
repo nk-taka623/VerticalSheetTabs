@@ -1203,6 +1203,7 @@ namespace VerticalSheetTabs
                 if (row.Bottom < 0 || r.IsFolder || r.Sheet == null || !_dnSheets.Contains(r.Sheet)) continue;
                 RowBadgeSpec spec = RowBadges(r, row).FirstOrDefault(s => s.Kind == RowBadgeKind.Progress);
                 if (spec == null) continue;
+                int doneState = spec.State == 4 ? 4 : 3;
                 var mode = g.SmoothingMode;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 // a soft green light over the row
@@ -1217,7 +1218,7 @@ namespace VerticalSheetTabs
                 // the mark swells and falls back
                 double pop = t < 0.1 ? 1.0 : 1 + 0.55 * Math.Sin(Math.PI * Clamp01((t - 0.1) / 0.45));
                 int grow = (int)Math.Round(spec.Bounds.Width * (pop - 1) / 2);
-                DrawProgressBadge(g, Rectangle.Inflate(spec.Bounds, grow, grow), 3);
+                DrawProgressBadge(g, Rectangle.Inflate(spec.Bounds, grow, grow), doneState);
                 // rays and dots
                 if (t > 0.1 && t < 0.85)
                 {
@@ -1828,13 +1829,20 @@ namespace VerticalSheetTabs
             {
                 BadgeInfo b;
                 if (!_rowBadges.TryGetValue(r.Sheet, out b)) return list;
+                // done and protected: one mark, a padlock that carries the check (Agents.md 12.201), and no lock of its own
+                bool doneLocked = (_shownBadges & BadgeKinds.Progress) != 0 && b.Progress == 3 && b.Protected;
                 if ((_shownBadges & BadgeKinds.Progress) != 0 && b.Progress > 0)
-                    found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Progress, State = b.Progress, Tip = "進捗: " + ProgressNames[b.Progress] + " (クリックで、次へ)" });
+                    found.Add(new RowBadgeSpec
+                    {
+                        Kind = RowBadgeKind.Progress,
+                        State = doneLocked ? 4 : b.Progress,
+                        Tip = doneLocked ? "進捗: 完了 (シートは保護されています)。クリックで、保護の解除" : b.Progress == 3 ? "進捗: 完了 (クリックで、シートの保護)" : "進捗: " + ProgressNames[b.Progress] + " (クリックで、次へ)"
+                    });
                 if ((_shownBadges & BadgeKinds.Error) != 0 && b.Errors > 0)
                     found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Error, Color = BadgeErrorColor, Tip = "数式エラーが " + b.Errors + " か所" });
                 if ((_shownBadges & BadgeKinds.Memo) != 0 && b.Memos > 0)
                     found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Memo, Color = BadgeMemoColor, Tip = "メモ・コメントが " + b.Memos + " 件" });
-                if ((_shownBadges & BadgeKinds.Protect) != 0 && b.Protected)
+                if ((_shownBadges & BadgeKinds.Protect) != 0 && b.Protected && !doneLocked)
                     found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Protect, Color = BadgeProtectColor, Tip = "シートは保護されています" });
             }
             // the first one stands at the right end, the next ones to its left
@@ -1874,7 +1882,10 @@ namespace VerticalSheetTabs
         // Asks for a progress for sheets (0 = none, 1 = not started, 2 = in progress, 3 = done).
         public event Action<List<string>, int> ProgressRequested;
 
-        // A click on the progress mark of a sheet: the next progress (none, not started, in progress, done, none ...).
+        // A click on the mark of a sheet that is done asks to protect it, or to take the protection off (Excel's own dialog), see PaneManager.
+        public event Action<string> ProgressProtectRequested;
+
+        // A click on the progress mark of a sheet: the next progress (none, not started, in progress, done); a click on "done" protects the sheet.
         private bool ProgressBadgeHit(int index, Point p)
         {
             if (index < 0 || index >= _rows.Count || _rows[index].IsFolder || (_shownBadges & BadgeKinds.Progress) == 0) return false;
@@ -1889,7 +1900,13 @@ namespace VerticalSheetTabs
         {
             BadgeInfo b;
             int now = _rowBadges.TryGetValue(sheet, out b) ? b.Progress : 0;
-            if (ProgressRequested != null) ProgressRequested(new List<string> { sheet }, (now + 1) % 4);
+            if (now == 3)
+            {
+                // "done" (protected or not): the dialog of Excel to protect the sheet, or to take its protection off
+                if (ProgressProtectRequested != null) ProgressProtectRequested(sheet);
+                return;
+            }
+            if (ProgressRequested != null) ProgressRequested(new List<string> { sheet }, now + 1);
         }
 
         private void DrawRowBadges(Graphics g, StripRow r, Rectangle row)
@@ -1912,6 +1929,32 @@ namespace VerticalSheetTabs
             g.SmoothingMode = SmoothingMode.AntiAlias;
             float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f;
             float line = Math.Max(1.4f, r * 0.2f);
+            if (state == 4)
+            {
+                // done and protected: a green padlock whose body carries the check
+                float k = r * 0.92f;
+                float bw = k * 1.7f, bh = k * 1.25f, bt = cy - k * 0.2f;
+                float sw = k * 0.95f, w = Math.Max(1.6f, k * 0.34f);
+                using (var pen = new Pen(BadgeProgressGreen, w))
+                using (var fill = new SolidBrush(BadgeProgressGreen))
+                {
+                    g.DrawArc(pen, cx - sw / 2, cy - k * 1.0f + w / 2, sw, sw, 180, 180);
+                    float ymid = cy - k * 1.0f + w / 2 + sw / 2;
+                    g.FillRectangle(fill, cx - sw / 2 - w / 2, ymid, w, bt + k * 0.2f - ymid);
+                    g.FillRectangle(fill, cx + sw / 2 - w / 2, ymid, w, bt + k * 0.2f - ymid);
+                    using (GraphicsPath body = RoundedRect(Rectangle.Round(new RectangleF(cx - bw / 2, bt, bw, bh)), Math.Max(2, (int)(k * 0.28f))))
+                    {
+                        g.FillPath(fill, body);
+                    }
+                }
+                float cy2 = bt + bh / 2, r2 = k * 0.7f;
+                using (var pen = new Pen(Color.White, Math.Max(1.5f, r2 * 0.26f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                {
+                    g.DrawLines(pen, new[] { new PointF(cx - r2 * 0.45f, cy2 + r2 * 0.02f), new PointF(cx - r2 * 0.1f, cy2 + r2 * 0.36f), new PointF(cx + r2 * 0.5f, cy2 - r2 * 0.34f) });
+                }
+                g.SmoothingMode = mode;
+                return;
+            }
             if (state == 3)
             {
                 using (var fill = new SolidBrush(BadgeProgressGreen)) g.FillEllipse(fill, cx - r, cy - r, r * 2, r * 2);
