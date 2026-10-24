@@ -39,7 +39,7 @@ namespace VerticalSheetTabs
                 // the badges of the rows (errors, notes): the sheet is looked at again when it has been changed or calculated, or left
                 this.Application.SheetChange += (sh, rng) => Guard(() => _panes.MarkBadgesDirty(sh));
                 this.Application.SheetCalculate += sh => Guard(() => _panes.MarkBadgesDirty(sh));
-                this.Application.SheetDeactivate += sh => Guard(() => _panes.MarkBadgesDirty(sh));
+                this.Application.SheetDeactivate += sh => Guard(() => _panes.MarkBadgesDirty(sh, true));
                 this.Application.WorkbookBeforeSave += Application_WorkbookBeforeSave;
 
                 _panes.EnsureAllPanes();

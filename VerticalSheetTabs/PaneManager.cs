@@ -62,6 +62,10 @@ namespace VerticalSheetTabs
             // with the time of the change that makes them so (looked at again when it has been quiet for a while).
             public Dictionary<string, BadgeInfo> Badges = new Dictionary<string, BadgeInfo>();
             public Dictionary<string, DateTime> BadgeDirty = new Dictionary<string, DateTime>();
+            // When each sheet was last looked at, and how long that took (ms): the sheets are looked at again now and then, and a sheet that is
+            // slow to look at is not looked at again at once.
+            public Dictionary<string, DateTime> BadgeScanned = new Dictionary<string, DateTime>();
+            public Dictionary<string, int> BadgeCost = new Dictionary<string, int>();
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -274,7 +278,7 @@ namespace VerticalSheetTabs
                 entry.Settings.SelectStyle = form.SelectStyle;
                 entry.Settings.ActiveMarker = form.ActiveMarker;
                 entry.Settings.Badges = form.Badges;
-                if (oldBadges != form.Badges) { entry.Badges.Clear(); entry.BadgeDirty.Clear(); } // (the sheets are looked at again for the new choice)
+                if (oldBadges != form.Badges) { entry.Badges.Clear(); entry.BadgeDirty.Clear(); entry.BadgeScanned.Clear(); entry.BadgeCost.Clear(); } // (the sheets are looked at again for the new choice)
                 entry.Settings.Wobble = form.Wobble;
                 entry.Settings.WobbleAmp = form.WobbleAmp;
                 entry.Settings.WobbleDur = form.WobbleDur;
@@ -716,8 +720,10 @@ namespace VerticalSheetTabs
         // ---- the badges of the rows: errors and notes (Agents.md 12.190) ----
 
         // How long a sheet has to be left alone (no edit, no recalculation) before it is looked at again, and how long one tick may look.
-        private static readonly TimeSpan BadgeQuiet = TimeSpan.FromMilliseconds(1500);
+        private static readonly TimeSpan BadgeQuiet = TimeSpan.FromMilliseconds(500);
         private const int BadgeBudgetMs = 30;
+        // A sheet is looked at again after this many seconds (the events cannot tell of every change: a note, the protection of a sheet).
+        private const int BadgeRefreshSeconds = 10;
 
         // Called by the sync. With no badge chosen it does nothing at all. The sheets are looked at one after the other within a small
         // time budget per tick, so that a workbook with many sheets does not stop Excel, and a sheet that is being edited is left alone
@@ -743,24 +749,77 @@ namespace VerticalSheetTabs
                 {
                     if (!entry.Badges.ContainsKey(n) && !entry.BadgeDirty.ContainsKey(n)) entry.BadgeDirty[n] = DateTime.MinValue;
                 }
+                foreach (string gone in entry.BadgeScanned.Keys.Where(k => !wanted.Contains(k)).ToList()) { entry.BadgeScanned.Remove(gone); entry.BadgeCost.Remove(gone); }
                 var clock = System.Diagnostics.Stopwatch.StartNew();
                 DateTime now = DateTime.UtcNow;
-                foreach (string n in entry.BadgeDirty.Where(kv => now - kv.Value >= BadgeQuiet).Select(kv => kv.Key).ToList())
+                BadgeKinds kinds = entry.Settings.Badges;
+
+                // 1. the active sheet: its notes and its protection are cheap to read, so they are read at every tick (no event tells of them)
+                BadgeInfo activeInfo;
+                if (activeName != null && entry.Badges.TryGetValue(activeName, out activeInfo))
+                {
+                    activeInfo.Protected = activeProtected;
+                    int memos;
+                    if ((kinds & BadgeKinds.Memo) != 0 && ReadMemoCount(entry.Workbook, activeName, out memos)) activeInfo.Memos = memos;
+                }
+
+                // 2. the sheets that were changed, calculated or left (or never looked at): when they have been quiet for a short while,
+                // oldest first; a sheet that took long to look at is not looked at again within twenty times that long
+                foreach (string n in entry.BadgeDirty.Where(kv => now - kv.Value >= BadgeQuiet).OrderBy(kv => kv.Value).Select(kv => kv.Key).ToList())
                 {
                     if (clock.ElapsedMilliseconds > BadgeBudgetMs) break;
-                    BadgeInfo info;
-                    if (!ScanBadges(entry.Workbook, n, entry.Settings.Badges, out info)) continue; // Excel is busy: the next tick
-                    entry.Badges[n] = info;
-                    entry.BadgeDirty.Remove(n);
+                    int cost;
+                    DateTime last;
+                    if (entry.BadgeDirty[n] != DateTime.MinValue && entry.BadgeCost.TryGetValue(n, out cost) && entry.BadgeScanned.TryGetValue(n, out last)
+                        && (now - last).TotalMilliseconds < cost * 20) continue;
+                    ScanOne(entry, n, now);
                 }
-                // the protection of the active sheet is known at every tick (there is no event for it)
-                BadgeInfo activeInfo;
-                if (activeName != null && entry.Badges.TryGetValue(activeName, out activeInfo)) activeInfo.Protected = activeProtected;
+
+                // 3. the other sheets, now and then: whatever a missed event left behind is put right within a short time
+                if (clock.ElapsedMilliseconds < BadgeBudgetMs / 2)
+                {
+                    foreach (string n in visibleNames
+                        .Where(v => !entry.BadgeDirty.ContainsKey(v) && (!entry.BadgeScanned.ContainsKey(v) || (now - entry.BadgeScanned[v]).TotalSeconds >= BadgeRefreshSeconds))
+                        .OrderBy(v => entry.BadgeScanned.ContainsKey(v) ? entry.BadgeScanned[v] : DateTime.MinValue).ToList())
+                    {
+                        if (clock.ElapsedMilliseconds > BadgeBudgetMs) break;
+                        ScanOne(entry, n, now);
+                    }
+                }
                 entry.Control.SetBadges(entry.Badges);
             }
             catch (Exception)
             {
                 // Excel is busy; the next tick tries again.
+            }
+        }
+
+        private static void ScanOne(Entry entry, string name, DateTime now)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            BadgeInfo info;
+            if (!ScanBadges(entry.Workbook, name, entry.Settings.Badges, out info)) return; // Excel is busy: the next tick
+            entry.Badges[name] = info;
+            entry.BadgeDirty.Remove(name);
+            entry.BadgeScanned[name] = now;
+            entry.BadgeCost[name] = (int)clock.ElapsedMilliseconds;
+        }
+
+        // The number of notes and comments of a sheet; false when Excel could not answer now.
+        private static bool ReadMemoCount(Excel.Workbook workbook, string sheetName, out int count)
+        {
+            count = 0;
+            try
+            {
+                var ws = workbook.Sheets[sheetName] as Excel.Worksheet;
+                if (ws == null) return false;
+                count = ws.Comments.Count;
+                try { count += ws.CommentsThreaded.Count; } catch (Exception) { }
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
             }
         }
 
@@ -806,7 +865,7 @@ namespace VerticalSheetTabs
         }
 
         // Called by the Excel events (a cell changed, a sheet calculated or left): the sheet is looked at again when it has been quiet.
-        public void MarkBadgesDirty(object sheet)
+        public void MarkBadgesDirty(object sheet, bool atOnce = false)
         {
             try
             {
@@ -819,7 +878,7 @@ namespace VerticalSheetTabs
                 {
                     if (entry.Settings.Badges == BadgeKinds.None) continue;
                     if (bookName != null && entry.Workbook.Name != bookName) continue;
-                    entry.BadgeDirty[name] = DateTime.UtcNow;
+                    entry.BadgeDirty[name] = atOnce ? DateTime.MinValue : DateTime.UtcNow; // (a sheet that is left is looked at at once)
                 }
             }
             catch (Exception)
