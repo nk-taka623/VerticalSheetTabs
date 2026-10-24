@@ -120,12 +120,13 @@ namespace VerticalSheetTabs
             _wobbleGroup.Dock = DockStyle.Fill;
             _wobbleGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(_wobbleGroup);
-            // the display mode and the side of the vertical tabs stand side by side in the top row: the side group keeps its own width, the mode group takes the rest
+            // the display mode and the side of the vertical tabs stand side by side in the top row: the side group takes about a third of the width, the mode group the rest
             modeGroup.Dock = DockStyle.None;
             _sideGroup.Dock = DockStyle.None;
             int topHeight = Math.Max(modeGroup.Height, _sideGroup.Height);
-            modeGroup.Size = new Size(_styleGroup.Width - _sideGroup.Width - 12, topHeight);
-            _sideGroup.Size = new Size(_sideGroup.Width, topHeight);
+            int sideWidth = (_styleGroup.Width - 12) * 34 / 100;
+            modeGroup.Size = new Size(_styleGroup.Width - sideWidth - 12, topHeight);
+            _sideGroup.Size = new Size(sideWidth, topHeight);
             modeGroup.Margin = new Padding(3);
             _sideGroup.Margin = new Padding(3);
             var top = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
