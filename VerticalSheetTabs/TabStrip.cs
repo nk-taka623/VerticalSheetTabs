@@ -1841,7 +1841,7 @@ namespace VerticalSheetTabs
                     {
                         Kind = RowBadgeKind.Progress,
                         State = doneLocked ? 4 : b.Progress,
-                        Tip = doneLocked ? "進捗: 完了 (シートは保護されています)。クリックで、保護の解除" : b.Progress == 3 ? "進捗: 完了 (クリックで、シートの保護)" : "進捗: " + ProgressNames[b.Progress] + " (クリックで、次へ)"
+                        Tip = doneLocked ? "進捗: 完了 (シートは保護されています。解除は、右クリックのメニューか、リボンから)" : b.Progress == 3 ? "進捗: 完了 (クリックで、シートの保護)" : "進捗: " + ProgressNames[b.Progress] + " (クリックで、次へ)"
                     });
                 if ((_shownBadges & BadgeKinds.Error) != 0 && b.Errors > 0)
                     found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Error, Color = BadgeErrorColor, Tip = "数式エラーが " + b.Errors + " か所" });
@@ -1909,8 +1909,9 @@ namespace VerticalSheetTabs
             int now = _rowBadges.TryGetValue(sheet, out b) ? b.Progress : 0;
             if (now == 3)
             {
-                // "done" (protected or not): the dialog of Excel to protect the sheet, or to take its protection off
-                if (ProgressProtectRequested != null) ProgressProtectRequested(sheet);
+                // "done": the dialog of Excel to protect the sheet. A sheet that is already protected stays so: the mark does not take the
+                // protection off (that is done by "Unprotect Sheet" of the menu or of the ribbon, Agents.md 12.207)
+                if (b != null && !b.Protected && ProgressProtectRequested != null) ProgressProtectRequested(sheet);
                 return;
             }
             if (ProgressRequested != null) ProgressRequested(new List<string> { sheet }, now + 1);
