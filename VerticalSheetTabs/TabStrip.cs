@@ -1759,9 +1759,6 @@ namespace VerticalSheetTabs
 
         // the done + lock mark and the count badge of a folder are a little larger than the others (Agents.md 12.203)
         private const double BadgeBigScale = 1.2;
-
-        // the done + lock mark: a two-part tile (a green check, a slate padlock), as wide as this many times its height (Agents.md 12.208)
-        private const double DoneLockWidth = 1.6;
         private static readonly Color BadgeProgressGray = Color.FromArgb(150, 150, 155), BadgeProgressBlue = Color.FromArgb(58, 128, 233), BadgeProgressGreen = Color.FromArgb(16, 124, 65);
         private static readonly string[] ProgressNames = { "なし", "未着手", "作業中", "完了" };
 
@@ -1857,9 +1854,9 @@ namespace VerticalSheetTabs
             int x = right;
             foreach (RowBadgeSpec s in found)
             {
-                bool big = s.Kind == RowBadgeKind.Count;
+                bool big = s.Kind == RowBadgeKind.Count || (s.Kind == RowBadgeKind.Progress && s.State == 4);
                 int side = big ? (int)Math.Round(radius * 2 * BadgeBigScale) : radius * 2;
-                int w = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillWidth) : s.Kind == RowBadgeKind.Progress && s.State == 4 ? (int)Math.Round(side * DoneLockWidth) : side;
+                int w = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillWidth) : side;
                 int h = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillHeight) : side;
                 s.Bounds = new Rectangle(x - w, cy - h / 2, w, h);
                 list.Add(s);
@@ -2108,24 +2105,27 @@ namespace VerticalSheetTabs
             float line = Math.Max(1.4f, r * 0.2f);
             if (state == 4)
             {
-                // done and protected: one tile of two parts, a green one with a check, a slate one with a white padlock (Agents.md 12.208)
-                float rr = b.Height / 2f * 0.92f, tw = rr * 3.1f;
-                var tile = new RectangleF(cx - tw / 2, cy - rr, tw, rr * 2);
-                using (GraphicsPath path = RoundedRect(Rectangle.Round(tile), Math.Max(2, (int)(rr * 0.36f))))
+                // done and protected: a green padlock whose body carries the check
+                float k = r * 0.92f;
+                float bw = k * 1.7f, bh = k * 1.25f, bt = cy - k * 0.2f;
+                float sw = k * 0.95f, w = Math.Max(1.6f, k * 0.34f);
+                using (var pen = new Pen(BadgeProgressGreen, w))
+                using (var fill = new SolidBrush(BadgeProgressGreen))
                 {
-                    using (var green = new SolidBrush(BadgeProgressGreen)) g.FillPath(green, path);
-                    GraphicsState keep = g.Save();
-                    g.SetClip(path, CombineMode.Intersect);
-                    using (var slate = new SolidBrush(BadgeProtectColor)) g.FillRectangle(slate, cx + rr * 0.05f, cy - rr - 1, tw, rr * 2 + 2);
-                    g.Restore(keep);
+                    g.DrawArc(pen, cx - sw / 2, cy - k * 1.0f + w / 2, sw, sw, 180, 180);
+                    float ymid = cy - k * 1.0f + w / 2 + sw / 2;
+                    g.FillRectangle(fill, cx - sw / 2 - w / 2, ymid, w, bt + k * 0.2f - ymid);
+                    g.FillRectangle(fill, cx + sw / 2 - w / 2, ymid, w, bt + k * 0.2f - ymid);
+                    using (GraphicsPath body = RoundedRect(Rectangle.Round(new RectangleF(cx - bw / 2, bt, bw, bh)), Math.Max(2, (int)(k * 0.28f))))
+                    {
+                        g.FillPath(fill, body);
+                    }
                 }
-                float k = rr * 0.8f;
-                using (var pen = new Pen(Color.White, Math.Max(1.5f, k * 0.26f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                float cy2 = bt + bh / 2, r2 = k * 0.7f;
+                using (var pen = new Pen(Color.White, Math.Max(1.5f, r2 * 0.26f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
                 {
-                    float ccx = cx - rr * 0.78f;
-                    g.DrawLines(pen, new[] { new PointF(ccx - k * 0.45f, cy + k * 0.02f), new PointF(ccx - k * 0.1f, cy + k * 0.36f), new PointF(ccx + k * 0.5f, cy - k * 0.34f) });
+                    g.DrawLines(pen, new[] { new PointF(cx - r2 * 0.45f, cy2 + r2 * 0.02f), new PointF(cx - r2 * 0.1f, cy2 + r2 * 0.36f), new PointF(cx + r2 * 0.5f, cy2 - r2 * 0.34f) });
                 }
-                DrawLockGlyph(g, cx + rr * 0.8f, cy + rr * 0.04f, rr * 0.58f, Color.White, BadgeProtectColor);
                 g.SmoothingMode = mode;
                 return;
             }
@@ -2235,38 +2235,42 @@ namespace VerticalSheetTabs
             g.SmoothingMode = mode;
         }
 
-        // the protection: a slate rounded tile with a white padlock (Agents.md 12.208)
+        // a padlock (a body and a shackle), in a white rim
         private static void DrawLockBadge(Graphics g, Rectangle b, Color color, bool outline = true)
         {
             var mode = g.SmoothingMode;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f * 0.92f;
-            using (GraphicsPath p = RoundedRect(Rectangle.Round(new RectangleF(cx - r, cy - r, r * 2, r * 2)), Math.Max(2, (int)(r * 0.36f))))
-            using (var fill = new SolidBrush(color)) g.FillPath(fill, p);
-            DrawLockGlyph(g, cx, cy + r * 0.04f, r * 0.62f, Color.White, color);
+            float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f * 1.05f;
+            float bodyTop = cy - r * 0.12f, bodyH = r * 1.0f, bodyW = r * 1.5f;
+            float shackleW = r * 0.95f, shackleTop = cy - r * 0.95f;
+            // the white rim: a thicker shackle and a larger body
+            float rim = Math.Max(1.2f, r * 0.2f);
+            using (var rimPen = new Pen(Color.White, r * 0.34f + rim))
+            using (var pen = new Pen(color, r * 0.34f))
+            {
+                rimPen.StartCap = rimPen.EndCap = LineCap.Round;
+                if (outline)
+                {
+                    g.DrawArc(rimPen, cx - shackleW / 2, shackleTop, shackleW, r * 1.4f, 180, 180);
+                    g.DrawLine(rimPen, cx - shackleW / 2, shackleTop + r * 0.7f, cx - shackleW / 2, bodyTop + r * 0.1f);
+                    g.DrawLine(rimPen, cx + shackleW / 2, shackleTop + r * 0.7f, cx + shackleW / 2, bodyTop + r * 0.1f);
+                    var outer = Rectangle.Round(new RectangleF(cx - bodyW / 2 - rim * 0.6f, bodyTop - rim * 0.6f, bodyW + rim * 1.2f, bodyH + rim * 1.2f));
+                    using (GraphicsPath p = RoundedRect(outer, Math.Max(2, (int)(r * 0.3f)))) using (var white = new SolidBrush(Color.White)) g.FillPath(white, p);
+                }
+                pen.StartCap = pen.EndCap = LineCap.Round;
+                g.DrawArc(pen, cx - shackleW / 2, shackleTop, shackleW, r * 1.4f, 180, 180);
+                g.DrawLine(pen, cx - shackleW / 2, shackleTop + r * 0.7f, cx - shackleW / 2, bodyTop + r * 0.1f);
+                g.DrawLine(pen, cx + shackleW / 2, shackleTop + r * 0.7f, cx + shackleW / 2, bodyTop + r * 0.1f);
+            }
+            var inner = Rectangle.Round(new RectangleF(cx - bodyW / 2, bodyTop, bodyW, bodyH));
+            using (GraphicsPath p = RoundedRect(inner, Math.Max(2, (int)(r * 0.22f)))) using (var fill = new SolidBrush(color)) g.FillPath(fill, p);
+            using (var white = new SolidBrush(Color.White))
+            {
+                float k = Math.Max(1.6f, r * 0.26f);
+                g.FillEllipse(white, cx - k / 2, bodyTop + bodyH * 0.28f, k, k);
+                g.FillRectangle(white, cx - k * 0.2f, bodyTop + bodyH * 0.28f + k * 0.5f, k * 0.4f, bodyH * 0.3f);
+            }
             g.SmoothingMode = mode;
-        }
-
-        // a symmetric padlock (a shackle, a body and a keyhole) of one color; the keyhole is cut out in the color `hole`
-        private static void DrawLockGlyph(Graphics g, float cx, float cy, float r, Color color, Color hole)
-        {
-            float bw = r * 1.5f, bh = r * 1.1f, bt = cy - r * 0.05f;
-            float sw = r * 0.78f, w = Math.Max(1.4f, r * 0.3f), top = cy - r * 0.95f;
-            using (var fill = new SolidBrush(color))
-            using (var pen = new Pen(color, w))
-            {
-                g.DrawArc(pen, cx - sw / 2, top + w / 2, sw, sw, 180, 180);
-                float ymid = top + (sw + w) / 2, bottom = bt + r * 0.3f;
-                g.FillRectangle(fill, cx - sw / 2 - w / 2, ymid, w, bottom - ymid);
-                g.FillRectangle(fill, cx + sw / 2 - w / 2, ymid, w, bottom - ymid);
-                using (GraphicsPath body = RoundedRect(Rectangle.Round(new RectangleF(cx - bw / 2, bt, bw, bh)), Math.Max(2, (int)(r * 0.24f)))) g.FillPath(fill, body);
-            }
-            float kr = r * 0.13f, y0 = bt + bh * 0.3f;
-            using (var h = new SolidBrush(hole))
-            {
-                g.FillEllipse(h, cx - kr, y0, kr * 2, kr * 2);
-                g.FillPolygon(h, new[] { new PointF(cx - kr * 0.5f, y0 + kr * 1.6f), new PointF(cx + kr * 0.5f, y0 + kr * 1.6f), new PointF(cx + kr * 0.8f, bt + bh * 0.85f), new PointF(cx - kr * 0.8f, bt + bh * 0.85f) });
-            }
         }
 
         // The icon of a kind of badge (for the settings dialog).
