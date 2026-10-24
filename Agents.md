@@ -2462,5 +2462,5 @@ gitGraph
 
 ### 12.206 インストーラの更新 (バージョン1.1.83.0)
 
-- 12.205 (一番右端のバッジが欠けないよう、バッジの右端の位置を左へ寄せる) を含めて、バージョンを 1.1.83.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映した。`master` への反映とタグ `v1.1.83` は、ユーザーの指示のあと)
+- 12.205 (一番右端のバッジが欠けないよう、バッジの右端の位置を左へ寄せる) を含めて、バージョンを 1.1.83.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.83` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.83.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_83_0\`)。インストールの実機確認は、未実施
