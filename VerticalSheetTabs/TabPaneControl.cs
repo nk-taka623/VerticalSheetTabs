@@ -88,6 +88,7 @@ namespace VerticalSheetTabs
             _strip.AllFoldersRequested += open => { if (AllFoldersRequested != null) AllFoldersRequested(open); };
             _strip.GridFocusForced += () => { if (GridFocusForced != null) GridFocusForced(); };
             _strip.ProgressRequested += (sheets, state) => { if (ProgressRequested != null) ProgressRequested(sheets, state); };
+            _strip.ProgressProtectRequested += sheet => { if (ProgressProtectRequested != null) ProgressProtectRequested(sheet); };
             _strip.BackRequested += () => { if (BackRequested != null) BackRequested(); };
             _strip.ForwardRequested += () => { if (ForwardRequested != null) ForwardRequested(); };
             _strip.HistoryClearRequested += () => { if (HistoryClearRequested != null) HistoryClearRequested(); };
@@ -295,6 +296,7 @@ namespace VerticalSheetTabs
         public ActiveMarker ActiveMarker { get { return _strip.ActiveMarker; } set { _strip.ActiveMarker = value; } }
         public bool DoneAnimation { get { return _strip.DoneAnimation; } set { _strip.DoneAnimation = value; } }
         public event Action<System.Collections.Generic.List<string>, int> ProgressRequested;
+        public event Action<string> ProgressProtectRequested;
         public bool RowAnimation { get { return _strip.RowAnimation; } set { _strip.RowAnimation = value; } }
         public BadgeKinds ShownBadges { get { return _strip.ShownBadges; } set { _strip.ShownBadges = value; } }
         public void SetBadges(System.Collections.Generic.IDictionary<string, BadgeInfo> info) { _strip.SetBadges(info); }

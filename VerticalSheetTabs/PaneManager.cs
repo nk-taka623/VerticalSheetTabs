@@ -125,6 +125,7 @@ namespace VerticalSheetTabs
             control.RowAnimation = settings.RowAnim;
             control.DoneAnimation = settings.DoneAnim;
             control.ProgressRequested += (sheets, state) => SetProgress(entry, sheets, state);
+            control.ProgressProtectRequested += sheet => ToggleSheetProtect(entry, sheet);
             control.SetWobble(settings.Wobble, settings.WobbleAmp, settings.WobbleDur);
             control.SetWobbleSound(settings.WobbleSound, settings.WobbleVolume);
 
@@ -841,6 +842,23 @@ namespace VerticalSheetTabs
                 if (cp.Name == ProgressProperty) cp.Delete();
             }
             if (state >= 1 && state <= 3) ws.CustomProperties.Add(ProgressProperty, state == 1 ? "todo" : state == 2 ? "doing" : "done");
+        }
+
+        // A click on the "done" mark: the sheet is made the active one, and Excel's own command to protect it (or to take its protection off)
+        // runs, with its dialog and password. Whether the sheet is protected afterwards is read at the next tick (the active sheet's protection
+        // is read at every tick), and the mark follows.
+        private void ToggleSheetProtect(Entry entry, string sheet)
+        {
+            try
+            {
+                CommitCellEdit(entry);
+                SelectSheets(entry, new List<string> { sheet }, sheet);
+                RunExcelCommand(entry, "SheetProtect");
+            }
+            catch (Exception)
+            {
+                // Excel is busy.
+            }
         }
 
         // Sets the progress of sheets (0 = none): the workbook is changed (it is asked to be saved), and the mark shows at once.
