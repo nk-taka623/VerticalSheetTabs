@@ -33,6 +33,15 @@ namespace VerticalSheetTabs
         CheckBadge // a round check mark at the left of the name (Agents.md 12.131)
     }
 
+    // The small marks drawn at the right end of a row (Agents.md 12.190); each one is shown only when it is chosen.
+    [Flags]
+    public enum BadgeKinds
+    {
+        None = 0,
+        Error = 1, // the sheet has formulas that show an error (#REF!, #DIV/0!, ...)
+        Memo = 2   // the sheet has notes or comments
+    }
+
     public enum TabSide
     {
         Left,
@@ -58,6 +67,7 @@ namespace VerticalSheetTabs
         public const string WobbleVolumeName = "VTab.WobbleVolume"; // number 0 to 100 (default 60)
         public const string WobbleSampleStyleName = "VTab.WobbleSampleStyle"; // string "On" / "Off" (default "Off"; Agents.md 12.178)
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
+        public const string BadgesName = "VTab.Badges";           // string "None", or "Error", "Memo", "Error,Memo" (default "None"; Agents.md 12.190)
         public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "Crystal"
 
         // Office.MsoDocProperties values.
@@ -82,6 +92,8 @@ namespace VerticalSheetTabs
         public SelectStyle SelectStyle { get; set; }
         // The mark of the active sheet (default: the underline).
         public ActiveMarker ActiveMarker { get; set; }
+        // The badges at the right end of the rows (default: none).
+        public BadgeKinds Badges { get; set; }
 
         public WobbleType Wobble { get; set; }
 
@@ -107,6 +119,7 @@ namespace VerticalSheetTabs
             NameRule = false;
             SelectStyle = SelectStyle.Standard;
             ActiveMarker = ActiveMarker.Underline;
+            Badges = BadgeKinds.None;
             Wobble = WobbleType.None;
             WobbleAmp = WobbleMotion.AmpDefault;
             WobbleDur = WobbleMotion.DurDefault;
@@ -152,6 +165,8 @@ namespace VerticalSheetTabs
                     string v = (string)marker.Value;
                     s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : v == "EdgeBars" ? ActiveMarker.EdgeBars : v == "CheckBadge" ? ActiveMarker.CheckBadge : ActiveMarker.Underline;
                 }
+                dynamic badges = Find(props, BadgesName);
+                if (badges != null) s.Badges = ParseBadges((string)badges.Value);
                 dynamic wobble = Find(props, WobbleName);
                 if (wobble != null)
                 {
@@ -200,6 +215,7 @@ namespace VerticalSheetTabs
                 Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
                 Write(props, SelectStyleName, PropTypeString, SelectStyleToString(SelectStyle));
                 Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : ActiveMarker == ActiveMarker.EdgeBars ? "EdgeBars" : ActiveMarker == ActiveMarker.CheckBadge ? "CheckBadge" : "Triangle");
+                Write(props, BadgesName, PropTypeString, BadgesToString(Badges));
                 Write(props, WobbleName, PropTypeString, Wobble.ToString());
                 Write(props, WobbleAmpName, PropTypeNumber, WobbleAmp);
                 Write(props, WobbleDurName, PropTypeNumber, WobbleDur);
@@ -211,6 +227,25 @@ namespace VerticalSheetTabs
             {
                 // Read-only or protected workbook: skip silently, nothing else depends on it.
             }
+        }
+
+        private static BadgeKinds ParseBadges(string value)
+        {
+            var kinds = BadgeKinds.None;
+            if (string.IsNullOrEmpty(value)) return kinds;
+            foreach (string part in value.Split(','))
+            {
+                string p = part.Trim();
+                if (p == "Error") kinds |= BadgeKinds.Error;
+                else if (p == "Memo") kinds |= BadgeKinds.Memo;
+            }
+            return kinds;
+        }
+
+        private static string BadgesToString(BadgeKinds kinds)
+        {
+            if (kinds == BadgeKinds.None) return "None";
+            return (kinds & BadgeKinds.Error) != 0 && (kinds & BadgeKinds.Memo) != 0 ? "Error,Memo" : (kinds & BadgeKinds.Error) != 0 ? "Error" : "Memo";
         }
 
         private static SelectStyle ParseSelectStyle(string value)

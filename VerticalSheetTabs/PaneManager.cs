@@ -58,6 +58,10 @@ namespace VerticalSheetTabs
             // The active sheet and the sheet names the history was last updated for.
             public string HistActive;
             public string HistNames;
+            // What the sheets hold (errors, notes) for the badges (Agents.md 12.190), by sheet name, and the sheets to look at again
+            // with the time of the change that makes them so (looked at again when it has been quiet for a while).
+            public Dictionary<string, BadgeInfo> Badges = new Dictionary<string, BadgeInfo>();
+            public Dictionary<string, DateTime> BadgeDirty = new Dictionary<string, DateTime>();
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -113,6 +117,7 @@ namespace VerticalSheetTabs
             control.OutlineLevel = settings.OutlineLevel;
             control.SelectionStyle = settings.SelectStyle;
             control.ActiveMarker = settings.ActiveMarker;
+            control.ShownBadges = settings.Badges;
             control.SetWobble(settings.Wobble, settings.WobbleAmp, settings.WobbleDur);
             control.SetWobbleSound(settings.WobbleSound, settings.WobbleVolume);
 
@@ -256,7 +261,7 @@ namespace VerticalSheetTabs
         private void ShowSettings(Entry entry)
         {
             bool nameRuleTurnedOn = false;
-            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle))
+            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
                 entry.Settings.Mode = form.Mode;
@@ -267,6 +272,7 @@ namespace VerticalSheetTabs
                 entry.Settings.NameRule = form.NameRule;
                 entry.Settings.SelectStyle = form.SelectStyle;
                 entry.Settings.ActiveMarker = form.ActiveMarker;
+                entry.Settings.Badges = form.Badges;
                 entry.Settings.Wobble = form.Wobble;
                 entry.Settings.WobbleAmp = form.WobbleAmp;
                 entry.Settings.WobbleDur = form.WobbleDur;
@@ -280,6 +286,7 @@ namespace VerticalSheetTabs
                 entry.Control.OutlineLevel = entry.Settings.OutlineLevel;
                 entry.Control.SelectionStyle = entry.Settings.SelectStyle;
                 entry.Control.ActiveMarker = entry.Settings.ActiveMarker;
+                entry.Control.ShownBadges = entry.Settings.Badges;
                 entry.Control.SetWobble(entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur);
                 entry.Control.SetWobbleSound(entry.Settings.WobbleSound, entry.Settings.WobbleVolume);
             }
@@ -591,6 +598,7 @@ namespace VerticalSheetTabs
 
                 entry.Control.ActiveSheetProtected = IsSheetProtected(activeSheet);
                 TrackHistory(entry, activeSheet, active, string.Join("|", allNames));
+                UpdateBadges(entry, names);
                 List<StripRow> rows = BuildRows(entry, allNames, visibleAt);
                 entry.Control.SetSheets(names, active, selected, colors, rows);
                 return true;
@@ -700,6 +708,109 @@ namespace VerticalSheetTabs
                 }
             }
             return rows;
+        }
+
+        // ---- the badges of the rows: errors and notes (Agents.md 12.190) ----
+
+        // How long a sheet has to be left alone (no edit, no recalculation) before it is looked at again, and how long one tick may look.
+        private static readonly TimeSpan BadgeQuiet = TimeSpan.FromMilliseconds(1500);
+        private const int BadgeBudgetMs = 30;
+
+        // Called by the sync. With no badge chosen it does nothing at all. The sheets are looked at one after the other within a small
+        // time budget per tick, so that a workbook with many sheets does not stop Excel, and a sheet that is being edited is left alone
+        // until it has been quiet for a while.
+        private static void UpdateBadges(Entry entry, List<string> visibleNames)
+        {
+            try
+            {
+                if (entry.Settings.Badges == BadgeKinds.None)
+                {
+                    if (entry.Badges.Count > 0 || entry.BadgeDirty.Count > 0)
+                    {
+                        entry.Badges.Clear();
+                        entry.BadgeDirty.Clear();
+                        entry.Control.SetBadges(null);
+                    }
+                    return;
+                }
+                var wanted = new HashSet<string>(visibleNames);
+                foreach (string gone in entry.Badges.Keys.Where(k => !wanted.Contains(k)).ToList()) entry.Badges.Remove(gone);
+                foreach (string gone in entry.BadgeDirty.Keys.Where(k => !wanted.Contains(k)).ToList()) entry.BadgeDirty.Remove(gone);
+                foreach (string n in visibleNames)
+                {
+                    if (!entry.Badges.ContainsKey(n) && !entry.BadgeDirty.ContainsKey(n)) entry.BadgeDirty[n] = DateTime.MinValue;
+                }
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                DateTime now = DateTime.UtcNow;
+                foreach (string n in entry.BadgeDirty.Where(kv => now - kv.Value >= BadgeQuiet).Select(kv => kv.Key).ToList())
+                {
+                    if (clock.ElapsedMilliseconds > BadgeBudgetMs) break;
+                    BadgeInfo info;
+                    if (!ScanBadges(entry.Workbook, n, out info)) continue; // Excel is busy: the next tick
+                    entry.Badges[n] = info;
+                    entry.BadgeDirty.Remove(n);
+                }
+                entry.Control.SetBadges(entry.Badges);
+            }
+            catch (Exception)
+            {
+                // Excel is busy; the next tick tries again.
+            }
+        }
+
+        // Counts the cells with an error (of formulas) and the notes and comments of one sheet. False when Excel could not answer now.
+        private static bool ScanBadges(Excel.Workbook workbook, string sheetName, out BadgeInfo info)
+        {
+            info = new BadgeInfo();
+            var ws = workbook.Sheets[sheetName] as Excel.Worksheet;
+            if (ws == null) return true; // a chart sheet: nothing to tell
+            try
+            {
+                Excel.Range errors = null;
+                try
+                {
+                    errors = ws.UsedRange.SpecialCells(Excel.XlCellType.xlCellTypeFormulas, Excel.XlSpecialCellsValue.xlErrors);
+                    info.Errors = (int)Math.Min(int.MaxValue, errors.CountLarge);
+                }
+                catch (System.Runtime.InteropServices.COMException ex)
+                {
+                    // "no cells were found" is the answer 0; anything else (Excel is busy or editing) is tried again
+                    if (ex.ErrorCode != unchecked((int)0x800A03EC)) return false;
+                }
+                finally
+                {
+                    if (errors != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(errors);
+                }
+                info.Memos = ws.Comments.Count;
+                try { info.Memos += ws.CommentsThreaded.Count; } catch (Exception) { } // (older Excel has no threaded comments)
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        // Called by the Excel events (a cell changed, a sheet calculated or left): the sheet is looked at again when it has been quiet.
+        public void MarkBadgesDirty(object sheet)
+        {
+            try
+            {
+                var ws = sheet as Excel.Worksheet;
+                if (ws == null) return;
+                string name = ws.Name;
+                var book = ws.Parent as Excel.Workbook;
+                string bookName = book != null ? book.Name : null;
+                foreach (Entry entry in _entries.Values)
+                {
+                    if (entry.Settings.Badges == BadgeKinds.None) continue;
+                    if (bookName != null && entry.Workbook.Name != bookName) continue;
+                    entry.BadgeDirty[name] = DateTime.UtcNow;
+                }
+            }
+            catch (Exception)
+            {
+            }
         }
 
         // ---- the sheets seen last (Agents.md 12.186) ----
