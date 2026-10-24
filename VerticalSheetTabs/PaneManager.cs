@@ -851,6 +851,8 @@ namespace VerticalSheetTabs
         {
             try
             {
+                var target = entry.Workbook.Sheets[sheet] as Excel.Worksheet;
+                if (target != null && target.ProtectContents) return; // (already protected: the mark never takes the protection off)
                 CommitCellEdit(entry);
                 SelectSheets(entry, new List<string> { sheet }, sheet);
                 RunExcelCommand(entry, "SheetProtect");
