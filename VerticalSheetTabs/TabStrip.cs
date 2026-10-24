@@ -52,6 +52,7 @@ namespace VerticalSheetTabs
         public int Errors;
         public int Memos;
         public bool Protected;
+        public int Progress; // 0 = none, 1 = not started, 2 = in progress, 3 = done
     }
 
     // A line of the menu of the sheets seen last (Agents.md 12.186).
@@ -1113,6 +1114,7 @@ namespace VerticalSheetTabs
                 }
             }
             DrawRowAnim(g, comingIn);
+            DrawDoneAnim(g);
             foreach (int index in wobbling)
             {
                 if (_animClock == null) break;
@@ -1144,6 +1146,102 @@ namespace VerticalSheetTabs
 
             if (ShowAllButtons) DrawAllButtons(g);
             if (!IsSample) DrawPlus(g);
+        }
+
+        // ---- the burst of a progress mark that turns to "done" (Agents.md 12.199) ----
+        // The mark swells a little and falls back, rays and dots fly out of it, and a soft green light crosses the row. 0.5 seconds, no sound.
+
+        private const int DoneAnimMs = 500;
+        private bool _doneAnimation = true;
+        private System.Diagnostics.Stopwatch _dnClock;
+        private HashSet<string> _dnSheets;
+        private System.Windows.Forms.Timer _dnTimer;
+
+        public bool DoneAnimation
+        {
+            get { return _doneAnimation; }
+            set { _doneAnimation = value; if (!value) EndDoneAnim(); }
+        }
+
+        private void StartDoneAnim(IEnumerable<string> sheets)
+        {
+            if (!IsHandleCreated || !base.Visible) return;
+            _dnSheets = new HashSet<string>(sheets);
+            _dnClock = System.Diagnostics.Stopwatch.StartNew();
+            if (_dnTimer == null)
+            {
+                _dnTimer = new System.Windows.Forms.Timer { Interval = 15 };
+                _dnTimer.Tick += (s, e) =>
+                {
+                    if (_dnClock == null || _dnClock.ElapsedMilliseconds >= DoneAnimMs) EndDoneAnim();
+                    Invalidate();
+                };
+            }
+            _dnTimer.Start();
+        }
+
+        private void EndDoneAnim()
+        {
+            if (_dnTimer != null) _dnTimer.Stop();
+            bool was = _dnClock != null;
+            _dnClock = null;
+            _dnSheets = null;
+            if (was) Invalidate();
+        }
+
+        private void DrawDoneAnim(Graphics g)
+        {
+            if (_dnClock == null || _dnSheets == null) return;
+            double t = Math.Min(1.0, _dnClock.ElapsedMilliseconds / (double)DoneAnimMs);
+            int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
+            for (int i = first; i < _rows.Count; i++)
+            {
+                StripRow r = _rows[i];
+                Rectangle row = RowRect(i);
+                row.Offset(0, RowAnimDy(i));
+                if (row.Top > ViewHeight) break;
+                if (row.Bottom < 0 || r.IsFolder || r.Sheet == null || !_dnSheets.Contains(r.Sheet)) continue;
+                RowBadgeSpec spec = RowBadges(r, row).FirstOrDefault(s => s.Kind == RowBadgeKind.Progress);
+                if (spec == null) continue;
+                var mode = g.SmoothingMode;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                // a soft green light over the row
+                double u = Clamp01((t - 0.1) / 0.7);
+                int left = row.Left + Px(InsetLeft) + (r.Indented ? Px(FolderIndent) : 0), right = row.Right - RightInset(r);
+                var body = new Rectangle(left, row.Top + Px(PlainTop), Math.Max(2, right - left), row.Height - Px(PlainTop) - Px(BottomInset));
+                using (GraphicsPath path = RoundedRect(body, Px(CornerRadius)))
+                using (var fill = new SolidBrush(Color.FromArgb((int)(60 * (1 - u)), BadgeProgressGreen)))
+                {
+                    g.FillPath(fill, path);
+                }
+                // the mark swells and falls back
+                double pop = t < 0.1 ? 1.0 : 1 + 0.55 * Math.Sin(Math.PI * Clamp01((t - 0.1) / 0.45));
+                int grow = (int)Math.Round(spec.Bounds.Width * (pop - 1) / 2);
+                DrawProgressBadge(g, Rectangle.Inflate(spec.Bounds, grow, grow), 3);
+                // rays and dots
+                if (t > 0.1 && t < 0.85)
+                {
+                    double k = (t - 0.1) / 0.75;
+                    float cx = spec.Bounds.Left + spec.Bounds.Width / 2f, cy = spec.Bounds.Top + spec.Bounds.Height / 2f;
+                    int alpha = (int)(255 * (1 - k));
+                    for (int d = 0; d < 8; d++)
+                    {
+                        double ang = d * Math.PI / 4;
+                        double r0 = Px(10 + 12 * k), r1 = Px(14 + 16 * k);
+                        using (var pen = new Pen(Color.FromArgb(alpha, BadgeProgressGreen), Math.Max(1.5f, Px(1.6))) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                        {
+                            g.DrawLine(pen, cx + (float)(Math.Cos(ang) * r0), cy + (float)(Math.Sin(ang) * r0), cx + (float)(Math.Cos(ang) * r1), cy + (float)(Math.Sin(ang) * r1));
+                        }
+                        double ang2 = ang + Math.PI / 8, rr = Px(8 + 20 * k);
+                        float dot = Math.Max(1.5f, Px(1.8));
+                        using (var b = new SolidBrush(Color.FromArgb(alpha, 245, 190, 40)))
+                        {
+                            g.FillEllipse(b, cx + (float)(Math.Cos(ang2) * rr) - dot, cy + (float)(Math.Sin(ang2) * rr) - dot, dot * 2, dot * 2);
+                        }
+                    }
+                }
+                g.SmoothingMode = mode;
+            }
         }
 
         // ---- the rows of added and deleted sheets and folders (Agents.md 12.194, 12.196) ----
@@ -1617,36 +1715,59 @@ namespace VerticalSheetTabs
         public void SetBadges(IDictionary<string, BadgeInfo> info)
         {
             var copy = new Dictionary<string, BadgeInfo>();
-            if (info != null) foreach (var kv in info) copy[kv.Key] = new BadgeInfo { Errors = kv.Value.Errors, Memos = kv.Value.Memos, Protected = kv.Value.Protected }; // (copies: the caller changes its own)
-            bool same = copy.Count == _rowBadges.Count && copy.All(kv => { BadgeInfo o; return _rowBadges.TryGetValue(kv.Key, out o) && o.Errors == kv.Value.Errors && o.Memos == kv.Value.Memos && o.Protected == kv.Value.Protected; });
+            if (info != null) foreach (var kv in info) copy[kv.Key] = new BadgeInfo { Errors = kv.Value.Errors, Memos = kv.Value.Memos, Protected = kv.Value.Protected, Progress = kv.Value.Progress }; // (copies: the caller changes its own)
+            bool same = copy.Count == _rowBadges.Count && copy.All(kv => { BadgeInfo o; return _rowBadges.TryGetValue(kv.Key, out o) && o.Errors == kv.Value.Errors && o.Memos == kv.Value.Memos && o.Protected == kv.Value.Protected && o.Progress == kv.Value.Progress; });
             if (same) return;
+            // the sheets that have just been marked as done burst (the ones seen first, at the start, do not)
+            List<string> becameDone = null;
+            if (_doneAnimation && !IsSample && (_shownBadges & BadgeKinds.Progress) != 0)
+            {
+                foreach (var kv in copy)
+                {
+                    BadgeInfo o;
+                    if (kv.Value.Progress == 3 && _rowBadges.TryGetValue(kv.Key, out o) && o.Progress != 3)
+                    {
+                        if (becameDone == null) becameDone = new List<string>();
+                        becameDone.Add(kv.Key);
+                    }
+                }
+            }
             _rowBadges = copy;
+            if (becameDone != null) StartDoneAnim(becameDone);
             Invalidate();
         }
 
         private static readonly Color BadgeErrorColor = Color.FromArgb(214, 69, 65), BadgeMemoColor = Color.FromArgb(232, 168, 28), BadgeProtectColor = Color.FromArgb(78, 110, 150);
 
-        private enum RowBadgeKind { Error, Memo, Protect, Count }
+        private enum RowBadgeKind { Progress, ProgressPill, Error, Memo, Protect, Count }
 
         private class RowBadgeSpec
         {
             public RowBadgeKind Kind;
             public int Count;
+            public int Total;
+            public int State; // the progress (1 to 3)
             public Color Color;
             public Rectangle Bounds;
             public string Tip;
         }
 
+        private const double RowBadgePillWidth = 34, RowBadgePillHeight = 17;
+        private static readonly Color BadgeProgressGray = Color.FromArgb(150, 150, 155), BadgeProgressBlue = Color.FromArgb(58, 128, 233), BadgeProgressGreen = Color.FromArgb(16, 124, 65);
+        private static readonly string[] ProgressNames = { "なし", "未着手", "作業中", "完了" };
+
         private bool IsActiveRow(StripRow r) { return !r.IsFolder && _selected.Contains(r.Sheet) && r.Sheet == _active; }
 
-        // The badges of a row from the right, left to right: the number of them and what each one tells. A closed folder shows one round badge
-        // with the number of its sheets that have something to tell (red when one of them has an error, else amber).
+        // The badges of a row from the right, left to right: the progress comes first, at the right end (Agents.md 12.199), then what each
+        // other badge tells. A folder shows a pill with the number of its sheets that are done out of those that have a progress; a closed
+        // folder also shows one round badge with the number of its sheets that have something else to tell (red when one of them has an
+        // error, else amber).
         private List<RowBadgeSpec> RowBadges(StripRow r, Rectangle row)
         {
             var list = new List<RowBadgeSpec>();
             if (_shownBadges == BadgeKinds.None || r == null) return list;
             int radius = Px(RowBadgeRadius);
-            int step = Px(RowBadgeStep);
+            int gap = Px(3);
             bool selected = r.IsFolder ? _selFolders.Contains(r.FolderId) : _selected.Contains(r.Sheet);
             // the middle of the body of the row: a selected row is a little higher than the others
             int top = row.Top + Px(selected ? PlainTop : ColoredTop), bottom = row.Bottom - Px(BottomInset);
@@ -1661,35 +1782,54 @@ namespace VerticalSheetTabs
             var found = new List<RowBadgeSpec>();
             if (r.IsFolder)
             {
-                if (r.Expanded) return list;
-                int errors = 0, memos = 0, locks = 0, sheets = 0;
-                foreach (string m in r.Members)
+                if ((_shownBadges & BadgeKinds.Progress) != 0)
                 {
-                    BadgeInfo b;
-                    if (!_rowBadges.TryGetValue(m, out b)) continue;
-                    bool e = (_shownBadges & BadgeKinds.Error) != 0 && b.Errors > 0, n = (_shownBadges & BadgeKinds.Memo) != 0 && b.Memos > 0, p = (_shownBadges & BadgeKinds.Protect) != 0 && b.Protected;
-                    if (e) errors++;
-                    if (n) memos++;
-                    if (p) locks++;
-                    if (e || n || p) sheets++;
+                    int done = 0, total = 0;
+                    foreach (string m in r.Members)
+                    {
+                        BadgeInfo b;
+                        if (!_rowBadges.TryGetValue(m, out b) || b.Progress == 0) continue;
+                        total++;
+                        if (b.Progress == 3) done++;
+                    }
+                    if (total > 0)
+                        found.Add(new RowBadgeSpec { Kind = RowBadgeKind.ProgressPill, Count = done, Total = total, Tip = "進捗: 完了 " + done + " / " + total });
                 }
-                if (sheets == 0) return list;
-                var lines = new List<string>();
-                if (errors > 0) lines.Add("数式エラーのあるシート " + errors + " 枚");
-                if (memos > 0) lines.Add("メモのあるシート " + memos + " 枚");
-                if (locks > 0) lines.Add("保護されたシート " + locks + " 枚");
-                found.Add(new RowBadgeSpec
+                if (!r.Expanded)
                 {
-                    Kind = RowBadgeKind.Count,
-                    Count = sheets,
-                    Color = errors > 0 ? BadgeErrorColor : memos > 0 ? BadgeMemoColor : BadgeProtectColor,
-                    Tip = string.Join("\n", lines)
-                });
+                    int errors = 0, memos = 0, locks = 0, sheets = 0;
+                    foreach (string m in r.Members)
+                    {
+                        BadgeInfo b;
+                        if (!_rowBadges.TryGetValue(m, out b)) continue;
+                        bool e = (_shownBadges & BadgeKinds.Error) != 0 && b.Errors > 0, n = (_shownBadges & BadgeKinds.Memo) != 0 && b.Memos > 0, p = (_shownBadges & BadgeKinds.Protect) != 0 && b.Protected;
+                        if (e) errors++;
+                        if (n) memos++;
+                        if (p) locks++;
+                        if (e || n || p) sheets++;
+                    }
+                    if (sheets > 0)
+                    {
+                        var lines = new List<string>();
+                        if (errors > 0) lines.Add("数式エラーのあるシート " + errors + " 枚");
+                        if (memos > 0) lines.Add("メモのあるシート " + memos + " 枚");
+                        if (locks > 0) lines.Add("保護されたシート " + locks + " 枚");
+                        found.Add(new RowBadgeSpec
+                        {
+                            Kind = RowBadgeKind.Count,
+                            Count = sheets,
+                            Color = errors > 0 ? BadgeErrorColor : memos > 0 ? BadgeMemoColor : BadgeProtectColor,
+                            Tip = string.Join("\n", lines)
+                        });
+                    }
+                }
             }
             else
             {
                 BadgeInfo b;
                 if (!_rowBadges.TryGetValue(r.Sheet, out b)) return list;
+                if ((_shownBadges & BadgeKinds.Progress) != 0 && b.Progress > 0)
+                    found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Progress, State = b.Progress, Tip = "進捗: " + ProgressNames[b.Progress] + " (クリックで、次へ)" });
                 if ((_shownBadges & BadgeKinds.Error) != 0 && b.Errors > 0)
                     found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Error, Color = BadgeErrorColor, Tip = "数式エラーが " + b.Errors + " か所" });
                 if ((_shownBadges & BadgeKinds.Memo) != 0 && b.Memos > 0)
@@ -1698,12 +1838,14 @@ namespace VerticalSheetTabs
                     found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Protect, Color = BadgeProtectColor, Tip = "シートは保護されています" });
             }
             // the first one stands at the right end, the next ones to its left
-            int x = right - radius;
+            int x = right;
             foreach (RowBadgeSpec s in found)
             {
-                s.Bounds = new Rectangle(x - radius, cy - radius, radius * 2, radius * 2);
+                int w = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillWidth) : radius * 2;
+                int h = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillHeight) : radius * 2;
+                s.Bounds = new Rectangle(x - w, cy - h / 2, w, h);
                 list.Add(s);
-                x -= step;
+                x -= w + gap;
             }
             return list;
         }
@@ -1712,19 +1854,117 @@ namespace VerticalSheetTabs
         private int RowBadgeReserve(StripRow r)
         {
             if (_shownBadges == BadgeKinds.None) return 0;
-            int n = RowBadges(r, new Rectangle(0, 0, ContentWidth, RowPx)).Count;
-            return n == 0 ? 0 : n * Px(RowBadgeStep) + Px(RowBadgeEdge - 2);
+            List<RowBadgeSpec> specs = RowBadges(r, new Rectangle(0, 0, ContentWidth, RowPx));
+            if (specs.Count == 0) return 0;
+            return specs.Sum(s => s.Bounds.Width + Px(3)) + Px(RowBadgeEdge - 2);
+        }
+
+        private bool IsProgressDone(string sheet)
+        {
+            BadgeInfo b;
+            return sheet != null && (_shownBadges & BadgeKinds.Progress) != 0 && _rowBadges.TryGetValue(sheet, out b) && b.Progress == 3;
+        }
+
+        public int ActiveProgress()
+        {
+            BadgeInfo b;
+            return _active != null && _rowBadges.TryGetValue(_active, out b) ? b.Progress : 0;
+        }
+
+        // Asks for a progress for sheets (0 = none, 1 = not started, 2 = in progress, 3 = done).
+        public event Action<List<string>, int> ProgressRequested;
+
+        // A click on the progress mark of a sheet: the next progress (none, not started, in progress, done, none ...).
+        private bool ProgressBadgeHit(int index, Point p)
+        {
+            if (index < 0 || index >= _rows.Count || _rows[index].IsFolder || (_shownBadges & BadgeKinds.Progress) == 0) return false;
+            foreach (RowBadgeSpec s in RowBadges(_rows[index], RowRect(index)))
+            {
+                if (s.Kind == RowBadgeKind.Progress && Rectangle.Inflate(s.Bounds, Px(3), Px(5)).Contains(p)) return true;
+            }
+            return false;
+        }
+
+        private void CycleProgress(string sheet)
+        {
+            BadgeInfo b;
+            int now = _rowBadges.TryGetValue(sheet, out b) ? b.Progress : 0;
+            if (ProgressRequested != null) ProgressRequested(new List<string> { sheet }, (now + 1) % 4);
         }
 
         private void DrawRowBadges(Graphics g, StripRow r, Rectangle row)
         {
             foreach (RowBadgeSpec s in RowBadges(r, row))
             {
-                if (s.Kind == RowBadgeKind.Error) DrawErrorBadge(g, s.Bounds, s.Color);
+                if (s.Kind == RowBadgeKind.Progress) DrawProgressBadge(g, s.Bounds, s.State);
+                else if (s.Kind == RowBadgeKind.ProgressPill) DrawProgressPill(g, s.Bounds, s.Count, s.Total);
+                else if (s.Kind == RowBadgeKind.Error) DrawErrorBadge(g, s.Bounds, s.Color);
                 else if (s.Kind == RowBadgeKind.Memo) DrawMemoBadge(g, s.Bounds, s.Color);
                 else if (s.Kind == RowBadgeKind.Protect) DrawLockBadge(g, s.Bounds, s.Color);
                 else DrawCountBadge(g, s.Bounds, s.Color, s.Count);
             }
+        }
+
+        // the progress of a sheet: an empty ring (not started), a half filled ring (in progress), a green circle with a check (done)
+        private static void DrawProgressBadge(Graphics g, Rectangle b, int state)
+        {
+            var mode = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f;
+            float line = Math.Max(1.4f, r * 0.2f);
+            if (state == 3)
+            {
+                using (var fill = new SolidBrush(BadgeProgressGreen)) g.FillEllipse(fill, cx - r, cy - r, r * 2, r * 2);
+                using (var pen = new Pen(Color.White, Math.Max(1.6f, r * 0.22f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                {
+                    g.DrawLines(pen, new[] { new PointF(cx - r * 0.45f, cy + r * 0.02f), new PointF(cx - r * 0.1f, cy + r * 0.36f), new PointF(cx + r * 0.5f, cy - r * 0.34f) });
+                }
+            }
+            else
+            {
+                Color c = state == 2 ? BadgeProgressBlue : BadgeProgressGray;
+                float rr = r - line / 2;
+                using (var white = new SolidBrush(Color.White)) g.FillEllipse(white, cx - rr, cy - rr, rr * 2, rr * 2);
+                using (var pen = new Pen(c, line)) g.DrawEllipse(pen, cx - rr, cy - rr, rr * 2, rr * 2);
+                if (state == 2)
+                {
+                    float ri = r * 0.6f;
+                    using (var fill = new SolidBrush(c)) g.FillPie(fill, cx - ri, cy - ri, ri * 2, ri * 2, -90, 180);
+                }
+            }
+            g.SmoothingMode = mode;
+        }
+
+        // the pill of a folder: the sheets that are done out of those that have a progress; green with a check when all of them are done
+        private void DrawProgressPill(Graphics g, Rectangle b, int done, int total)
+        {
+            var mode = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (GraphicsPath path = RoundedRect(b, b.Height / 2))
+            {
+                if (done == total)
+                {
+                    using (var fill = new SolidBrush(BadgeProgressGreen)) g.FillPath(fill, path);
+                    float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f;
+                    using (var pen = new Pen(Color.White, Math.Max(1.6f, b.Height * 0.14f)) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
+                    {
+                        g.DrawLines(pen, new[] { new PointF(cx - b.Width * 0.14f, cy), new PointF(cx - b.Width * 0.04f, cy + b.Height * 0.2f), new PointF(cx + b.Width * 0.14f, cy - b.Height * 0.2f) });
+                    }
+                }
+                else
+                {
+                    using (var fill = new SolidBrush(Color.White)) g.FillPath(fill, path);
+                    using (var pen = new Pen(Color.FromArgb(185, 185, 190), 1f)) g.DrawPath(pen, path);
+                    using (var font = new Font(TabFont.FontFamily, Math.Max(7f, b.Height * 0.62f), FontStyle.Bold, GraphicsUnit.Pixel))
+                    using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                    using (var brush = new SolidBrush(Color.FromArgb(70, 70, 75)))
+                    {
+                        g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                        g.DrawString(done + "/" + total, font, brush, new RectangleF(b.Left, b.Top + 1, b.Width, b.Height), format);
+                    }
+                }
+            }
+            g.SmoothingMode = mode;
         }
 
         // a red triangle with an exclamation mark, in a white rim
@@ -1813,6 +2053,7 @@ namespace VerticalSheetTabs
             if (kind == BadgeKinds.Error) DrawErrorBadge(g, bounds, BadgeErrorColor);
             else if (kind == BadgeKinds.Memo) DrawMemoBadge(g, bounds, BadgeMemoColor);
             else if (kind == BadgeKinds.Protect) DrawLockBadge(g, bounds, BadgeProtectColor);
+            else if (kind == BadgeKinds.Progress) DrawProgressBadge(g, bounds, 2);
         }
 
         // a round badge with the number of the sheets of a closed folder that have something to tell
@@ -1984,7 +2225,7 @@ namespace VerticalSheetTabs
             };
             var names = new List<string> { "Sheet1", "Sheet2" };
             var colors = new Dictionary<string, int> { { "Sheet2", 0x3A80E9 } };
-            _rowBadges = new Dictionary<string, BadgeInfo> { { "Sheet1", new BadgeInfo { Errors = 2, Protected = true } }, { "Sheet2", new BadgeInfo { Memos = 1 } } };
+            _rowBadges = new Dictionary<string, BadgeInfo> { { "Sheet1", new BadgeInfo { Errors = 2, Protected = true, Progress = 2 } }, { "Sheet2", new BadgeInfo { Memos = 1, Progress = 3 } } };
             string active = selection == "plain" ? "Sheet1" : selection == "colored" ? "Sheet2" : "";
             var selected = new List<string>();
             if (active != "") selected.Add(active);
@@ -2470,6 +2711,7 @@ namespace VerticalSheetTabs
             int lift = underline ? Px(StandardTextLift) : DoubleFrame && selected ? Px(ActiveTextLift) : 0;
             int room = triangles ? Px(MarkerRoom) : bars ? Px(BarRoom) : 0; // room for the triangles or the bars at both ends of the active sheet
             int roomLeft = badge ? Px(BadgeRoom) : room; // (the check badge takes the left end; it is the only mark then)
+            if (IsProgressDone(name)) textColor = Mix(textColor, Theme.BarBack, 0.5); // (a finished sheet is a little paler)
             var textRect = new Rectangle(left + roomLeft + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - roomLeft - room - Px(TextPadLeft) - Px(TextPadRight) - RowBadgeReserve(tabRow)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
@@ -3024,6 +3266,13 @@ namespace VerticalSheetTabs
             StripRow row = _rows[index];
             bool ctrl = (ModifierKeys & Keys.Control) != 0;
             bool shift = (ModifierKeys & Keys.Shift) != 0;
+
+            // the progress mark of a sheet: a click changes it (and does not select the sheet)
+            if (e.Button == MouseButtons.Left && ProgressBadgeHit(index, e.Location))
+            {
+                CycleProgress(row.Sheet);
+                return;
+            }
 
             if (row.IsFolder)
             {
@@ -3666,6 +3915,8 @@ namespace VerticalSheetTabs
                 if (_animTimer != null) _animTimer.Dispose();
                 EndRowAnim();
                 if (_raTimer != null) _raTimer.Dispose();
+                EndDoneAnim();
+                if (_dnTimer != null) _dnTimer.Dispose();
                 if (_longPress != null) _longPress.Dispose();
                 _tip.Dispose();
             }

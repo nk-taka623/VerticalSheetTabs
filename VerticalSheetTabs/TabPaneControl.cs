@@ -87,6 +87,7 @@ namespace VerticalSheetTabs
             _strip.ExcelCommandRequested += command => { if (ExcelCommandRequested != null) ExcelCommandRequested(command); };
             _strip.AllFoldersRequested += open => { if (AllFoldersRequested != null) AllFoldersRequested(open); };
             _strip.GridFocusForced += () => { if (GridFocusForced != null) GridFocusForced(); };
+            _strip.ProgressRequested += (sheets, state) => { if (ProgressRequested != null) ProgressRequested(sheets, state); };
             _strip.BackRequested += () => { if (BackRequested != null) BackRequested(); };
             _strip.ForwardRequested += () => { if (ForwardRequested != null) ForwardRequested(); };
             _strip.HistoryClearRequested += () => { if (HistoryClearRequested != null) HistoryClearRequested(); };
@@ -131,6 +132,17 @@ namespace VerticalSheetTabs
                 palette.SetTheme(ThemeColorProvider != null ? ThemeColorProvider() : null);
                 paletteHost.Size = palette.Size;
             };
+            // the progress of the selected sheets (only while the progress badge is shown)
+            var progress = new ToolStripMenuItem("進捗(&G)");
+            var progressItems = new ToolStripMenuItem[4];
+            string[] progressNames = { "なし(&N)", "未着手(&T)", "作業中(&W)", "完了(&D)" };
+            for (int i = 0; i < 4; i++)
+            {
+                int state = i;
+                progressItems[i] = new ToolStripMenuItem(progressNames[i]);
+                progressItems[i].Click += (s, e) => { if (ProgressRequested != null) ProgressRequested(_strip.SelectedInOrder(), state); };
+                progress.DropDownItems.Add(progressItems[i]);
+            }
             var hide = MenuItem("非表示(&H)", () => HideRequested);
             var unhide = MenuItem("再表示(&U)...", () => UnhideRequested);
             var selectAll = MenuItem("すべてのシートを選択(&S)", () => SelectAllRequested);
@@ -142,6 +154,7 @@ namespace VerticalSheetTabs
             _menu.Items.Add(moveCopy);
             _menu.Items.Add(viewCode);
             _menu.Items.Add(protect);
+            _menu.Items.Add(progress);
             _menu.Items.Add(tabColor);
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(hide);
@@ -161,6 +174,9 @@ namespace VerticalSheetTabs
                 protect.Text = ActiveSheetProtected ? "シート保護の解除(&P)" : "シートの保護(&P)...";
                 ungroup.Visible = _strip.SelectedCount > 1;
                 newFolder.Enabled = free;
+                progress.Visible = (ShownBadges & BadgeKinds.Progress) != 0;
+                int now = _strip.ActiveProgress();
+                for (int i = 0; i < 4; i++) progressItems[i].Checked = i == now;
             };
 
             // The menu of a folder row (more commands come with step 8-5).
@@ -277,6 +293,8 @@ namespace VerticalSheetTabs
         public SelectStyle SelectionStyle { get { return _strip.SelectionStyle; } set { _strip.SelectionStyle = value; } }
 
         public ActiveMarker ActiveMarker { get { return _strip.ActiveMarker; } set { _strip.ActiveMarker = value; } }
+        public bool DoneAnimation { get { return _strip.DoneAnimation; } set { _strip.DoneAnimation = value; } }
+        public event Action<System.Collections.Generic.List<string>, int> ProgressRequested;
         public bool RowAnimation { get { return _strip.RowAnimation; } set { _strip.RowAnimation = value; } }
         public BadgeKinds ShownBadges { get { return _strip.ShownBadges; } set { _strip.ShownBadges = value; } }
         public void SetBadges(System.Collections.Generic.IDictionary<string, BadgeInfo> info) { _strip.SetBadges(info); }
