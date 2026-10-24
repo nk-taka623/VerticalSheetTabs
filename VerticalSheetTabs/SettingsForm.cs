@@ -296,7 +296,7 @@ namespace VerticalSheetTabs
             durBox.Controls.Add(durLabel); durBox.Controls.Add(_wobbleDur); durBox.Controls.Add(_wobbleDurText); durBox.Controls.Add(_wobbleReset);
             var sliders = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
             sliders.Controls.Add(ampBox); sliders.Controls.Add(durBox);
-            _wobbleUseStyle.Text = "選択したデザインとマーカー表示の見た目にする";
+            _wobbleUseStyle.Text = "サンプルの見た目を、選択したデザインとマーカー表示に合わせる";
             _wobbleUseStyle.AutoSize = true;
             _wobbleUseStyle.Margin = new Padding(3, 2, 3, 3);
             _wobbleUseStyle.CheckedChanged += (s, e) => { RefreshWobbleSample(); PlayWobbleSample(); };
