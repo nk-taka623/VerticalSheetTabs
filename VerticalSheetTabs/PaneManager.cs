@@ -244,7 +244,7 @@ namespace VerticalSheetTabs
         private void ShowSettings(Entry entry)
         {
             bool nameRuleTurnedOn = false;
-            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume))
+            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
                 entry.Settings.Mode = form.Mode;
@@ -260,6 +260,7 @@ namespace VerticalSheetTabs
                 entry.Settings.WobbleDur = form.WobbleDur;
                 entry.Settings.WobbleSound = form.WobbleSound;
                 entry.Settings.WobbleVolume = form.WobbleVolume;
+                entry.Settings.WobbleSampleStyle = form.WobbleSampleStyle;
             }
             try
             {
