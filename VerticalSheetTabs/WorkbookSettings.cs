@@ -39,7 +39,8 @@ namespace VerticalSheetTabs
     {
         None = 0,
         Error = 1, // the sheet has formulas that show an error (#REF!, #DIV/0!, ...)
-        Memo = 2   // the sheet has notes or comments
+        Memo = 2,  // the sheet has notes or comments
+        Protect = 4 // the sheet is protected
     }
 
     public enum TabSide
@@ -67,7 +68,7 @@ namespace VerticalSheetTabs
         public const string WobbleVolumeName = "VTab.WobbleVolume"; // number 0 to 100 (default 60)
         public const string WobbleSampleStyleName = "VTab.WobbleSampleStyle"; // string "On" / "Off" (default "Off"; Agents.md 12.178)
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
-        public const string BadgesName = "VTab.Badges";           // string "None", or "Error", "Memo", "Error,Memo" (default "None"; Agents.md 12.190)
+        public const string BadgesName = "VTab.Badges";           // string "None", or "Error", "Memo", "Protect" joined by commas (default "None"; Agents.md 12.190)
         public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "Crystal"
 
         // Office.MsoDocProperties values.
@@ -238,6 +239,7 @@ namespace VerticalSheetTabs
                 string p = part.Trim();
                 if (p == "Error") kinds |= BadgeKinds.Error;
                 else if (p == "Memo") kinds |= BadgeKinds.Memo;
+                else if (p == "Protect") kinds |= BadgeKinds.Protect;
             }
             return kinds;
         }
@@ -245,7 +247,11 @@ namespace VerticalSheetTabs
         private static string BadgesToString(BadgeKinds kinds)
         {
             if (kinds == BadgeKinds.None) return "None";
-            return (kinds & BadgeKinds.Error) != 0 && (kinds & BadgeKinds.Memo) != 0 ? "Error,Memo" : (kinds & BadgeKinds.Error) != 0 ? "Error" : "Memo";
+            var parts = new System.Collections.Generic.List<string>();
+            if ((kinds & BadgeKinds.Error) != 0) parts.Add("Error");
+            if ((kinds & BadgeKinds.Memo) != 0) parts.Add("Memo");
+            if ((kinds & BadgeKinds.Protect) != 0) parts.Add("Protect");
+            return string.Join(",", parts);
         }
 
         private static SelectStyle ParseSelectStyle(string value)

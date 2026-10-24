@@ -261,6 +261,7 @@ namespace VerticalSheetTabs
         private void ShowSettings(Entry entry)
         {
             bool nameRuleTurnedOn = false;
+            BadgeKinds oldBadges = entry.Settings.Badges;
             using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
@@ -273,6 +274,7 @@ namespace VerticalSheetTabs
                 entry.Settings.SelectStyle = form.SelectStyle;
                 entry.Settings.ActiveMarker = form.ActiveMarker;
                 entry.Settings.Badges = form.Badges;
+                if (oldBadges != form.Badges) { entry.Badges.Clear(); entry.BadgeDirty.Clear(); } // (the sheets are looked at again for the new choice)
                 entry.Settings.Wobble = form.Wobble;
                 entry.Settings.WobbleAmp = form.WobbleAmp;
                 entry.Settings.WobbleDur = form.WobbleDur;
@@ -596,9 +598,10 @@ namespace VerticalSheetTabs
                 }
                 if (selected.Count == 0 && active != null) selected.Add(active);
 
-                entry.Control.ActiveSheetProtected = IsSheetProtected(activeSheet);
+                bool activeProtected = IsSheetProtected(activeSheet);
+                entry.Control.ActiveSheetProtected = activeProtected;
                 TrackHistory(entry, activeSheet, active, string.Join("|", allNames));
-                UpdateBadges(entry, names);
+                UpdateBadges(entry, names, active, activeProtected);
                 List<StripRow> rows = BuildRows(entry, allNames, visibleAt);
                 entry.Control.SetSheets(names, active, selected, colors, rows);
                 return true;
@@ -719,7 +722,7 @@ namespace VerticalSheetTabs
         // Called by the sync. With no badge chosen it does nothing at all. The sheets are looked at one after the other within a small
         // time budget per tick, so that a workbook with many sheets does not stop Excel, and a sheet that is being edited is left alone
         // until it has been quiet for a while.
-        private static void UpdateBadges(Entry entry, List<string> visibleNames)
+        private static void UpdateBadges(Entry entry, List<string> visibleNames, string activeName, bool activeProtected)
         {
             try
             {
@@ -746,10 +749,13 @@ namespace VerticalSheetTabs
                 {
                     if (clock.ElapsedMilliseconds > BadgeBudgetMs) break;
                     BadgeInfo info;
-                    if (!ScanBadges(entry.Workbook, n, out info)) continue; // Excel is busy: the next tick
+                    if (!ScanBadges(entry.Workbook, n, entry.Settings.Badges, out info)) continue; // Excel is busy: the next tick
                     entry.Badges[n] = info;
                     entry.BadgeDirty.Remove(n);
                 }
+                // the protection of the active sheet is known at every tick (there is no event for it)
+                BadgeInfo activeInfo;
+                if (activeName != null && entry.Badges.TryGetValue(activeName, out activeInfo)) activeInfo.Protected = activeProtected;
                 entry.Control.SetBadges(entry.Badges);
             }
             catch (Exception)
@@ -759,18 +765,23 @@ namespace VerticalSheetTabs
         }
 
         // Counts the cells with an error (of formulas) and the notes and comments of one sheet. False when Excel could not answer now.
-        private static bool ScanBadges(Excel.Workbook workbook, string sheetName, out BadgeInfo info)
+        private static bool ScanBadges(Excel.Workbook workbook, string sheetName, BadgeKinds kinds, out BadgeInfo info)
         {
             info = new BadgeInfo();
             var ws = workbook.Sheets[sheetName] as Excel.Worksheet;
             if (ws == null) return true; // a chart sheet: nothing to tell
             try
             {
+                try { info.Protected = ws.ProtectContents; } catch (Exception) { }
                 Excel.Range errors = null;
                 try
                 {
+                    if ((kinds & BadgeKinds.Error) == 0) throw new InvalidOperationException(); // (not asked for)
                     errors = ws.UsedRange.SpecialCells(Excel.XlCellType.xlCellTypeFormulas, Excel.XlSpecialCellsValue.xlErrors);
                     info.Errors = (int)Math.Min(int.MaxValue, errors.CountLarge);
+                }
+                catch (InvalidOperationException)
+                {
                 }
                 catch (System.Runtime.InteropServices.COMException ex)
                 {
@@ -781,8 +792,11 @@ namespace VerticalSheetTabs
                 {
                     if (errors != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(errors);
                 }
-                info.Memos = ws.Comments.Count;
-                try { info.Memos += ws.CommentsThreaded.Count; } catch (Exception) { } // (older Excel has no threaded comments)
+                if ((kinds & BadgeKinds.Memo) != 0)
+                {
+                    info.Memos = ws.Comments.Count;
+                    try { info.Memos += ws.CommentsThreaded.Count; } catch (Exception) { } // (older Excel has no threaded comments)
+                }
                 return true;
             }
             catch (Exception)
