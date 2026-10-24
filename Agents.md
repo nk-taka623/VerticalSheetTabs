@@ -2453,3 +2453,9 @@ gitGraph
 
 - 12.203 (バッジの周りに白い縁とぼかし。完了 + ロックと、フォルダの数のバッジを1.2倍にする) を含めて、バージョンを 1.1.82.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.82` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.82.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_82_0\`)。インストールの実機確認は、未実施
+
+### 12.205 修正: 一番右端のバッジの右側が欠ける
+
+- 現象 (ユーザーの指摘): 一番右端のバッジの右側が、欠けて見える (縁とぼかし (12.203) が、行の右端、ペインの端に近く、切れる)
+- 修正: すべてのバッジの右端の位置を、行の右端から、6DIP から 11DIP に、左へ寄せた (`TabStrip.RowBadgeEdge`)。名前を省略する幅 (`RowBadgeReserve`) も、同じ定数なので、合わせて狭まる
+- 確認 (縦タブの部品を単独の画面に描画、拡大率125%): 右端のバッジの右に、縁とぼかしが収まる余白が残る。実機のペインでの確認は、未実施
