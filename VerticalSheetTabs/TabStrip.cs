@@ -571,7 +571,9 @@ namespace VerticalSheetTabs
         private int _ghostRowLeft, _ghostRowTop;
         private int _ghostCount;
         private bool _dragCopy;
-        private string _ghostWobbleSheet;
+        // what wobbles after the drop (the rows change a moment later, and a sheet may get a new name)
+        private HashSet<string> _wobbleSheets, _wobbleFolders, _dropNames;
+        private string _dropSignature;
         private HashSet<string> _fadeSheets = new HashSet<string>();
         private HashSet<string> _fadeFolders = new HashSet<string>();
         private System.Diagnostics.Stopwatch _ghostClock;
@@ -620,7 +622,7 @@ namespace VerticalSheetTabs
             if (_ghostBmp != null) { _ghostBmp.Dispose(); _ghostBmp = null; }
             _fadeSheets.Clear();
             _fadeFolders.Clear();
-            _ghostWobbleSheet = null;
+            _wobbleSheets = _wobbleFolders = _dropNames = null;
             _ghostClock = null;
             Invalidate();
         }
@@ -637,11 +639,11 @@ namespace VerticalSheetTabs
         }
 
         // The drop: the ghost glides into the place and turns solid.
-        private void SettleGhost(int markerY, bool movedDown)
+        private void SettleGhost(int markerY, bool movedDown, int rowCount)
         {
             if (!_ghostOn) return;
             _ghostSettling = true;
-            _ghostTarget = new PointF(_ghostRowLeft, movedDown ? markerY - RowPx : markerY);
+            _ghostTarget = new PointF(_ghostRowLeft, movedDown ? markerY - Math.Max(1, rowCount) * RowPx : markerY);
             _settleStart = _ghostClock.ElapsedMilliseconds;
             Invalidate();
         }
@@ -670,11 +672,14 @@ namespace VerticalSheetTabs
             {
                 double t = Math.Min(1.0, (now - _settleStart) / 140.0);
                 alpha = GhostAlpha + (1 - GhostAlpha) * t;
-                if (arrived || now - _settleStart > 260)
+                // the ghost stays on its place until the rows show the new order (or for a short while at most)
+                if (arrived && (_rowSignature != _dropSignature || now - _settleStart > 700))
                 {
-                    string wobble = _ghostWobbleSheet;
+                    var sheets = _wobbleSheets ?? new HashSet<string>();
+                    var folders = _wobbleFolders ?? new HashSet<string>();
+                    if (_dropNames != null) foreach (string n in _names) if (!_dropNames.Contains(n)) sheets.Add(n); // renamed or copied sheets
                     EndGhost();
-                    if (wobble != null) StartWobble(wobble, null, null);
+                    if (sheets.Count > 0 || folders.Count > 0) StartWobble(null, folders.Count > 0 ? folders : null, sheets.Count > 0 ? sheets : null);
                     return;
                 }
             }
@@ -2230,8 +2235,14 @@ namespace VerticalSheetTabs
             {
                 int markY = target < _rows.Count ? RowRect(target).Top : RowRect(_rows.Count - 1).Bottom;
                 bool down = markY > _ghostRowTop && !_dragCopy;
-                SettleGhost(markY, down);
-                if (_dragSheets.Count == 1 && _dragFolders.Count == 0 && !_dragCopy) _ghostWobbleSheet = _dragSheets[0];
+                SettleGhost(markY, down, _dragSheets.Count > 0 ? _dragSheets.Count : 1);
+                _dropSignature = _rowSignature;
+                _dropNames = new HashSet<string>(_names);
+                _wobbleSheets = _dragCopy ? new HashSet<string>() : new HashSet<string>(_dragSheets);
+                _wobbleFolders = _dragCopy ? new HashSet<string>() : new HashSet<string>(_dragFolders);
+                if (!_dragCopy)
+                    foreach (StripRow r in _rows)
+                        if (r.IsFolder && _dragFolders.Contains(r.FolderId)) foreach (string m in r.Members) _wobbleSheets.Add(m);
             }
             else if (_ghostOn) EndGhost();
             SetDropIndex(-1);
