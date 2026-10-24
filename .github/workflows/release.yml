@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - 'v*' # 「v1.1.46」などのタグがプッシュされたときに起動
+               # 注意: 一度に 4 つ以上のタグをプッシュすると、GitHub は、どのタグでも、この起動をしない
+  workflow_dispatch: # 手動で実行する (Actions の「Run workflow」)。タグの名前を指定する
+    inputs:
+      tag:
+        description: 'リリースするタグ (例: v1.1.71)。そのタグのコミットに、配布用zipが含まれている必要がある'
+        required: true
+        type: string
 
 jobs:
   release:
@@ -12,14 +19,25 @@ jobs:
       contents: write # リリースを作成するために必須の権限
 
     steps:
+      # タグのプッシュのときは、そのタグ (github.ref_name)、手動のときは、入力したタグ
+      - name: Decide the tag
+        id: tag
+        run: echo "name=${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.name }}
+
+      - name: Check the zip
+        run: test -f "配布用zip/VerticalSheetTabs_${{ steps.tag.outputs.name }}.zip"
 
       - name: Create GitHub Release and Upload Asset
         uses: softprops/action-gh-release@v2
         with:
-          # プッシュされたタグ名（例: v1.1.46）をファイル名に埋め込みます
-          files: 配布用zip/VerticalSheetTabs_${{ github.ref_name }}.zip
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.name }}
+          # タグ名 (例: v1.1.46) をファイル名に埋め込みます
+          files: 配布用zip/VerticalSheetTabs_${{ steps.tag.outputs.name }}.zip
+          name: Release ${{ steps.tag.outputs.name }}
           draft: false
           prerelease: false
