@@ -349,6 +349,7 @@ namespace VerticalSheetTabs
         // Asks for the sheets seen last (the menu of the back / forward buttons); the list is made by the pane.
         public Func<List<HistoryItem>> HistoryProvider;
         public event Action<string> HistoryJumpRequested;
+        public event Action HistoryClearRequested;
 
         private int ToolPx { get { return IsSample ? 0 : Px(ToolHeight); } }
         private bool Filtering { get { return !IsSample && _query.Length > 0; } }
@@ -833,6 +834,10 @@ namespace VerticalSheetTabs
                     menu.Items.Add(mi);
                 }
             }
+            menu.Items.Add(new ToolStripSeparator());
+            var clear = new ToolStripMenuItem("履歴をクリア") { Enabled = items != null && items.Count > 0 };
+            clear.Click += (s, e) => { if (HistoryClearRequested != null) HistoryClearRequested(); };
+            menu.Items.Add(clear);
             menu.Closed += (s, e) => BeginInvoke(new Action(menu.Dispose));
             Rectangle b = ToolBackRect();
             menu.Show(this, new Point(b.Left, b.Bottom + Px(2)));
