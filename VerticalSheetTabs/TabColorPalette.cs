@@ -28,9 +28,9 @@ namespace VerticalSheetTabs
         private static readonly int[] ThemeIndexes = { 2, 1, 4, 3, 5, 6, 7, 8, 9, 10 };
         private static readonly Color[] OfficeTheme =
         {
-            Color.FromArgb(255, 255, 255), Color.FromArgb(0, 0, 0), Color.FromArgb(231, 230, 230), Color.FromArgb(68, 84, 106),
-            Color.FromArgb(68, 114, 196), Color.FromArgb(237, 125, 49), Color.FromArgb(165, 165, 165), Color.FromArgb(255, 192, 0),
-            Color.FromArgb(91, 155, 213), Color.FromArgb(112, 173, 71)
+            Color.FromArgb(255, 255, 255), Color.FromArgb(0, 0, 0), Color.FromArgb(232, 232, 232), Color.FromArgb(14, 40, 65),
+            Color.FromArgb(21, 96, 130), Color.FromArgb(233, 113, 50), Color.FromArgb(25, 107, 36), Color.FromArgb(15, 158, 213),
+            Color.FromArgb(160, 43, 147), Color.FromArgb(78, 167, 46)
         };
         private static readonly Color[] StandardColors =
         {
@@ -88,6 +88,9 @@ namespace VerticalSheetTabs
         }
 
         // The ten theme colors of the workbook in Excel's order (white, black, two backgrounds, six accents).
+        // The Office theme's ten colors, for a workbook whose own theme cannot be read.
+        public static Color[] DefaultTheme() { return (Color[])OfficeTheme.Clone(); }
+
         public void SetTheme(Color[] theme)
         {
             _theme = theme != null && theme.Length == 10 ? theme : OfficeTheme;
