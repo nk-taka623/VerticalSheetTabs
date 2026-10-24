@@ -510,6 +510,18 @@ namespace VerticalSheetTabs
                     }
                 }
                 _folderOpen = seen;
+                // a folder that is selected or unselected wobbles as well (the folders seen at first, and the ones that are gone, do not)
+                var selNow = new HashSet<string>(_selFolders.Where(seen.ContainsKey));
+                if (_folderSelSeen)
+                {
+                    foreach (string id in selNow.Where(id => !_folderSel.Contains(id)).Concat(_folderSel.Where(id => !selNow.Contains(id) && seen.ContainsKey(id))))
+                    {
+                        if (toggled == null) toggled = new HashSet<string>();
+                        toggled.Add(id);
+                    }
+                }
+                _folderSel = selNow;
+                _folderSelSeen = true;
                 if ((sheetChanged || toggled != null) && !_ghostOn) StartWobble(sheetChanged ? _active : null, toggled, opened);
             }
 
@@ -775,6 +787,8 @@ namespace VerticalSheetTabs
         private HashSet<string> _animFolders;
         private HashSet<string> _animSheets;
         private Dictionary<string, bool> _folderOpen = new Dictionary<string, bool>();
+        private HashSet<string> _folderSel = new HashSet<string>();
+        private bool _folderSelSeen;
         private System.Diagnostics.Stopwatch _animClock;
         private System.Windows.Forms.Timer _animTimer;
         private string _lastActive;
