@@ -58,7 +58,7 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.1.67.0</ApplicationVersion>
+    <ApplicationVersion>1.1.68.0</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>false</CreateDesktopShortcut>
     <CreateWebPageOnPublish>false</CreateWebPageOnPublish>
@@ -228,6 +228,9 @@
     can be found.
   -->
   <ItemGroup>
+    <EmbeddedResource Include="Sounds\*.wav">
+      <LogicalName>VerticalSheetTabs.Sounds.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -246,6 +249,7 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Wobble.cs" />
+    <Compile Include="WobbleSounds.cs" />
     <Compile Include="WorkbookSettings.cs" />
     <Compile Include="TabPaneControl.cs">
       <SubType>UserControl</SubType>
