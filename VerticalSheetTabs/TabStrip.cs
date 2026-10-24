@@ -795,6 +795,17 @@ namespace VerticalSheetTabs
         private bool _activeSeen;
         private bool _transforming;
 
+        private bool _soundOn;
+        private int _soundVolume = WobbleSounds.VolumeDefault;
+        private bool _muteNext;
+
+        // The sound effect of the wobble (Agents.md 12.172).
+        public void SetWobbleSound(bool on, int volume)
+        {
+            _soundOn = on;
+            _soundVolume = Math.Max(0, Math.Min(100, volume));
+        }
+
         public void SetWobble(WobbleType type, int amp, int dur)
         {
             _wobbleType = type;
@@ -806,7 +817,14 @@ namespace VerticalSheetTabs
         // Plays the wobble of the active sheet (a new random motion each time for WobbleType.Random).
         public void PlayWobble()
         {
-            if (_active != null) StartWobble(_active, null, null);
+            PlayWobble(true);
+        }
+
+        public void PlayWobble(bool withSound)
+        {
+            _muteNext = !withSound;
+            try { if (_active != null) StartWobble(_active, null, null); }
+            finally { _muteNext = false; }
         }
 
         // Starts the wobble of one sheet and/or some folders (all with the same motion).
@@ -814,6 +832,7 @@ namespace VerticalSheetTabs
         {
             if (_wobbleType == WobbleType.None || !IsHandleCreated) return;
             _animType = _wobbleType == WobbleType.Random ? WobbleMotion.PickRandom() : _wobbleType;
+            if (_soundOn && !_muteNext) WobbleSounds.Play(_animType, _soundVolume);
             _animSheet = sheet;
             _animFolders = folders;
             _animSheets = sheets;

@@ -228,6 +228,9 @@
     can be found.
   -->
   <ItemGroup>
+    <EmbeddedResource Include="Sounds\*.wav">
+      <LogicalName>VerticalSheetTabs.Sounds.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -246,6 +249,7 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Wobble.cs" />
+    <Compile Include="WobbleSounds.cs" />
     <Compile Include="WorkbookSettings.cs" />
     <Compile Include="TabPaneControl.cs">
       <SubType>UserControl</SubType>
