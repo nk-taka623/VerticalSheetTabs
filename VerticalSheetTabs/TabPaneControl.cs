@@ -277,6 +277,8 @@ namespace VerticalSheetTabs
         public SelectStyle SelectionStyle { get { return _strip.SelectionStyle; } set { _strip.SelectionStyle = value; } }
 
         public ActiveMarker ActiveMarker { get { return _strip.ActiveMarker; } set { _strip.ActiveMarker = value; } }
+        public BadgeKinds ShownBadges { get { return _strip.ShownBadges; } set { _strip.ShownBadges = value; } }
+        public void SetBadges(System.Collections.Generic.IDictionary<string, BadgeInfo> info) { _strip.SetBadges(info); }
 
         public void SetWobble(WobbleType type, int amp, int dur) { _strip.SetWobble(type, amp, dur); }
         public void SetWobbleSound(bool on, int volume) { _strip.SetWobbleSound(on, volume); }

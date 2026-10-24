@@ -36,6 +36,10 @@ namespace VerticalSheetTabs
         private readonly RadioButton _markerBars = new RadioButton();
         private readonly RadioButton _markerBadge = new RadioButton();
         private GroupBox _markerGroup;
+        private readonly CheckBox _badgeError = new CheckBox();
+        private readonly CheckBox _badgeMemo = new CheckBox();
+        private readonly CheckBox _badgeProtect = new CheckBox();
+        private GroupBox _badgeGroup;
         private readonly RadioButton[] _wobbleTypes = new RadioButton[8]; // index = WobbleType (None, 1 to 6, Random)
         private readonly TrackBar _wobbleAmp = new TrackBar();
         private readonly CheckBox _wobbleSound = new CheckBox();
@@ -52,7 +56,7 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle)
+        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -77,6 +81,17 @@ namespace VerticalSheetTabs
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
+            _badgeError.Text = "数式エラー";
+            _badgeMemo.Text = "メモ・コメント";
+            _badgeProtect.Text = "シートの保護";
+            _badgeError.Checked = (badges & BadgeKinds.Error) != 0;
+            _badgeMemo.Checked = (badges & BadgeKinds.Memo) != 0;
+            _badgeProtect.Checked = (badges & BadgeKinds.Protect) != 0;
+            _badgeGroup = CreateBadgeGroup("表示するバッジ (閉じたフォルダには、中のシートの数を表示)", new[] { BadgeKinds.Error, BadgeKinds.Memo, BadgeKinds.Protect }, new[] { _badgeError, _badgeMemo, _badgeProtect });
+            foreach (CheckBox c in new[] { _badgeError, _badgeMemo, _badgeProtect })
+            {
+                c.CheckedChanged += (s, e) => { foreach (TabStrip sample in _samples) sample.ShownBadges = Badges; };
+            }
             _markerNone.Text = "マーカーなし";
             _markerUnderline.Text = "下線マーカー (名前の下に線)";
             _markerTriangle.Text = "三角マーカー (左右の端に三角)";
@@ -114,6 +129,9 @@ namespace VerticalSheetTabs
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             _outlineGroup.Dock = DockStyle.Fill;
             _outlineGroup.Margin = new Padding(3, 8, 3, 3);
+            _badgeGroup.Dock = DockStyle.Fill;
+            _badgeGroup.Margin = new Padding(3, 8, 3, 3);
+            layout.Controls.Add(_badgeGroup);
             _markerGroup.Dock = DockStyle.Fill;
             _markerGroup.Margin = new Padding(3, 8, 3, 3);
             layout.Controls.Add(_markerGroup);
@@ -230,6 +248,11 @@ namespace VerticalSheetTabs
                     : _styleStripes.Checked ? SelectStyle.Stripes
                     : _styleCrystal.Checked ? SelectStyle.Crystal : SelectStyle.Standard;
             }
+        }
+
+        public BadgeKinds Badges
+        {
+            get { return (_badgeError.Checked ? BadgeKinds.Error : BadgeKinds.None) | (_badgeMemo.Checked ? BadgeKinds.Memo : BadgeKinds.None) | (_badgeProtect.Checked ? BadgeKinds.Protect : BadgeKinds.None); }
         }
 
         public ActiveMarker ActiveMarker
@@ -470,6 +493,7 @@ namespace VerticalSheetTabs
             var strip = new TabStrip();
             strip.SetSample(SelectStyle.Standard, "none", ActiveMarker);
             _samples.Add(strip);
+            strip.ShownBadges = Badges;
             strip.Size = strip.SampleSize(120);
             strip.Margin = new Padding(0);
             var caption = new Label { Text = "非選択", AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(0, 0, 0, 2) };
@@ -510,6 +534,7 @@ namespace VerticalSheetTabs
                 var strip = new TabStrip();
                 strip.SetSample(style, cell[1], ActiveMarker);
                 _samples.Add(strip);
+            strip.ShownBadges = Badges;
                 strip.Size = strip.SampleSize(120);
                 strip.Margin = new Padding(0, 0, 0, 0);
                 strip.SampleClicked += () => radio.Checked = true;
@@ -611,7 +636,64 @@ namespace VerticalSheetTabs
 
         // A group box with its radio buttons side by side, at equal steps: the widest one plus a gap of about
         // four half-width characters.
-        private static GroupBox CreateRowGroup(string title, params RadioButton[] radios)
+        // The icon of a badge, drawn as it is on the rows.
+        private class BadgeIcon : Control
+        {
+            private readonly BadgeKinds _kind;
+
+            public BadgeIcon(BadgeKinds kind, int size)
+            {
+                _kind = kind;
+                SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint, true);
+                BackColor = Color.Transparent;
+                Size = new Size(size, size);
+                TabStop = false;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                TabStrip.DrawBadgeIcon(e.Graphics, _kind, new Rectangle(1, 1, Width - 2, Height - 2));
+            }
+        }
+
+        // Like a row of radio buttons (CreateRowGroup), but each check box has the icon of its badge at its left.
+        private static GroupBox CreateBadgeGroup(string title, BadgeKinds[] kinds, CheckBox[] boxes)
+        {
+            var group = new GroupBox
+            {
+                Text = title,
+                Font = SystemFonts.MessageBoxFont,
+                AutoSize = false,
+                Padding = new Padding(8, 4, 8, 6)
+            };
+            var panel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            int widest = 0;
+            foreach (CheckBox c in boxes)
+            {
+                c.AutoSize = true;
+                c.Font = group.Font;
+                widest = Math.Max(widest, c.PreferredSize.Width);
+            }
+            int icon = (int)(boxes[0].PreferredSize.Height * 1.1);
+            int gap = TextRenderer.MeasureText("0000", group.Font).Width;
+            for (int i = 0; i < boxes.Length; i++)
+            {
+                var item = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(3, 0, widest - boxes[i].PreferredSize.Width + gap, 0) };
+                var pic = new BadgeIcon(kinds[i], icon) { Margin = new Padding(0, 2, 0, 2) };
+                boxes[i].Margin = new Padding(0, 3, 0, 3);
+                item.Controls.Add(pic);
+                item.Controls.Add(boxes[i]);
+                panel.Controls.Add(item);
+            }
+            group.Controls.Add(panel);
+            panel.Location = group.DisplayRectangle.Location;
+            Size content = panel.PreferredSize;
+            group.Size = new Size(content.Width + group.Padding.Horizontal + 8, panel.Top + content.Height + group.Padding.Bottom + 2);
+            return group;
+        }
+
+        private static GroupBox CreateRowGroup(string title, params ButtonBase[] radios)
         {
             var group = new GroupBox
             {
@@ -629,14 +711,14 @@ namespace VerticalSheetTabs
                 Margin = Padding.Empty
             };
             int widest = 0;
-            foreach (RadioButton r in radios)
+            foreach (ButtonBase r in radios)
             {
                 r.AutoSize = true;
                 r.Font = group.Font;
                 widest = Math.Max(widest, r.PreferredSize.Width);
             }
             int gap = TextRenderer.MeasureText("0000", group.Font).Width;
-            foreach (RadioButton r in radios)
+            foreach (ButtonBase r in radios)
             {
                 r.Margin = new Padding(3, 3, widest - r.PreferredSize.Width + gap, 3);
                 panel.Controls.Add(r);

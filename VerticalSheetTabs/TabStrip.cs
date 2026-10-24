@@ -46,6 +46,14 @@ namespace VerticalSheetTabs
         }
     }
 
+    // What a sheet holds that a badge tells of (Agents.md 12.190): the number of cells with an error, and of notes and comments.
+    public class BadgeInfo
+    {
+        public int Errors;
+        public int Memos;
+        public bool Protected;
+    }
+
     // A line of the menu of the sheets seen last (Agents.md 12.186).
     public class HistoryItem
     {
@@ -79,6 +87,8 @@ namespace VerticalSheetTabs
         // bottom, and the room the text keeps free at each end.
         private const double BarWidth = 6, BarInset = 9, BarMargin = 4, BarRoom = 12, BarScale = 0.75; // 0.75 times the first size (8 wide); moved in by one bar width (Agents.md 12.132)
         // the check badge marker at the left of the name of the active sheet: the room it takes before the text (Agents.md 12.131)
+        // The badges at the right end of a row: each takes a step of 18 DIP, the first one stands 6 DIP from the end (Agents.md 12.190).
+        private const double RowBadgeStep = 18, RowBadgeRadius = 7.5, RowBadgeEdge = 6;
         private const double BadgeRoom = 12, BadgeScale = 0.75; // the badge is 0.75 times the first size (Agents.md 12.132)
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
@@ -1320,6 +1330,248 @@ namespace VerticalSheetTabs
 
         private bool Crystal { get { return _selectStyle == SelectStyle.Crystal; } }
 
+        // ---- the badges at the right end of the rows (Agents.md 12.190) ----
+
+        private BadgeKinds _shownBadges = BadgeKinds.None;
+        private Dictionary<string, BadgeInfo> _rowBadges = new Dictionary<string, BadgeInfo>();
+        private string _badgeTip;
+
+        public BadgeKinds ShownBadges
+        {
+            get { return _shownBadges; }
+            set { if (_shownBadges != value) { _shownBadges = value; Invalidate(); } }
+        }
+
+        // What the sheets hold, by sheet name (null = nothing is known).
+        public void SetBadges(IDictionary<string, BadgeInfo> info)
+        {
+            var copy = new Dictionary<string, BadgeInfo>();
+            if (info != null) foreach (var kv in info) copy[kv.Key] = new BadgeInfo { Errors = kv.Value.Errors, Memos = kv.Value.Memos, Protected = kv.Value.Protected }; // (copies: the caller changes its own)
+            bool same = copy.Count == _rowBadges.Count && copy.All(kv => { BadgeInfo o; return _rowBadges.TryGetValue(kv.Key, out o) && o.Errors == kv.Value.Errors && o.Memos == kv.Value.Memos && o.Protected == kv.Value.Protected; });
+            if (same) return;
+            _rowBadges = copy;
+            Invalidate();
+        }
+
+        private static readonly Color BadgeErrorColor = Color.FromArgb(214, 69, 65), BadgeMemoColor = Color.FromArgb(232, 168, 28), BadgeProtectColor = Color.FromArgb(78, 110, 150);
+
+        private enum RowBadgeKind { Error, Memo, Protect, Count }
+
+        private class RowBadgeSpec
+        {
+            public RowBadgeKind Kind;
+            public int Count;
+            public Color Color;
+            public Rectangle Bounds;
+            public string Tip;
+        }
+
+        private bool IsActiveRow(StripRow r) { return !r.IsFolder && _selected.Contains(r.Sheet) && r.Sheet == _active; }
+
+        // The badges of a row from the right, left to right: the number of them and what each one tells. A closed folder shows one round badge
+        // with the number of its sheets that have something to tell (red when one of them has an error, else amber).
+        private List<RowBadgeSpec> RowBadges(StripRow r, Rectangle row)
+        {
+            var list = new List<RowBadgeSpec>();
+            if (_shownBadges == BadgeKinds.None || r == null) return list;
+            int radius = Px(RowBadgeRadius);
+            int step = Px(RowBadgeStep);
+            bool selected = r.IsFolder ? _selFolders.Contains(r.FolderId) : _selected.Contains(r.Sheet);
+            // the middle of the body of the row: a selected row is a little higher than the others
+            int top = row.Top + Px(selected ? PlainTop : ColoredTop), bottom = row.Bottom - Px(BottomInset);
+            int cy = (top + bottom) / 2;
+            int right = row.Right - RightInset(r) - Px(RowBadgeEdge) - CheckReserve(r);
+            if (!r.IsFolder)
+            {
+                // the triangles and the bars of the active sheet stand at the right end
+                if (IsActiveRow(r) && _activeMarker == ActiveMarker.Triangle) right -= Px(MarkerRoom + 3);
+                else if (IsActiveRow(r) && _activeMarker == ActiveMarker.EdgeBars) right -= Px(BarRoom + 3);
+            }
+            var found = new List<RowBadgeSpec>();
+            if (r.IsFolder)
+            {
+                if (r.Expanded) return list;
+                int errors = 0, memos = 0, locks = 0, sheets = 0;
+                foreach (string m in r.Members)
+                {
+                    BadgeInfo b;
+                    if (!_rowBadges.TryGetValue(m, out b)) continue;
+                    bool e = (_shownBadges & BadgeKinds.Error) != 0 && b.Errors > 0, n = (_shownBadges & BadgeKinds.Memo) != 0 && b.Memos > 0, p = (_shownBadges & BadgeKinds.Protect) != 0 && b.Protected;
+                    if (e) errors++;
+                    if (n) memos++;
+                    if (p) locks++;
+                    if (e || n || p) sheets++;
+                }
+                if (sheets == 0) return list;
+                var lines = new List<string>();
+                if (errors > 0) lines.Add("数式エラーのあるシート " + errors + " 枚");
+                if (memos > 0) lines.Add("メモのあるシート " + memos + " 枚");
+                if (locks > 0) lines.Add("保護されたシート " + locks + " 枚");
+                found.Add(new RowBadgeSpec
+                {
+                    Kind = RowBadgeKind.Count,
+                    Count = sheets,
+                    Color = errors > 0 ? BadgeErrorColor : memos > 0 ? BadgeMemoColor : BadgeProtectColor,
+                    Tip = string.Join("\n", lines)
+                });
+            }
+            else
+            {
+                BadgeInfo b;
+                if (!_rowBadges.TryGetValue(r.Sheet, out b)) return list;
+                if ((_shownBadges & BadgeKinds.Error) != 0 && b.Errors > 0)
+                    found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Error, Color = BadgeErrorColor, Tip = "数式エラーが " + b.Errors + " か所" });
+                if ((_shownBadges & BadgeKinds.Memo) != 0 && b.Memos > 0)
+                    found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Memo, Color = BadgeMemoColor, Tip = "メモ・コメントが " + b.Memos + " 件" });
+                if ((_shownBadges & BadgeKinds.Protect) != 0 && b.Protected)
+                    found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Protect, Color = BadgeProtectColor, Tip = "シートは保護されています" });
+            }
+            // the first one stands at the right end, the next ones to its left
+            int x = right - radius;
+            foreach (RowBadgeSpec s in found)
+            {
+                s.Bounds = new Rectangle(x - radius, cy - radius, radius * 2, radius * 2);
+                list.Add(s);
+                x -= step;
+            }
+            return list;
+        }
+
+        // The width the badges of a row take (the name stays clear of them).
+        private int RowBadgeReserve(StripRow r)
+        {
+            if (_shownBadges == BadgeKinds.None) return 0;
+            int n = RowBadges(r, new Rectangle(0, 0, ContentWidth, RowPx)).Count;
+            return n == 0 ? 0 : n * Px(RowBadgeStep) + Px(RowBadgeEdge - 2);
+        }
+
+        private void DrawRowBadges(Graphics g, StripRow r, Rectangle row)
+        {
+            foreach (RowBadgeSpec s in RowBadges(r, row))
+            {
+                if (s.Kind == RowBadgeKind.Error) DrawErrorBadge(g, s.Bounds, s.Color);
+                else if (s.Kind == RowBadgeKind.Memo) DrawMemoBadge(g, s.Bounds, s.Color);
+                else if (s.Kind == RowBadgeKind.Protect) DrawLockBadge(g, s.Bounds, s.Color);
+                else DrawCountBadge(g, s.Bounds, s.Color, s.Count);
+            }
+        }
+
+        // a red triangle with an exclamation mark, in a white rim
+        private static void DrawErrorBadge(Graphics g, Rectangle b, Color color)
+        {
+            var mode = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f * 1.05f;
+            using (var white = new SolidBrush(Color.White)) g.FillPolygon(white, TriangleAt(cx, cy, r, 1f));
+            using (var fill = new SolidBrush(color)) g.FillPolygon(fill, TriangleAt(cx, cy, r, 0.82f));
+            using (var white = new SolidBrush(Color.White))
+            {
+                float w = Math.Max(1.5f, r * 0.2f);
+                g.FillRectangle(white, cx - w / 2, cy - r * 0.35f, w, r * 0.55f);
+                g.FillEllipse(white, cx - w / 2, cy + r * 0.38f, w, w);
+            }
+            g.SmoothingMode = mode;
+        }
+
+        private static PointF[] TriangleAt(float cx, float cy, float r, float k)
+        {
+            return new[] { new PointF(cx, cy - r * k), new PointF(cx + r * 1.1f * k, cy + r * 0.85f * k), new PointF(cx - r * 1.1f * k, cy + r * 0.85f * k) };
+        }
+
+        // an amber note with three lines, in a white rim
+        private static void DrawMemoBadge(Graphics g, Rectangle b, Color color)
+        {
+            var mode = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f * 1.05f;
+            var outer = Rectangle.Round(new RectangleF(cx - r * 0.85f, cy - r * 0.95f, r * 1.7f, r * 1.9f));
+            var inner = Rectangle.Round(new RectangleF(cx - r * 0.75f, cy - r * 0.84f, r * 1.5f, r * 1.68f));
+            using (GraphicsPath p = RoundedRect(outer, Math.Max(2, (int)(r * 0.25f))))
+            using (var white = new SolidBrush(Color.White)) g.FillPath(white, p);
+            using (GraphicsPath p = RoundedRect(inner, Math.Max(2, (int)(r * 0.2f))))
+            using (var fill = new SolidBrush(color)) g.FillPath(fill, p);
+            using (var pen = new Pen(Color.White, Math.Max(1.5f, r * 0.2f)))
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    float y = cy - r * 0.5f + i * r * 0.4f;
+                    g.DrawLine(pen, cx - r * 0.5f, y, i < 2 ? cx + r * 0.25f : cx - r * 0.1f, y);
+                }
+            }
+            g.SmoothingMode = mode;
+        }
+
+        // a padlock (a body and a shackle), in a white rim
+        private static void DrawLockBadge(Graphics g, Rectangle b, Color color)
+        {
+            var mode = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f * 1.05f;
+            float bodyTop = cy - r * 0.12f, bodyH = r * 1.0f, bodyW = r * 1.5f;
+            float shackleW = r * 0.95f, shackleTop = cy - r * 0.95f;
+            // the white rim: a thicker shackle and a larger body
+            float rim = Math.Max(1.2f, r * 0.2f);
+            using (var rimPen = new Pen(Color.White, r * 0.34f + rim))
+            using (var pen = new Pen(color, r * 0.34f))
+            {
+                rimPen.StartCap = rimPen.EndCap = LineCap.Round;
+                g.DrawArc(rimPen, cx - shackleW / 2, shackleTop, shackleW, r * 1.4f, 180, 180);
+                g.DrawLine(rimPen, cx - shackleW / 2, shackleTop + r * 0.7f, cx - shackleW / 2, bodyTop + r * 0.1f);
+                g.DrawLine(rimPen, cx + shackleW / 2, shackleTop + r * 0.7f, cx + shackleW / 2, bodyTop + r * 0.1f);
+                var outer = Rectangle.Round(new RectangleF(cx - bodyW / 2 - rim * 0.6f, bodyTop - rim * 0.6f, bodyW + rim * 1.2f, bodyH + rim * 1.2f));
+                using (GraphicsPath p = RoundedRect(outer, Math.Max(2, (int)(r * 0.3f)))) using (var white = new SolidBrush(Color.White)) g.FillPath(white, p);
+                pen.StartCap = pen.EndCap = LineCap.Round;
+                g.DrawArc(pen, cx - shackleW / 2, shackleTop, shackleW, r * 1.4f, 180, 180);
+                g.DrawLine(pen, cx - shackleW / 2, shackleTop + r * 0.7f, cx - shackleW / 2, bodyTop + r * 0.1f);
+                g.DrawLine(pen, cx + shackleW / 2, shackleTop + r * 0.7f, cx + shackleW / 2, bodyTop + r * 0.1f);
+            }
+            var inner = Rectangle.Round(new RectangleF(cx - bodyW / 2, bodyTop, bodyW, bodyH));
+            using (GraphicsPath p = RoundedRect(inner, Math.Max(2, (int)(r * 0.22f)))) using (var fill = new SolidBrush(color)) g.FillPath(fill, p);
+            using (var white = new SolidBrush(Color.White))
+            {
+                float k = Math.Max(1.6f, r * 0.26f);
+                g.FillEllipse(white, cx - k / 2, bodyTop + bodyH * 0.28f, k, k);
+                g.FillRectangle(white, cx - k * 0.2f, bodyTop + bodyH * 0.28f + k * 0.5f, k * 0.4f, bodyH * 0.3f);
+            }
+            g.SmoothingMode = mode;
+        }
+
+        // The icon of a kind of badge (for the settings dialog).
+        public static void DrawBadgeIcon(Graphics g, BadgeKinds kind, Rectangle bounds)
+        {
+            if (kind == BadgeKinds.Error) DrawErrorBadge(g, bounds, BadgeErrorColor);
+            else if (kind == BadgeKinds.Memo) DrawMemoBadge(g, bounds, BadgeMemoColor);
+            else if (kind == BadgeKinds.Protect) DrawLockBadge(g, bounds, BadgeProtectColor);
+        }
+
+        // a round badge with the number of the sheets of a closed folder that have something to tell
+        private void DrawCountBadge(Graphics g, Rectangle b, Color color, int count)
+        {
+            var mode = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var white = new SolidBrush(Color.White)) g.FillEllipse(white, b);
+            using (var fill = new SolidBrush(color)) g.FillEllipse(fill, Rectangle.Inflate(b, -Math.Max(1, Px(1)), -Math.Max(1, Px(1))));
+            using (var font = new Font(TabFont.FontFamily, Math.Max(7f, b.Height * 0.52f), FontStyle.Bold, GraphicsUnit.Pixel))
+            using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            using (var brush = new SolidBrush(Color.White))
+            {
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                g.DrawString(count > 99 ? "99+" : count.ToString(), font, brush, new RectangleF(b.Left - 2, b.Top + 1, b.Width + 4, b.Height), format);
+            }
+            g.SmoothingMode = mode;
+        }
+
+        // The text of the tip of the badge under the pointer (null = none).
+        private string BadgeTipAt(int index, Point p)
+        {
+            if (index < 0 || index >= _rows.Count || _shownBadges == BadgeKinds.None) return null;
+            foreach (RowBadgeSpec s in RowBadges(_rows[index], RowRect(index)))
+            {
+                if (Rectangle.Inflate(s.Bounds, Px(2), Px(4)).Contains(p)) return s.Tip;
+            }
+            return null;
+        }
+
         // The mark of the active sheet, with every look (Agents.md 12.110).
         private ActiveMarker _activeMarker = ActiveMarker.Underline;
 
@@ -1461,6 +1713,7 @@ namespace VerticalSheetTabs
             };
             var names = new List<string> { "Sheet1", "Sheet2" };
             var colors = new Dictionary<string, int> { { "Sheet2", 0x3A80E9 } };
+            _rowBadges = new Dictionary<string, BadgeInfo> { { "Sheet1", new BadgeInfo { Errors = 2, Protected = true } }, { "Sheet2", new BadgeInfo { Memos = 1 } } };
             string active = selection == "plain" ? "Sheet1" : selection == "colored" ? "Sheet2" : "";
             var selected = new List<string>();
             if (active != "") selected.Add(active);
@@ -1717,6 +1970,7 @@ namespace VerticalSheetTabs
             {
                 if (colored) FillColoredBox(g, left, right, row, radius, color);
                 var body = new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset));
+                DrawRowBadges(g, folder, row); // (under the glass)
                 DrawGlass(g, body, radius, true, colored, color);
                 textColor = GlassText(colored);
             }
@@ -1753,7 +2007,7 @@ namespace VerticalSheetTabs
 
             int textLeft = left + markShift + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
             int roomRight = 0;
-            var textRect = new Rectangle(textLeft, row.Top - (selected && DoubleFrame ? Px(ActiveTextLift) : 0) + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - roomRight - CheckReserve(folder)), row.Height);
+            var textRect = new Rectangle(textLeft, row.Top - (selected && DoubleFrame ? Px(ActiveTextLift) : 0) + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - roomRight - CheckReserve(folder) - RowBadgeReserve(folder)), row.Height);
             g.TextRenderingHint = _transforming ? TextRenderingHint.AntiAliasGridFit : TextRenderingHint.ClearTypeGridFit;
             if (_editor == null || _editingFolderId != folder.FolderId)
             {
@@ -1770,6 +2024,7 @@ namespace VerticalSheetTabs
                 }
             }
             if (folder.SyncColor) DrawCheck(g, row, right);
+            if (!(selected && Glass)) DrawRowBadges(g, folder, row);
             DrawSeparator(g, row);
         }
 
@@ -1903,6 +2158,7 @@ namespace VerticalSheetTabs
                 if (triangles) DrawMarkers(g, body, 0, LineColorFor(tabColor, colored));
                 if (bars) DrawEdgeBars(g, body, LineColorFor(tabColor, colored));
                 if (badge) DrawCheckBadge(g, body, colored, tabColor);
+                DrawRowBadges(g, tabRow, row); // (the glass covers the badges of the row as well)
                 // the active sheet behind thicker glass than the other sheets of a group
                 DrawGlass(g, body, radius, active, colored, tabColor);
                 textColor = GlassText(colored);
@@ -1929,6 +2185,9 @@ namespace VerticalSheetTabs
                 textColor = luma >= 150 ? TextColor : Color.White;
             }
 
+            // the badges at the right end (Agents.md 12.190), over the look of the row (on glass they were drawn above, under the glass)
+            if (!(selected && Glass)) DrawRowBadges(g, tabRow, row);
+
             // the check badge marker (Agents.md 12.131), over whichever look the row has
             if (badge && !(selected && Glass)) DrawCheckBadge(g, new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset)), colored, tabColor);
 
@@ -1940,7 +2199,7 @@ namespace VerticalSheetTabs
             int lift = underline ? Px(StandardTextLift) : DoubleFrame && selected ? Px(ActiveTextLift) : 0;
             int room = triangles ? Px(MarkerRoom) : bars ? Px(BarRoom) : 0; // room for the triangles or the bars at both ends of the active sheet
             int roomLeft = badge ? Px(BadgeRoom) : room; // (the check badge takes the left end; it is the only mark then)
-            var textRect = new Rectangle(left + roomLeft + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - roomLeft - room - Px(TextPadLeft) - Px(TextPadRight)), row.Height);
+            var textRect = new Rectangle(left + roomLeft + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - roomLeft - room - Px(TextPadLeft) - Px(TextPadRight) - RowBadgeReserve(tabRow)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
                 g.TextRenderingHint = _transforming ? TextRenderingHint.AntiAliasGridFit : TextRenderingHint.ClearTypeGridFit;
@@ -2776,6 +3035,19 @@ namespace VerticalSheetTabs
                 return;
             }
             int index = IndexFromPoint(p);
+            string badgeTip = Control.MouseButtons == MouseButtons.None ? BadgeTipAt(index, p) : null;
+            if (badgeTip != _badgeTip)
+            {
+                _badgeTip = badgeTip;
+                _tip.Hide(this);
+                if (badgeTip != null)
+                {
+                    _hoverIndex = index;
+                    _tip.Show(badgeTip, this, p.X, RowRect(index).Bottom, 4000);
+                    return;
+                }
+            }
+            else if (badgeTip != null) return;
             if (index == _hoverIndex) return;
             _hoverIndex = index;
             _tip.Hide(this);
@@ -2790,7 +3062,7 @@ namespace VerticalSheetTabs
         private bool IsTextCut(string name, StripRow row)
         {
             int available = ContentWidth - Px(InsetLeft + TextPadLeft + TextPadRight) - RightInset(row)
-                - (row.Indented ? Px(FolderIndent) : 0) - (row.IsFolder ? Px(FolderMarkWidth + 4) : 0) - CheckReserve(row);
+                - (row.Indented ? Px(FolderIndent) : 0) - (row.IsFolder ? Px(FolderMarkWidth + 4) : 0) - CheckReserve(row) - RowBadgeReserve(row);
             using (Graphics g = CreateGraphics())
             using (var format = new StringFormat(StringFormat.GenericDefault))
             {
