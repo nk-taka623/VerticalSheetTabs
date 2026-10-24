@@ -548,6 +548,10 @@ namespace VerticalSheetTabs
             if (entry.Busy) return true;
             // While Excel's "Protect Sheet" dialog is open the sync stays out of Excel (Agents.md 12.214).
             if (entry.ProtectAsking) return true;
+            // While one of Excel's dialogs is open (Excel disables its main window), the sync stays out of Excel: some questions it
+            // asks (the workbook's theme colors, for one) are answered with the message "this command cannot be used on a protected
+            // sheet" as soon as the workbook has a protected sheet (Agents.md 12.218).
+            if (ExcelMainWindowDisabled(entry)) return true;
             // A sync that is already running is not started again: the moves the sync makes itself (the
             // sheet-name rule) make Excel raise SheetActivate, whose handler would start a sync inside
             // the running one, which sees the sheets half moved and moves more; and Excel delivers timer
@@ -2740,6 +2744,28 @@ namespace VerticalSheetTabs
         private const byte VkControl = 0x11;
         private const byte VkReturn = 0x0D;
         private const byte VkF6 = 0x75;
+
+        // Excel's main window is disabled: a dialog of Excel (a message, "save changes?", a command's dialog) is open.
+        private static bool ExcelMainWindowDisabled(Entry entry)
+        {
+            try
+            {
+                IntPtr h = entry.Control.Handle;
+                var name = new System.Text.StringBuilder(64);
+                for (int i = 0; i < 12 && h != IntPtr.Zero; i++)
+                {
+                    name.Clear();
+                    GetClassName(h, name, name.Capacity);
+                    if (name.ToString() == "XLMAIN") return !IsWindowEnabled(h);
+                    h = GetParent(h);
+                }
+                return false;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
 
         // A cell (or the formula bar) is being edited: the keyboard focus is in Excel's edit window.
         private static bool IsExcelEditing()
