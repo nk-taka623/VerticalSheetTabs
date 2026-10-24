@@ -858,7 +858,10 @@ namespace VerticalSheetTabs
                 var target = entry.Workbook.Sheets[sheet] as Excel.Worksheet;
                 if (target != null && target.ProtectContents) return; // (already protected: the mark never takes the protection off)
                 CommitCellEdit(entry);
-                SelectSheets(entry, new List<string> { sheet }, sheet);
+                // Only this sheet is selected: SelectSheets keeps a group when the sheet is in it, and Excel's "Protect Sheet" on a group that has
+                // a protected sheet is refused ("this command cannot be used on a protected sheet"), Agents.md 12.211.
+                if (target != null) target.Select(true);
+                else SelectSheets(entry, new List<string> { sheet }, sheet);
                 RunExcelCommand(entry, "SheetProtect");
             }
             catch (Exception)
