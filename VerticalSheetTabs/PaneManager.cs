@@ -26,6 +26,7 @@ namespace VerticalSheetTabs
             public bool ProtectAsking;
             public System.Drawing.Color[] ThemeCache;   // the workbook's theme colors, read at most every few seconds (Agents.md 12.218)
             public DateTime ThemeCacheAt = DateTime.MinValue;
+            public int ThemeCacheSeconds = 5;
             public bool InitPending;
             // Visibility changes we cause ourselves must not be mistaken for the user closing the pane.
             public DateTime IgnoreVisibleUntil;
@@ -2039,14 +2040,62 @@ namespace VerticalSheetTabs
         private static System.Drawing.Color[] ThemeColors(Entry entry)
         {
             // The sync asks at every tick for the folders that are colored by a theme color; the workbook's theme is read again after a few seconds only
-            if (entry.ThemeCache != null && DateTime.Now - entry.ThemeCacheAt < TimeSpan.FromSeconds(5)) return entry.ThemeCache;
-            // Excel gives no theme (Workbook.Theme is null) while any sheet of the workbook is protected (Agents.md 12.222): the theme
-            // is then read from the saved file, and, when the workbook was never saved, the Office theme stands for it. Never null,
-            // so that a folder colored with a theme color shows that color, and the palette shows the same colors as the folders get.
-            var colors = ReadThemeColors(entry) ?? ReadThemeColorsFromFile(entry) ?? TabColorPalette.DefaultTheme();
+            if (entry.ThemeCache != null && DateTime.Now - entry.ThemeCacheAt < TimeSpan.FromSeconds(entry.ThemeCacheSeconds)) return entry.ThemeCache;
+            // Excel gives no theme (Workbook.Theme is null) while any sheet of the workbook is protected (Agents.md 12.222, 12.224). The colors
+            // are then taken from the built-in cell styles, which Excel answers all the same (9 of the 10 colors; the live theme), and the
+            // rest from the saved file's theme, or, when the workbook was never saved, from the Office theme. Never null, so that a folder
+            // colored with a theme color shows that color, and the palette shows the same colors as the folders get.
+            var colors = ReadThemeColors(entry);
+            int seconds = 5;
+            if (colors == null)
+            {
+                colors = ReadThemeColorsFromFile(entry) ?? TabColorPalette.DefaultTheme();
+                OverrideFromStyles(entry, colors);
+                seconds = 30; // (reading the styles takes longer)
+            }
             entry.ThemeCache = colors;
             entry.ThemeCacheAt = DateTime.Now;
+            entry.ThemeCacheSeconds = seconds;
             return colors;
+        }
+
+        // The theme colors that the built-in cell styles show: the accent styles' fills are the accent colors; the font colors of the styles
+        // "20% - Accent 1" (dark 1), "Accent 1" (light 1) and "Title" (dark 2) are theme colors 2, 1 and 4 without a tint. Background 2
+        // (light 2) is not used by any built-in style. Found by the theme index of the style, not by its (translated) name.
+        private static void OverrideFromStyles(Entry entry, System.Drawing.Color[] colors)
+        {
+            try
+            {
+                // position in colors[]: 0 light1, 1 dark1, 2 light2, 3 dark2, 4..9 accent1..6; Excel's theme index of the style: font 1 light1, 2 dark1, 4 dark2; fill 5..10 accents
+                var found = new HashSet<int>();
+                foreach (Excel.Style style in entry.Workbook.Styles)
+                {
+                    try
+                    {
+                        if (!style.BuiltIn) continue;
+                        int fillIndex = style.Interior.ThemeColor;
+                        if (fillIndex >= 5 && fillIndex <= 10 && style.Interior.TintAndShade == 0 && found.Add(fillIndex))
+                            colors[fillIndex - 1] = FromBgr(Convert.ToInt32(style.Interior.Color));
+                        int fontIndex = style.Font.ThemeColor;
+                        if ((fontIndex == 1 || fontIndex == 2 || fontIndex == 4) && style.Font.TintAndShade == 0 && found.Add(fontIndex))
+                            colors[fontIndex == 1 ? 0 : fontIndex == 2 ? 1 : 3] = FromBgr(Convert.ToInt32(style.Font.Color));
+                    }
+                    catch (Exception)
+                    {
+                        // a style without that color
+                    }
+                    if (found.Count >= 9) break;
+                }
+            }
+            catch (Exception)
+            {
+                // the colors of the file (or the Office theme) stay
+            }
+        }
+
+        private static System.Drawing.Color FromBgr(int bgr)
+        {
+            return System.Drawing.Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF);
         }
 
         private static System.Drawing.Color[] ReadThemeColors(Entry entry)
