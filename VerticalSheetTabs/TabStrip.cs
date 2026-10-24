@@ -265,6 +265,9 @@ namespace VerticalSheetTabs
             bool sameSelection = userBusy || (_active == activeName && _selected.SetEquals(selected));
             if (sameNames && sameRows && sameSelection && sameColors) return;
 
+            // a sheet added or deleted: the row appears or shrinks away (looked at while the old state is still here)
+            RowAnimPending pending = sameNames ? null : PrepareRowAnim(names);
+
             if (!sameColors)
             {
                 _colors.Clear();
@@ -280,6 +283,7 @@ namespace VerticalSheetTabs
                 ApplyFilter();
                 LayoutSearch();
             }
+            FinishRowAnim(pending);
             if (!userBusy)
             {
                 bool activeChanged = _active != activeName;
@@ -1082,7 +1086,9 @@ namespace VerticalSheetTabs
                 }
                 _folderSel = selNow;
                 _folderSelSeen = true;
-                if ((sheetChanged || toggled != null) && !_ghostOn) StartWobble(sheetChanged ? _active : null, toggled, opened);
+                // (the row of a sheet that has just been added comes in with its own motion)
+                bool wobbleSheet = sheetChanged && !(_raAdded != null && _active != null && _raAdded.Contains(_active));
+                if ((wobbleSheet || toggled != null) && !_ghostOn) StartWobble(wobbleSheet ? _active : null, toggled, opened);
             }
 
             // the tabs scroll inside the area above the pinned "+" row
@@ -1090,22 +1096,27 @@ namespace VerticalSheetTabs
             DrawFolderOutlines(g);
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
             var wobbling = new List<int>();
+            var comingIn = new List<int>();
             for (int i = first; i < _rows.Count; i++)
             {
                 Rectangle row = RowRect(i);
+                row.Offset(0, RowAnimDy(i));
                 if (row.Top > ViewHeight) break;
                 if (row.Bottom < 0) continue;
-                if (_animClock != null && (_rows[i].IsFolder ? (_animFolders != null && _animFolders.Contains(_rows[i].FolderId)) : (_rows[i].Sheet == _animSheet || (_animSheets != null && _rows[i].Sheet != null && _animSheets.Contains(_rows[i].Sheet))))) wobbling.Add(i);
+                if (_raAdded != null && !_rows[i].IsFolder && _rows[i].Sheet != null && _raAdded.Contains(_rows[i].Sheet)) comingIn.Add(i);
+                else if (_animClock != null && (_rows[i].IsFolder ? (_animFolders != null && _animFolders.Contains(_rows[i].FolderId)) : (_rows[i].Sheet == _animSheet || (_animSheets != null && _rows[i].Sheet != null && _animSheets.Contains(_rows[i].Sheet))))) wobbling.Add(i);
                 else
                 {
                     if (_rows[i].IsFolder) DrawFolder(g, _rows[i], row); else DrawTab(g, _rows[i], row);
                     if (IsFadedRow(_rows[i])) DrawFadedPlace(g, row);
                 }
             }
+            DrawRowAnim(g, comingIn);
             foreach (int index in wobbling)
             {
                 if (_animClock == null) break;
                 Rectangle row = RowRect(index);
+                row.Offset(0, RowAnimDy(index));
                 WobbleFrame f = WobbleMotion.At(_animType, _animClock.ElapsedMilliseconds / (double)_wobbleDur, _wobbleAmp / 100.0);
                 var pivot = f.PivotTopLeft
                     ? new PointF(row.Left + Px(InsetLeft), row.Top + Px(PlainTop))
@@ -1132,6 +1143,226 @@ namespace VerticalSheetTabs
 
             if (ShowAllButtons) DrawAllButtons(g);
             if (!IsSample) DrawPlus(g);
+        }
+
+        // ---- the rows of added and deleted sheets (Agents.md 12.194) ----
+        // An added sheet: the rows below make room (they slide down), and the new row grows in with a little spring, fading in, with a
+        // ring of light around it. A deleted sheet: its row swells a little, shrinks and fades away, a few dots fly out, and the rows below
+        // slide up. It runs 0.4 seconds (the length is fixed) and makes no sound. It is off unless it is chosen in the settings.
+
+        private const int RowAnimMs = 400;
+        private bool _rowAnimation;
+        private System.Windows.Forms.Timer _raTimer;
+        private System.Diagnostics.Stopwatch _raClock;
+        private HashSet<string> _raAdded;
+        private List<RowAnimGhost> _raGhosts;
+
+        private class RowAnimGhost
+        {
+            public Bitmap Bmp;
+            public int At;      // the number of rows of the new list that stand before it
+            public Color Color;
+        }
+
+        private class RowAnimPending
+        {
+            public List<string> Added = new List<string>();
+            public List<RowAnimGhost> Ghosts = new List<RowAnimGhost>();
+        }
+
+        public bool RowAnimation
+        {
+            get { return _rowAnimation; }
+            set { _rowAnimation = value; if (!value) EndRowAnim(); }
+        }
+
+        private static double EaseOut(double t) { t = Math.Max(0, Math.Min(1, t)); return 1 - Math.Pow(1 - t, 3); }
+
+        private static double EaseOutBack(double t)
+        {
+            t = Math.Max(0, Math.Min(1, t)) - 1;
+            const double k = 2.2;
+            return 1 + (k + 1) * t * t * t + k * t * t;
+        }
+
+        private static double Clamp01(double t) { return Math.Max(0, Math.Min(1, t)); }
+
+        private double RowAnimT { get { return _raClock == null ? 1 : Math.Min(1.0, _raClock.ElapsedMilliseconds / (double)RowAnimMs); } }
+
+        // Called with the old state still in place: which sheets came and went, and (of those that went) a picture of their rows.
+        private RowAnimPending PrepareRowAnim(IList<string> names)
+        {
+            if (!_rowAnimation || IsSample || _names.Count == 0 || Filtering || !IsHandleCreated || !base.Visible || ClientSize.Width < 20 || RowPx <= 0) return null;
+            var added = names.Where(n => !_names.Contains(n)).ToList();
+            var removed = _names.Where(n => !names.Contains(n)).ToList();
+            // only a sheet that came, or only one that went (a rename or a regrouping does both; a bulk change is not shown)
+            if ((added.Count == 0) == (removed.Count == 0) || added.Count + removed.Count > 3) return null;
+            var p = new RowAnimPending { Added = added };
+            int before = 0;
+            for (int i = 0; i < _rows.Count; i++)
+            {
+                StripRow r = _rows[i];
+                if (r.IsFolder || r.Sheet == null || !removed.Contains(r.Sheet)) continue;
+                int bgr;
+                Color c = _colors.TryGetValue(r.Sheet, out bgr) ? Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF) : Underline;
+                p.Ghosts.Add(new RowAnimGhost { Bmp = RenderRowBitmap(r, ContentWidth), At = i - before, Color = c });
+                before++;
+            }
+            if (added.Count == 0 && p.Ghosts.Count == 0) return null;
+            return p;
+        }
+
+        // Called with the new rows in place: starts the motion.
+        private void FinishRowAnim(RowAnimPending p)
+        {
+            if (p == null) return;
+            EndRowAnim();
+            if (p.Added.Count > 0)
+            {
+                var set = new HashSet<string>(_rows.Where(r => !r.IsFolder && r.Sheet != null && p.Added.Contains(r.Sheet)).Select(r => r.Sheet));
+                if (set.Count == 0) return; // (the sheet is in a closed folder: no row)
+                _raAdded = set;
+            }
+            else
+            {
+                foreach (RowAnimGhost g in p.Ghosts) g.At = Math.Min(g.At, _rows.Count);
+                _raGhosts = p.Ghosts;
+            }
+            _raClock = System.Diagnostics.Stopwatch.StartNew();
+            if (_raTimer == null)
+            {
+                _raTimer = new System.Windows.Forms.Timer { Interval = 15 };
+                _raTimer.Tick += (s, e) =>
+                {
+                    if (_raClock == null || _raClock.ElapsedMilliseconds >= RowAnimMs) EndRowAnim();
+                    Invalidate();
+                };
+            }
+            _raTimer.Start();
+        }
+
+        private void EndRowAnim()
+        {
+            if (_raTimer != null) _raTimer.Stop();
+            bool was = _raClock != null;
+            _raClock = null;
+            _raAdded = null;
+            if (_raGhosts != null)
+            {
+                foreach (RowAnimGhost g in _raGhosts) if (g.Bmp != null) g.Bmp.Dispose();
+                _raGhosts = null;
+            }
+            if (was) Invalidate();
+        }
+
+        // How far a row is from its place (the rows below an added or a deleted one are on their way).
+        private int RowAnimDy(int index)
+        {
+            if (_raClock == null) return 0;
+            double t = RowAnimT;
+            if (_raAdded != null)
+            {
+                int before = 0;
+                for (int j = 0; j < index && j < _rows.Count; j++) if (!_rows[j].IsFolder && _rows[j].Sheet != null && _raAdded.Contains(_rows[j].Sheet)) before++;
+                return -(int)Math.Round(RowPx * before * (1 - EaseOut(t / 0.5)));
+            }
+            if (_raGhosts != null)
+            {
+                int before = _raGhosts.Count(g => g.At <= index);
+                return (int)Math.Round(RowPx * before * (1 - EaseOut((t - 0.35) / 0.6)));
+            }
+            return 0;
+        }
+
+        // A picture of a row (transparent around it), as it looks now.
+        private Bitmap RenderRowBitmap(StripRow r, int width)
+        {
+            var bmp = new Bitmap(Math.Max(1, width), Math.Max(1, RowPx), System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.Transparent);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                _transforming = true; // (text without ClearType: it cannot be drawn on a transparent picture)
+                try
+                {
+                    var local = new Rectangle(0, 0, bmp.Width, bmp.Height);
+                    if (r.IsFolder) DrawFolder(g, r, local); else DrawTab(g, r, local);
+                }
+                finally { _transforming = false; }
+            }
+            return bmp;
+        }
+
+        private void DrawRowImage(Graphics g, Bitmap bmp, Rectangle row, double sx, double sy, double alpha)
+        {
+            if (sx < 0.03 || sy < 0.03 || alpha < 0.02) return;
+            int w = Math.Max(1, (int)(row.Width * sx)), h = Math.Max(1, (int)(row.Height * sy));
+            var dest = new Rectangle(row.Left + (row.Width - w) / 2, row.Top + (row.Height - h) / 2, w, h);
+            using (var attr = new System.Drawing.Imaging.ImageAttributes())
+            {
+                attr.SetColorMatrix(new System.Drawing.Imaging.ColorMatrix { Matrix33 = (float)Clamp01(alpha) });
+                var mode = g.InterpolationMode;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(bmp, dest, 0, 0, bmp.Width, bmp.Height, GraphicsUnit.Pixel, attr);
+                g.InterpolationMode = mode;
+            }
+        }
+
+        // The rows that come in, and the rows that go.
+        private void DrawRowAnim(Graphics g, List<int> comingIn)
+        {
+            if (_raClock == null) return;
+            double t = RowAnimT;
+            foreach (int index in comingIn)
+            {
+                Rectangle row = RowRect(index);
+                double s = EaseOutBack((t - 0.12) / 0.6), a = (t - 0.12) / 0.2;
+                using (Bitmap bmp = RenderRowBitmap(_rows[index], row.Width))
+                {
+                    DrawRowImage(g, bmp, row, Math.Min(1.0, s), s, a);
+                }
+                // a ring of light that spreads and fades
+                if (t > 0.1 && t < 0.7)
+                {
+                    double k = (t - 0.1) / 0.6;
+                    int grow = (int)(Px(10) * k);
+                    int bgr;
+                    Color c = _colors.TryGetValue(_rows[index].Sheet, out bgr) ? Color.FromArgb(bgr & 0xFF, (bgr >> 8) & 0xFF, (bgr >> 16) & 0xFF) : Underline;
+                    var ring = new Rectangle(row.Left + Px(InsetLeft) - grow, row.Top + Px(PlainTop) - grow, row.Width - Px(InsetLeft + InsetRight) + grow * 2, row.Height - Px(PlainTop + BottomInset) + grow * 2);
+                    using (GraphicsPath path = RoundedRect(ring, Px(CornerRadius) + grow))
+                    using (var pen = new Pen(Color.FromArgb((int)(130 * (1 - k)), c), Math.Max(1.5f, Px(2))))
+                    {
+                        g.DrawPath(pen, path);
+                    }
+                }
+            }
+            if (_raGhosts == null) return;
+            for (int j = 0; j < _raGhosts.Count; j++)
+            {
+                RowAnimGhost gh = _raGhosts[j];
+                var row = new Rectangle(0, HeaderPx + (gh.At + j) * RowPx - _scrollY, gh.Bmp.Width, gh.Bmp.Height);
+                double shrink = EaseOut((t - 0.1) / 0.55);
+                double sy = t < 0.1 ? 1 + 0.06 * (t / 0.1) : 1 - shrink;
+                double sx = t < 0.1 ? sy : 1 - 0.25 * shrink;
+                DrawRowImage(g, gh.Bmp, row, sx, sy, 1 - shrink * 1.1);
+                if (t > 0.2 && t < 0.85)
+                {
+                    double k = (t - 0.2) / 0.65;
+                    float cx = row.Left + row.Width / 2f, cy = row.Top + row.Height / 2f;
+                    var mode = g.SmoothingMode;
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    for (int d = 0; d < 8; d++)
+                    {
+                        double ang = d * Math.PI / 4 + 0.3;
+                        double dist = Px(5) + Px(24) * k;
+                        float r = (float)(Px(2.2) * (1 - 0.75 * k));
+                        float px = cx + (float)(Math.Cos(ang) * dist * 2.4), py = cy + (float)(Math.Sin(ang) * dist);
+                        using (var b = new SolidBrush(Color.FromArgb((int)(220 * (1 - k)), gh.Color))) g.FillEllipse(b, px - r, py - r, r * 2, r * 2);
+                    }
+                    g.SmoothingMode = mode;
+                }
+            }
         }
 
         // ---- the drag ghost: while rows are dragged, a half transparent copy of the first one follows the pointer ----
@@ -3393,6 +3624,8 @@ namespace VerticalSheetTabs
             {
                 if (_font != null) _font.Dispose();
                 if (_animTimer != null) _animTimer.Dispose();
+                EndRowAnim();
+                if (_raTimer != null) _raTimer.Dispose();
                 if (_longPress != null) _longPress.Dispose();
                 _tip.Dispose();
             }

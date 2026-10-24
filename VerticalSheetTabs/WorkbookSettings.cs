@@ -66,6 +66,7 @@ namespace VerticalSheetTabs
         public const string WobbleDurName = "VTab.WobbleDur"; // number, milliseconds (300 to 1200, default 600)
         public const string WobbleSoundName = "VTab.WobbleSound";   // string "On" / "Off" (default "Off"; Agents.md 12.172)
         public const string WobbleVolumeName = "VTab.WobbleVolume"; // number 0 to 100 (default 60)
+        public const string RowAnimName = "VTab.RowAnim";         // string "On" / "Off" (default "Off"; the add and delete animation of the rows, Agents.md 12.194)
         public const string WobbleSampleStyleName = "VTab.WobbleSampleStyle"; // string "On" / "Off" (default "Off"; Agents.md 12.178)
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
         public const string BadgesName = "VTab.Badges";           // string "None", or "Error", "Memo", "Protect" joined by commas (default "None"; Agents.md 12.190)
@@ -109,6 +110,9 @@ namespace VerticalSheetTabs
         // the sample of the wobble in the settings dialog follows the chosen look and marker
         public bool WobbleSampleStyle { get; set; }
 
+        // The rows of added sheets appear and the rows of deleted sheets shrink away (default: off).
+        public bool RowAnim { get; set; }
+
         public WorkbookSettings()
         {
             IsFirstOpen = true;
@@ -127,6 +131,7 @@ namespace VerticalSheetTabs
             WobbleSound = false;
             WobbleVolume = WobbleSounds.VolumeDefault;
             WobbleSampleStyle = false;
+            RowAnim = false;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
@@ -182,6 +187,8 @@ namespace VerticalSheetTabs
                 if (wobbleSound != null) s.WobbleSound = (string)wobbleSound.Value == "On";
                 dynamic wobbleVolume = Find(props, WobbleVolumeName);
                 if (wobbleVolume != null) s.WobbleVolume = Math.Max(0, Math.Min(100, Convert.ToInt32((object)wobbleVolume.Value)));
+                dynamic rowAnim = Find(props, RowAnimName);
+                if (rowAnim != null) s.RowAnim = (string)rowAnim.Value == "On";
                 dynamic sampleStyle = Find(props, WobbleSampleStyleName);
                 if (sampleStyle != null) s.WobbleSampleStyle = (string)sampleStyle.Value == "On";
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
@@ -223,6 +230,7 @@ namespace VerticalSheetTabs
                 Write(props, WobbleSoundName, PropTypeString, WobbleSound ? "On" : "Off");
                 Write(props, WobbleVolumeName, PropTypeNumber, WobbleVolume);
                 Write(props, WobbleSampleStyleName, PropTypeString, WobbleSampleStyle ? "On" : "Off");
+                Write(props, RowAnimName, PropTypeString, RowAnim ? "On" : "Off");
             }
             catch (Exception)
             {
