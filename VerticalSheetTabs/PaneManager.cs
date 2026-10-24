@@ -24,6 +24,8 @@ namespace VerticalSheetTabs
             public bool Initialized;
             // Excel's "Protect Sheet" dialog is open because of a click on a done mark: a second request must not start another one.
             public bool ProtectAsking;
+            public System.Drawing.Color[] ThemeCache;   // the workbook's theme colors, read at most every few seconds (Agents.md 12.218)
+            public DateTime ThemeCacheAt = DateTime.MinValue;
             public bool InitPending;
             // Visibility changes we cause ourselves must not be mistaken for the user closing the pane.
             public DateTime IgnoreVisibleUntil;
@@ -502,6 +504,9 @@ namespace VerticalSheetTabs
 
         private void SyncEntries()
         {
+            // a dialog of Excel is open: neither the panes are looked after nor the sheets read
+            if (ExcelMainWindowDisabled(null)) return;
+
             // A pane that is missing for an open window (the close was cancelled, or the pane could not
             // be created while Excel was showing a dialog) is created again, at most every 3 seconds.
             if (DateTime.Now - _lastEnsure > TimeSpan.FromSeconds(3))
@@ -2033,6 +2038,15 @@ namespace VerticalSheetTabs
         // backgrounds, six accents); null falls back to the Office theme in the palette.
         private static System.Drawing.Color[] ThemeColors(Entry entry)
         {
+            // The sync asks at every tick for the folders that are colored by a theme color; the workbook's theme is read again after a few seconds only
+            if (entry.ThemeCache != null && DateTime.Now - entry.ThemeCacheAt < TimeSpan.FromSeconds(5)) return entry.ThemeCache;
+            var colors = ReadThemeColors(entry);
+            if (colors != null) { entry.ThemeCache = colors; entry.ThemeCacheAt = DateTime.Now; }
+            return colors ?? entry.ThemeCache;
+        }
+
+        private static System.Drawing.Color[] ReadThemeColors(Entry entry)
+        {
             try
             {
                 Office.ThemeColorScheme scheme = entry.Workbook.Theme.ThemeColorScheme;
@@ -2745,21 +2759,34 @@ namespace VerticalSheetTabs
         private const byte VkReturn = 0x0D;
         private const byte VkF6 = 0x75;
 
-        // Excel's main window is disabled: a dialog of Excel (a message, "save changes?", a command's dialog) is open.
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        // A dialog of Excel (a message, "save changes?", a command's dialog) is open: Excel disables its main window (the main window of
+        // every workbook window, when there are several). While that lasts, nothing here asks Excel anything (Agents.md 12.218).
         private static bool ExcelMainWindowDisabled(Entry entry)
         {
             try
             {
-                IntPtr h = entry.Control.Handle;
-                var name = new System.Text.StringBuilder(64);
-                for (int i = 0; i < 12 && h != IntPtr.Zero; i++)
+                uint mine = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
+                bool disabled = false;
+                var name = new System.Text.StringBuilder(32);
+                EnumWindows((h, l) =>
                 {
+                    uint pid;
+                    GetWindowThreadProcessId(h, out pid);
+                    if (pid != mine) return true;
                     name.Clear();
                     GetClassName(h, name, name.Capacity);
-                    if (name.ToString() == "XLMAIN") return !IsWindowEnabled(h);
-                    h = GetParent(h);
-                }
-                return false;
+                    if (name.ToString() == "XLMAIN" && !IsWindowEnabled(h)) { disabled = true; return false; }
+                    return true;
+                }, IntPtr.Zero);
+                return disabled;
             }
             catch (Exception)
             {
