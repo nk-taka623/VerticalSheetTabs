@@ -2109,14 +2109,12 @@ namespace VerticalSheetTabs
                 float k = r * 0.92f;
                 float bw = k * 1.7f, bh = k * 1.25f, bt = cy - k * 0.2f;
                 float sw = k * 0.95f, w = Math.Max(1.6f, k * 0.34f);
-                using (var pen = new Pen(BadgeProgressGreen, w))
                 using (var fill = new SolidBrush(BadgeProgressGreen))
                 {
-                    g.DrawArc(pen, cx - sw / 2, cy - k * 1.0f + w / 2, sw, sw, 180, 180);
                     float ymid = cy - k * 1.0f + w / 2 + sw / 2;
-                    g.FillRectangle(fill, cx - sw / 2 - w / 2, ymid, w, bt + k * 0.2f - ymid);
-                    g.FillRectangle(fill, cx + sw / 2 - w / 2, ymid, w, bt + k * 0.2f - ymid);
-                    using (GraphicsPath body = RoundedRect(Rectangle.Round(new RectangleF(cx - bw / 2, bt, bw, bh)), Math.Max(2, (int)(k * 0.28f))))
+                    // (one filled shape, the same on both sides of the middle)
+                    using (GraphicsPath shackle = ShacklePath(cx, ymid, sw / 2, sw / 2, w, bt + k * 0.2f)) g.FillPath(fill, shackle);
+                    using (GraphicsPath body = RoundedRectF(new RectangleF(cx - bw / 2, bt, bw, bh), Math.Max(2f, k * 0.28f)))
                     {
                         g.FillPath(fill, body);
                     }
@@ -2216,13 +2214,13 @@ namespace VerticalSheetTabs
             g.SmoothingMode = SmoothingMode.AntiAlias;
             float cx = b.Left + b.Width / 2f, cy = b.Top + b.Height / 2f, r = b.Width / 2f * 1.05f;
             var outer = Rectangle.Round(new RectangleF(cx - r * 0.85f, cy - r * 0.95f, r * 1.7f, r * 1.9f));
-            var inner = outline ? Rectangle.Round(new RectangleF(cx - r * 0.75f, cy - r * 0.84f, r * 1.5f, r * 1.68f)) : Rectangle.Round(new RectangleF(cx - r * 0.8f, cy - r * 0.9f, r * 1.6f, r * 1.8f));
+            var inner = outline ? new RectangleF(cx - r * 0.75f, cy - r * 0.84f, r * 1.5f, r * 1.68f) : new RectangleF(cx - r * 0.8f, cy - r * 0.9f, r * 1.6f, r * 1.8f);
             if (outline)
             {
                 using (GraphicsPath p = RoundedRect(outer, Math.Max(2, (int)(r * 0.25f))))
                 using (var white = new SolidBrush(Color.White)) g.FillPath(white, p);
             }
-            using (GraphicsPath p = RoundedRect(inner, Math.Max(2, (int)(r * 0.2f))))
+            using (GraphicsPath p = RoundedRectF(inner, Math.Max(2f, r * 0.2f)))
             using (var fill = new SolidBrush(color)) g.FillPath(fill, p);
             using (var pen = new Pen(Color.White, Math.Max(1.5f, r * 0.2f)))
             {
@@ -2257,13 +2255,13 @@ namespace VerticalSheetTabs
                     var outer = Rectangle.Round(new RectangleF(cx - bodyW / 2 - rim * 0.6f, bodyTop - rim * 0.6f, bodyW + rim * 1.2f, bodyH + rim * 1.2f));
                     using (GraphicsPath p = RoundedRect(outer, Math.Max(2, (int)(r * 0.3f)))) using (var white = new SolidBrush(Color.White)) g.FillPath(white, p);
                 }
-                pen.StartCap = pen.EndCap = LineCap.Round;
-                g.DrawArc(pen, cx - shackleW / 2, shackleTop, shackleW, r * 1.4f, 180, 180);
-                g.DrawLine(pen, cx - shackleW / 2, shackleTop + r * 0.7f, cx - shackleW / 2, bodyTop + r * 0.1f);
-                g.DrawLine(pen, cx + shackleW / 2, shackleTop + r * 0.7f, cx + shackleW / 2, bodyTop + r * 0.1f);
             }
-            var inner = Rectangle.Round(new RectangleF(cx - bodyW / 2, bodyTop, bodyW, bodyH));
-            using (GraphicsPath p = RoundedRect(inner, Math.Max(2, (int)(r * 0.22f)))) using (var fill = new SolidBrush(color)) g.FillPath(fill, p);
+            // the shackle is one filled shape that is built the same on both sides of the middle (pens with caps were not the same on both)
+            using (GraphicsPath shackle = ShacklePath(cx, shackleTop + r * 0.7f, shackleW / 2, r * 0.7f, r * 0.34f, bodyTop + r * 0.15f))
+            using (var shackleFill = new SolidBrush(color))
+                g.FillPath(shackleFill, shackle);
+            var inner = new RectangleF(cx - bodyW / 2, bodyTop, bodyW, bodyH);
+            using (GraphicsPath p = RoundedRectF(inner, Math.Max(2f, r * 0.22f))) using (var fill = new SolidBrush(color)) g.FillPath(fill, p);
             using (var white = new SolidBrush(Color.White))
             {
                 float k = Math.Max(1.6f, r * 0.26f);
@@ -3379,6 +3377,41 @@ namespace VerticalSheetTabs
                 (int)Math.Round(a.R + (b.R - a.R) * t),
                 (int)Math.Round(a.G + (b.G - a.G) * t),
                 (int)Math.Round(a.B + (b.B - a.B) * t));
+        }
+
+        // A shackle (an upside-down U): a half ring on an ellipse of radii a and b around (cx, cyArc), pw thick, with two straight legs down to
+        // `bottom`. It is one closed shape, built the same on the left and on the right.
+        private static GraphicsPath ShacklePath(float cx, float cyArc, float a, float b, float pw, float bottom)
+        {
+            float ao = a + pw / 2, bo = b + pw / 2, ai = Math.Max(0.1f, a - pw / 2), bi = Math.Max(0.1f, b - pw / 2);
+            var p = new GraphicsPath();
+            p.AddArc(cx - ao, cyArc - bo, ao * 2, bo * 2, 180, 180);
+            p.AddLine(cx + ao, cyArc, cx + ao, bottom);
+            p.AddLine(cx + ao, bottom, cx + ai, bottom);
+            p.AddLine(cx + ai, bottom, cx + ai, cyArc);
+            p.AddArc(cx - ai, cyArc - bi, ai * 2, bi * 2, 0, -180);
+            p.AddLine(cx - ai, cyArc, cx - ai, bottom);
+            p.AddLine(cx - ai, bottom, cx - ao, bottom);
+            p.CloseFigure();
+            return p;
+        }
+
+        // A rounded rectangle on exact (float) edges. RoundedRect above ends one pixel short at the right and the bottom, which is right for the
+        // outlines of rows, but it moves the middle of a small badge half a pixel to the left of what is drawn around its own middle.
+        private static GraphicsPath RoundedRectF(RectangleF r, float radius)
+        {
+            var path = new GraphicsPath();
+            float d = Math.Max(1f, radius * 2);
+            var arc = new RectangleF(r.X, r.Y, d, d);
+            path.AddArc(arc, 180, 90);
+            arc.X = r.Right - d;
+            path.AddArc(arc, 270, 90);
+            arc.Y = r.Bottom - d;
+            path.AddArc(arc, 0, 90);
+            arc.X = r.X;
+            path.AddArc(arc, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private static GraphicsPath RoundedRect(Rectangle r, int radius)
