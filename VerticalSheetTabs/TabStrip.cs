@@ -98,8 +98,8 @@ namespace VerticalSheetTabs
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
         // with a color, a bar at its left edge.
         private const double OutlineRightInset = 1.5, OutlineCut = 10;
-        // The check mark of a folder that keeps its sheets in its color: size, space to the right end, gap to the text.
-        private const double CheckWidth = 10, CheckHeight = 7, CheckPadRight = 8, CheckGap = 4, CheckHalo = 3;
+        // The mark of a folder that keeps its sheets in its color (a tipped paint can with a blue drop): size, space to the right end, gap to the text.
+        private const double CheckWidth = 16, CheckHeight = 14, CanRadius = 7.6, CheckPadRight = 8, CheckGap = 4, CheckHalo = 3;
         private const double FolderIndent = 14, FolderMarkWidth = 6, FolderMarkHeight = 10, FolderBarWidth = 4;
         // Excel's tab text is about 9pt "Yu Gothic" (the measured width of "Sheet1" matches it).
         private const string FontFamilyName = "Yu Gothic";
@@ -2772,39 +2772,83 @@ namespace VerticalSheetTabs
             DrawSeparator(g, row);
         }
 
-        // The check mark at the right end of a folder row. It is dark and has a soft light halo (a few pixels
-        // wide, white pens of growing width with a little opacity each, which looks like a blur), so that it
-        // can be seen on the dark bar of the dark Office themes and on any folder color alike.
+        // The mark at the right end of a folder row that keeps its sheets in the folder's color (Agents.md 12.216): a paint can
+        // tipped to the left (silver metal, a white label band) and a blue drop of paint falling from its lip, over a floor
+        // line. It has a soft light halo (a few pixels wide, white pens of growing width with a little opacity each, which
+        // looks like a blur), so that it can be seen on the dark bar of the dark Office themes and on any folder color alike.
         private void DrawCheck(Graphics g, Rectangle row, int right)
         {
-            int w = Px(CheckWidth), h = Px(CheckHeight);
-            int x2 = right - Px(CheckPadRight), x1 = x2 - w;
+            float r = Px(CanRadius);
+            float cx = right - Px(CheckPadRight) - Px(CheckWidth) / 2f;
             int top = row.Top + Px(PlainTop), bottom = row.Bottom - Px(BottomInset);
-            int cy = (top + bottom) / 2;
-            var points = new[]
+            float cy = (top + bottom) / 2f - r * 0.02f;
+            // the can, tipped to the left (the points are mirrored at the vertical line through cx)
+            PointF[] can =
             {
-                new Point(x1, cy), new Point(x1 + (int)Math.Round(w * 0.38), cy + h / 2), new Point(x2, cy - h / 2)
+                new PointF(cx + r * 0.8f, cy - r * 0.1f), new PointF(cx, cy - r * 0.9f),
+                new PointF(cx - r * 0.6f, cy - r * 0.3f), new PointF(cx + r * 0.2f, cy + r * 0.5f)
             };
-            float markWidth = Math.Max(1.5f, Px(1.6));
-            float halo = Math.Max(2f, Px(CheckHalo));
-            const int steps = 6;
-            for (int i = steps; i >= 1; i--)
+            PointF lip = new PointF(cx - r * 0.78f, cy + r * 0.05f);
+            float k = r * 0.7f;
+            RectangleF floor = new RectangleF(cx - r * 0.95f, cy + r * 0.78f, r * 1.9f, r * 0.15f);
+            using (var shape = new GraphicsPath())
             {
-                using (var pen = new Pen(Color.FromArgb(46, 255, 255, 255), markWidth + 2 * halo * i / steps))
+                shape.AddPolygon(can);
+                shape.AddPolygon(new[] { new PointF(lip.X, lip.Y - k * 0.2f), new PointF(lip.X + k * 0.3f, lip.Y + k * 0.35f), new PointF(lip.X - k * 0.3f, lip.Y + k * 0.35f) });
+                shape.AddEllipse(lip.X - k * 0.3f, lip.Y + k * 0.08f, k * 0.6f, k * 0.6f);
+                shape.AddRectangle(floor);
+                float halo = Math.Max(2f, Px(CheckHalo));
+                const int steps = 6;
+                for (int i = steps; i >= 1; i--)
                 {
-                    pen.LineJoin = LineJoin.Round;
-                    pen.StartCap = LineCap.Round;
-                    pen.EndCap = LineCap.Round;
-                    g.DrawLines(pen, points);
+                    using (var pen = new Pen(Color.FromArgb(46, 255, 255, 255), 2 * halo * i / steps))
+                    {
+                        pen.LineJoin = LineJoin.Round;
+                        g.DrawPath(pen, shape);
+                    }
                 }
             }
-            using (var pen = new Pen(TextColor, markWidth))
+
+            // the body: silver metal shaded across the can, then a white label band
+            var metal = Color.FromArgb(150, 152, 158);
+            float[] at = { 0f, 0.14f, 0.2f, 0.5f, 0.78f, 1f };
+            using (var body = new GraphicsPath())
             {
-                pen.LineJoin = LineJoin.Round;
-                pen.StartCap = LineCap.Round;
-                pen.EndCap = LineCap.Round;
-                g.DrawLines(pen, points);
+                body.AddPolygon(can);
+                var colors = new Color[at.Length];
+                for (int i = 0; i < at.Length; i++)
+                {
+                    double t = at[i];
+                    double kk = 0.62 + 0.62 * Math.Sin(t * Math.PI * 0.95 + 0.1) + (t > 0.12 && t < 0.26 ? 0.2 : 0);
+                    colors[i] = Color.FromArgb(Math.Min(255, (int)(metal.R * kk)), Math.Min(255, (int)(metal.G * kk)), Math.Min(255, (int)(metal.B * kk)));
+                }
+                using (var brush = new LinearGradientBrush(can[0], can[3], colors[0], colors[colors.Length - 1]))
+                {
+                    brush.InterpolationColors = new ColorBlend { Colors = colors, Positions = at };
+                    g.FillPath(brush, body);
+                }
+                var state = g.Save();
+                g.SetClip(body, CombineMode.Intersect);
+                PointF L(PointF p, PointF q, float t) { return new PointF(p.X + (q.X - p.X) * t, p.Y + (q.Y - p.Y) * t); }
+                var band = new[] { L(can[1], can[0], 0.38f), L(can[2], can[3], 0.38f), L(can[2], can[3], 0.62f), L(can[1], can[0], 0.62f) };
+                using (var bandBrush = new SolidBrush(Color.FromArgb(230, 238, 238, 240))) g.FillPolygon(bandBrush, band);
+                g.Restore(state);
+                using (var pen = new Pen(Color.FromArgb(70, 72, 78), Math.Max(1f, r * 0.05f)) { LineJoin = LineJoin.Round })
+                    g.DrawPolygon(pen, can);
+                using (var pen = new Pen(Color.FromArgb(225, 227, 232), Math.Max(1.5f, r * 0.1f)))
+                    g.DrawLine(pen, can[1], can[2]);
             }
+
+            // the drop of paint (blue) and the floor line
+            using (var blue = new SolidBrush(Color.FromArgb(40, 110, 230)))
+            {
+                g.FillPolygon(blue, new[] { new PointF(lip.X, lip.Y - k * 0.2f), new PointF(lip.X + k * 0.3f, lip.Y + k * 0.35f), new PointF(lip.X - k * 0.3f, lip.Y + k * 0.35f) });
+                g.FillEllipse(blue, lip.X - k * 0.3f, lip.Y + k * 0.08f, k * 0.6f, k * 0.6f);
+            }
+            using (var shine = new SolidBrush(Color.FromArgb(120, 255, 255, 255)))
+                g.FillEllipse(shine, lip.X - k * 0.17f, lip.Y + k * 0.22f, k * 0.12f * 1.5f, k * 0.16f * 1.5f);
+            using (var line = new SolidBrush(Color.FromArgb(95, 97, 103)))
+                g.FillRectangle(line, floor);
         }
 
         // The text of a row is centered with the line box of its font, whose glyphs sit above the middle
