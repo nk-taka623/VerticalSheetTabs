@@ -510,7 +510,7 @@ namespace VerticalSheetTabs
                     }
                 }
                 _folderOpen = seen;
-                if (sheetChanged || toggled != null) StartWobble(sheetChanged ? _active : null, toggled, opened);
+                if ((sheetChanged || toggled != null) && !_ghostOn) StartWobble(sheetChanged ? _active : null, toggled, opened);
             }
 
             // the tabs scroll inside the area above the pinned "+" row
@@ -524,8 +524,11 @@ namespace VerticalSheetTabs
                 if (row.Top > ViewHeight) break;
                 if (row.Bottom < 0) continue;
                 if (_animClock != null && (_rows[i].IsFolder ? (_animFolders != null && _animFolders.Contains(_rows[i].FolderId)) : (_rows[i].Sheet == _animSheet || (_animSheets != null && _rows[i].Sheet != null && _animSheets.Contains(_rows[i].Sheet))))) wobbling.Add(i);
-                else if (_rows[i].IsFolder) DrawFolder(g, _rows[i], row);
-                else DrawTab(g, _rows[i], row);
+                else
+                {
+                    if (_rows[i].IsFolder) DrawFolder(g, _rows[i], row); else DrawTab(g, _rows[i], row);
+                    if (IsFadedRow(_rows[i])) DrawFadedPlace(g, row);
+                }
             }
             foreach (int index in wobbling)
             {
@@ -550,10 +553,179 @@ namespace VerticalSheetTabs
                 int y = _dropIndex < _rows.Count ? RowRect(_dropIndex).Top : RowRect(_rows.Count - 1).Bottom;
                 DrawDropMarker(g, y, _dropInside ? Px(FolderIndent) : 0);
             }
+            DrawGhost(g);
             g.ResetClip();
 
             if (ShowAllButtons) DrawAllButtons(g);
             if (!IsSample) DrawPlus(g);
+        }
+
+        // ---- the drag ghost: while rows are dragged, a half transparent copy of the first one follows the pointer ----
+
+        private const double GhostAlpha = 0.62;
+        private bool _ghostOn;
+        private bool _ghostSettling;
+        private Bitmap _ghostBmp;
+        private PointF _ghostPos, _ghostTarget;
+        private PointF _ghostGrab;
+        private int _ghostRowLeft, _ghostRowTop;
+        private int _ghostCount;
+        private bool _dragCopy;
+        private string _ghostWobbleSheet;
+        private HashSet<string> _fadeSheets = new HashSet<string>();
+        private HashSet<string> _fadeFolders = new HashSet<string>();
+        private System.Diagnostics.Stopwatch _ghostClock;
+        private long _ghostLast, _settleStart;
+
+        private int GhostPad { get { return Px(10); } }
+
+        // The first dragged row is drawn once into a bitmap (with room around it for the shadow).
+        private void BeginGhost(int index)
+        {
+            EndGhost();
+            if (IsSample || index < 0 || index >= _rows.Count) return;
+            Rectangle row = RowRect(index);
+            if (row.Width < 4 || row.Height < 4) return;
+            int pad = GhostPad;
+            var bmp = new Bitmap(row.Width, row.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Theme.BarBack);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                var local = new Rectangle(0, 0, row.Width, row.Height);
+                if (_rows[index].IsFolder) DrawFolder(g, _rows[index], local); else DrawTab(g, _rows[index], local);
+            }
+            _ghostBmp = bmp;
+            _ghostRowLeft = row.Left;
+            _ghostRowTop = row.Top;
+            _ghostGrab = new PointF(_dragOrigin.X - row.Left, _dragOrigin.Y - row.Top);
+            _ghostPos = _ghostTarget = new PointF(row.Left, row.Top);
+            _ghostCount = _dragSheets.Count + _dragFolders.Count;
+            _ghostSettling = false;
+            _ghostOn = true;
+            _ghostClock = System.Diagnostics.Stopwatch.StartNew();
+            _ghostLast = 0;
+            // the places the rows are dragged from stay faint (not while copying)
+            _fadeSheets = new HashSet<string>(_dragSheets);
+            _fadeFolders = new HashSet<string>(_dragFolders);
+            foreach (StripRow r in _rows)
+                if (r.IsFolder && _dragFolders.Contains(r.FolderId)) foreach (string m in r.Members) _fadeSheets.Add(m);
+        }
+
+        private void EndGhost()
+        {
+            _ghostOn = false;
+            _ghostSettling = false;
+            if (_ghostBmp != null) { _ghostBmp.Dispose(); _ghostBmp = null; }
+            _fadeSheets.Clear();
+            _fadeFolders.Clear();
+            _ghostWobbleSheet = null;
+            _ghostClock = null;
+            Invalidate();
+        }
+
+        // The ghost follows the pointer (a little sideways, the rows are as wide as the pane).
+        private void MoveGhost(Point client)
+        {
+            if (!_ghostOn || _ghostSettling) return;
+            float dx = client.X - _dragOrigin.X;
+            float limit = Px(8);
+            dx = Math.Max(-limit, Math.Min(limit, dx));
+            _ghostTarget = new PointF(_ghostRowLeft + dx, client.Y - _ghostGrab.Y);
+            Invalidate();
+        }
+
+        // The drop: the ghost glides into the place and turns solid.
+        private void SettleGhost(int markerY, bool movedDown)
+        {
+            if (!_ghostOn) return;
+            _ghostSettling = true;
+            _ghostTarget = new PointF(_ghostRowLeft, movedDown ? markerY - RowPx : markerY);
+            _settleStart = _ghostClock.ElapsedMilliseconds;
+            Invalidate();
+        }
+
+        private bool IsFadedRow(StripRow r)
+        {
+            if (!_ghostOn || _dragCopy) return false;
+            return r.IsFolder ? _fadeFolders.Contains(r.FolderId) : (r.Sheet != null && _fadeSheets.Contains(r.Sheet));
+        }
+
+        // Drawn on top of the rows, inside the clip of the rows.
+        private void DrawGhost(Graphics g)
+        {
+            if (!_ghostOn || _ghostBmp == null) return;
+            long now = _ghostClock.ElapsedMilliseconds;
+            double dt = Math.Max(1, now - _ghostLast);
+            _ghostLast = now;
+            double tau = _ghostSettling ? 38 : 55; // smoothing time, in milliseconds
+            double k = 1 - Math.Exp(-dt / tau);
+            float dxp = _ghostTarget.X - _ghostPos.X, dyp = _ghostTarget.Y - _ghostPos.Y;
+            _ghostPos = new PointF(_ghostPos.X + (float)(dxp * k), _ghostPos.Y + (float)(dyp * k));
+            bool arrived = Math.Abs(dxp) < 1.2 && Math.Abs(dyp) < 1.2;
+
+            double alpha = GhostAlpha;
+            if (_ghostSettling)
+            {
+                double t = Math.Min(1.0, (now - _settleStart) / 140.0);
+                alpha = GhostAlpha + (1 - GhostAlpha) * t;
+                if (arrived || now - _settleStart > 260)
+                {
+                    string wobble = _ghostWobbleSheet;
+                    EndGhost();
+                    if (wobble != null) StartWobble(wobble, null, null);
+                    return;
+                }
+            }
+
+            int w = _ghostBmp.Width, h = _ghostBmp.Height;
+            var dest = new Rectangle((int)Math.Round(_ghostPos.X), (int)Math.Round(_ghostPos.Y), w, h);
+            int radius = Px(8);
+            // soft shadow around and below the ghost
+            for (int i = 4; i >= 1; i--)
+            {
+                int grow = Px(i * 1.4);
+                var sr = new Rectangle(dest.Left + Px(3) - grow, dest.Top + Px(6) - grow / 2, w - Px(6) + grow * 2, h - Px(10) + grow);
+                using (GraphicsPath path = RoundedRect(sr, radius + grow))
+                using (var brush = new SolidBrush(Color.FromArgb((int)(10 * (_ghostSettling ? 1 - 0.5 * (alpha - GhostAlpha) / (1 - GhostAlpha) : 1)), 0, 0, 0)))
+                    g.FillPath(brush, path);
+            }
+            var shape = new Rectangle(dest.Left + Px(InsetLeft) - Px(2), dest.Top + Px(PlainTop), w - Px(InsetLeft) * 2 + Px(4), h - Px(PlainTop) - Px(BottomInset));
+            GraphicsState state = g.Save();
+            using (GraphicsPath clip = RoundedRect(shape, radius))
+            {
+                g.SetClip(clip, CombineMode.Intersect);
+                using (var attr = new System.Drawing.Imaging.ImageAttributes())
+                {
+                    var matrix = new System.Drawing.Imaging.ColorMatrix { Matrix33 = (float)alpha };
+                    attr.SetColorMatrix(matrix, System.Drawing.Imaging.ColorMatrixFlag.Default, System.Drawing.Imaging.ColorAdjustType.Bitmap);
+                    g.DrawImage(_ghostBmp, dest, 0, 0, w, h, GraphicsUnit.Pixel, attr);
+                }
+            }
+            g.Restore(state);
+            using (GraphicsPath edge = RoundedRect(shape, radius))
+            using (var pen = new Pen(Color.FromArgb((int)(70 * alpha), 0, 0, 0), 1f)) g.DrawPath(pen, edge);
+
+            // badges: the number of dragged rows, and "+" while copying
+            if (_ghostCount > 1) DrawGhostBadge(g, _ghostCount.ToString(), new Point(shape.Right - Px(4), shape.Top), alpha);
+            if (_dragCopy) DrawGhostBadge(g, "+", new Point(shape.Left + Px(4), shape.Top), alpha);
+
+            if (!arrived || _ghostSettling) Invalidate();
+        }
+
+        private void DrawGhostBadge(Graphics g, string text, Point center, double alpha)
+        {
+            int d = Px(18);
+            var box = new Rectangle(center.X - d / 2, center.Y - d / 2, d, d);
+            using (var brush = new SolidBrush(Color.FromArgb(235, 16, 124, 65))) g.FillEllipse(brush, box);
+            using (var pen = new Pen(Color.White, Math.Max(1f, Px(1.2)))) g.DrawEllipse(pen, box);
+            using (var font = new Font(TabFont.FontFamily, TabFont.Size * 0.8f, FontStyle.Bold, TabFont.Unit))
+            using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
+            {
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                g.DrawString(text, font, Brushes.White, box, format);
+            }
         }
 
         public const int OutlineLevels = 9;
@@ -848,6 +1020,14 @@ namespace VerticalSheetTabs
 
         // Excel marks the place a dragged tab will land with a small black triangle; here it points
         // into the stack from the left edge.
+        // The place a dragged row comes from: the row, mostly covered with the background.
+        private void DrawFadedPlace(Graphics g, Rectangle row)
+        {
+            var area = new Rectangle(row.Left + Px(InsetLeft) - Px(3), row.Top + Px(PlainTop) - 1, row.Width - Px(InsetLeft) * 2 + Px(6), row.Height - Px(PlainTop) - Px(BottomInset) + 2);
+            using (GraphicsPath path = RoundedRect(area, Px(8)))
+            using (var brush = new SolidBrush(Color.FromArgb(185, Theme.BarBack))) g.FillPath(brush, path);
+        }
+
         private void DrawDropMarker(Graphics g, int y, int x)
         {
             int w = Px(MarkerWidth), h = Px(MarkerHeight);
@@ -1995,6 +2175,8 @@ namespace VerticalSheetTabs
             }
             _dragNames = _dragSheets;
             _dragging = true;
+            _dragCopy = (Control.ModifierKeys & Keys.Control) != 0;
+            BeginGhost(index);
             try
             {
                 DoDragDrop(row.IsFolder ? row.FolderName : row.Sheet, DragDropEffects.Move | DragDropEffects.Copy);
@@ -2003,6 +2185,7 @@ namespace VerticalSheetTabs
             {
                 _dragging = false;
                 SetDropIndex(-1);
+                if (_ghostOn && !_ghostSettling) EndGhost();
             }
         }
 
@@ -2021,8 +2204,10 @@ namespace VerticalSheetTabs
                 return;
             }
             e.Effect = IsCopy(e) ? DragDropEffects.Copy : DragDropEffects.Move;
+            _dragCopy = IsCopy(e);
 
             Point p = PointToClient(new Point(e.X, e.Y));
+            MoveGhost(p);
             ScrollNearEdge(p);
             if (HasFolders) ResolveFolderDrop(p);
             else { _dropInside = false; _dropInto = _dropBeforeSheet = _dropBeforeFolder = null; SetDropIndex(InsertIndexAt(p)); }
@@ -2032,6 +2217,7 @@ namespace VerticalSheetTabs
         {
             base.OnDragLeave(e);
             SetDropIndex(-1);
+            if (_ghostOn && !_ghostSettling) EndGhost();
         }
 
         protected override void OnDragDrop(DragEventArgs e)
@@ -2039,6 +2225,15 @@ namespace VerticalSheetTabs
             base.OnDragDrop(e);
             int target = _dropIndex;
             string into = _dropInto, beforeSheet = _dropBeforeSheet, beforeFolder = _dropBeforeFolder;
+            // where the ghost settles: the drop mark; a row dragged down leaves its own place above the mark
+            if (_ghostOn && target >= 0 && _rows.Count > 0)
+            {
+                int markY = target < _rows.Count ? RowRect(target).Top : RowRect(_rows.Count - 1).Bottom;
+                bool down = markY > _ghostRowTop && !_dragCopy;
+                SettleGhost(markY, down);
+                if (_dragSheets.Count == 1 && _dragFolders.Count == 0 && !_dragCopy) _ghostWobbleSheet = _dragSheets[0];
+            }
+            else if (_ghostOn) EndGhost();
             SetDropIndex(-1);
             if (!_dragging || target < 0 || _dragNames.Count + _dragFolders.Count == 0) return;
 
