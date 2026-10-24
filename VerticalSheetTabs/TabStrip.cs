@@ -91,7 +91,7 @@ namespace VerticalSheetTabs
         private const double BarWidth = 6, BarInset = 9, BarMargin = 4, BarRoom = 12, BarScale = 0.75; // 0.75 times the first size (8 wide); moved in by one bar width (Agents.md 12.132)
         // the check badge marker at the left of the name of the active sheet: the room it takes before the text (Agents.md 12.131)
         // The badges at the right end of a row: each takes a step of 18 DIP, the first one stands 6 DIP from the end (Agents.md 12.190).
-        private const double RowBadgeStep = 18, RowBadgeRadius = 7.5, RowBadgeEdge = 11;
+        private const double RowBadgeStep = 18, RowBadgeRadius = 7.5, RowBadgeEdge = 6;
         private const double BadgeRoom = 12, BadgeScale = 0.75; // the badge is 0.75 times the first size (Agents.md 12.132)
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
@@ -1903,6 +1903,8 @@ namespace VerticalSheetTabs
             return false;
         }
 
+        private bool _protectAsking;
+
         private void CycleProgress(string sheet)
         {
             BadgeInfo b;
@@ -1911,7 +1913,10 @@ namespace VerticalSheetTabs
             {
                 // "done": the dialog of Excel to protect the sheet. A sheet that is already protected stays so: the mark does not take the
                 // protection off (that is done by "Unprotect Sheet" of the menu or of the ribbon, Agents.md 12.207)
-                if (b != null && !b.Protected && ProgressProtectRequested != null) ProgressProtectRequested(sheet);
+                if (b == null || b.Protected || ProgressProtectRequested == null || _protectAsking) return;
+                _protectAsking = true; // (the request opens Excel's dialog and does not return until it is closed: clicks that come meanwhile are ignored)
+                try { ProgressProtectRequested(sheet); }
+                finally { _protectAsking = false; }
                 return;
             }
             if (ProgressRequested != null) ProgressRequested(new List<string> { sheet }, now + 1);
