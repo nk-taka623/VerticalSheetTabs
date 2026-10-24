@@ -22,6 +22,8 @@ namespace VerticalSheetTabs
             // Pane width minus content width (title bar border, scrollbar gap); measured once.
             public int Chrome;
             public bool Initialized;
+            // Excel's "Protect Sheet" dialog is open because of a click on a done mark: a second request must not start another one.
+            public bool ProtectAsking;
             public bool InitPending;
             // Visibility changes we cause ourselves must not be mistaken for the user closing the pane.
             public DateTime IgnoreVisibleUntil;
@@ -849,6 +851,8 @@ namespace VerticalSheetTabs
         // is read at every tick), and the mark follows.
         private void ToggleSheetProtect(Entry entry, string sheet)
         {
+            if (entry.ProtectAsking) return; // (the dialog is open already; a second click, or the second click of a double click, does nothing)
+            entry.ProtectAsking = true;
             try
             {
                 var target = entry.Workbook.Sheets[sheet] as Excel.Worksheet;
@@ -860,6 +864,10 @@ namespace VerticalSheetTabs
             catch (Exception)
             {
                 // Excel is busy.
+            }
+            finally
+            {
+                entry.ProtectAsking = false;
             }
         }
 

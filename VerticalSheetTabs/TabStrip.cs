@@ -1903,6 +1903,8 @@ namespace VerticalSheetTabs
             return false;
         }
 
+        private bool _protectAsking;
+
         private void CycleProgress(string sheet)
         {
             BadgeInfo b;
@@ -1911,7 +1913,10 @@ namespace VerticalSheetTabs
             {
                 // "done": the dialog of Excel to protect the sheet. A sheet that is already protected stays so: the mark does not take the
                 // protection off (that is done by "Unprotect Sheet" of the menu or of the ribbon, Agents.md 12.207)
-                if (b != null && !b.Protected && ProgressProtectRequested != null) ProgressProtectRequested(sheet);
+                if (b == null || b.Protected || ProgressProtectRequested == null || _protectAsking) return;
+                _protectAsking = true; // (the request opens Excel's dialog and does not return until it is closed: clicks that come meanwhile are ignored)
+                try { ProgressProtectRequested(sheet); }
+                finally { _protectAsking = false; }
                 return;
             }
             if (ProgressRequested != null) ProgressRequested(new List<string> { sheet }, now + 1);
