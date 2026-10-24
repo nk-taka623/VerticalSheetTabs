@@ -54,6 +54,8 @@ namespace VerticalSheetTabs
         public const string WobbleName = "VTab.Wobble";       // string "None" / "Shake" / "Wobble" / "Jelly" / "Bounce" / "Pulse" / "Swing" / "Random" (default "None"; Agents.md 12.141)
         public const string WobbleAmpName = "VTab.WobbleAmp"; // number, percent (40 to 200, default 100)
         public const string WobbleDurName = "VTab.WobbleDur"; // number, milliseconds (300 to 1200, default 600)
+        public const string WobbleSoundName = "VTab.WobbleSound";   // string "On" / "Off" (default "Off"; Agents.md 12.172)
+        public const string WobbleVolumeName = "VTab.WobbleVolume"; // number 0 to 100 (default 60)
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
         public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "Crystal"
 
@@ -86,6 +88,10 @@ namespace VerticalSheetTabs
 
         public int WobbleDur { get; set; }
 
+        public bool WobbleSound { get; set; }
+
+        public int WobbleVolume { get; set; }
+
         public WorkbookSettings()
         {
             IsFirstOpen = true;
@@ -100,6 +106,8 @@ namespace VerticalSheetTabs
             Wobble = WobbleType.None;
             WobbleAmp = WobbleMotion.AmpDefault;
             WobbleDur = WobbleMotion.DurDefault;
+            WobbleSound = false;
+            WobbleVolume = WobbleSounds.VolumeDefault;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
@@ -149,6 +157,10 @@ namespace VerticalSheetTabs
                 if (wobbleAmp != null) s.WobbleAmp = Math.Max(WobbleMotion.AmpMin, Math.Min(WobbleMotion.AmpMax, Convert.ToInt32((object)wobbleAmp.Value)));
                 dynamic wobbleDur = Find(props, WobbleDurName);
                 if (wobbleDur != null) s.WobbleDur = Math.Max(WobbleMotion.DurMin, Math.Min(WobbleMotion.DurMax, Convert.ToInt32((object)wobbleDur.Value)));
+                dynamic wobbleSound = Find(props, WobbleSoundName);
+                if (wobbleSound != null) s.WobbleSound = (string)wobbleSound.Value == "On";
+                dynamic wobbleVolume = Find(props, WobbleVolumeName);
+                if (wobbleVolume != null) s.WobbleVolume = Math.Max(0, Math.Min(100, Convert.ToInt32((object)wobbleVolume.Value)));
                 if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
                 if (level != null)
                 {
@@ -184,6 +196,8 @@ namespace VerticalSheetTabs
                 Write(props, WobbleName, PropTypeString, Wobble.ToString());
                 Write(props, WobbleAmpName, PropTypeNumber, WobbleAmp);
                 Write(props, WobbleDurName, PropTypeNumber, WobbleDur);
+                Write(props, WobbleSoundName, PropTypeString, WobbleSound ? "On" : "Off");
+                Write(props, WobbleVolumeName, PropTypeNumber, WobbleVolume);
             }
             catch (Exception)
             {
