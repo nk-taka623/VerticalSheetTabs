@@ -53,6 +53,11 @@ namespace VerticalSheetTabs
             public bool KeysGuessed;
             // The last SelectSheets really changed the selection of Excel (and the focus may go to the sheet).
             public bool SelectionChanged;
+            // The sheets seen last (Agents.md 12.186); written to the workbook when it is saved.
+            public SheetHistory History = new SheetHistory();
+            // The active sheet and the sheet names the history was last updated for.
+            public string HistActive;
+            public string HistNames;
         }
 
         private readonly CustomTaskPaneCollection _collection;
@@ -101,6 +106,7 @@ namespace VerticalSheetTabs
             var entry = new Entry { Pane = pane, Control = control, Window = window, Workbook = workbook, Settings = settings };
             entry.QuietRegroup = settings.NameRule;
             entry.Folders = FolderStore.Load(workbook);
+            entry.History = HistoryStore.Load(workbook);
             _entries[hwnd] = entry;
 
             control.OutlineVisible = settings.OutlineVisible;
@@ -119,6 +125,11 @@ namespace VerticalSheetTabs
                 SelectSheets(entry, names, active);
             };
             control.GridFocusRequested += hadFocus => FocusGrid(entry, hadFocus);
+            control.GridFocusForced += () => { entry.SelectionChanged = true; FocusGrid(entry, true); };
+            control.BackRequested += () => NavigateHistory(entry, 1);
+            control.ForwardRequested += () => NavigateHistory(entry, -1);
+            control.HistoryProvider = () => HistoryItems(entry);
+            control.HistoryJumpRequested += key => JumpToHistory(entry, key);
             control.ViewCodeRequested += () => RunExcelCommand(entry, "ViewCode");
             control.ProtectSheetRequested += () => RunExcelCommand(entry, "SheetProtect");
             control.TabColorRequested += (names, choice) => ApplyTabColor(entry, names, choice);
@@ -368,6 +379,7 @@ namespace VerticalSheetTabs
                 catch (Exception)
                 {
                 }
+                HistoryStore.Save(entry.Workbook, entry.History);
                 try
                 {
                     entry.Settings.Side = entry.Pane.DockPosition == Office.MsoCTPDockPosition.msoCTPDockPositionRight
@@ -577,6 +589,7 @@ namespace VerticalSheetTabs
                 if (selected.Count == 0 && active != null) selected.Add(active);
 
                 entry.Control.ActiveSheetProtected = IsSheetProtected(activeSheet);
+                TrackHistory(entry, activeSheet, active, string.Join("|", allNames));
                 List<StripRow> rows = BuildRows(entry, allNames, visibleAt);
                 entry.Control.SetSheets(names, active, selected, colors, rows);
                 return true;
@@ -675,17 +688,125 @@ namespace VerticalSheetTabs
                 {
                     if (!nameOf.TryGetValue(code, out name)) continue;
                     folderRow.Members.Add(name);
-                    if (!node.Expanded) continue;
                     var sheetRow = new StripRow { Sheet = name, Indented = true };
                     if (rule)
                     {
                         sheetRow.Display = NameRule.BaseOf(name);
                         sheetRow.EditLimit = Math.Max(1, NameRule.MaxCombined - node.Name.Length);
                     }
-                    rows.Add(sheetRow);
+                    folderRow.Children.Add(sheetRow); // (the search looks at the sheets of closed folders as well)
+                    if (node.Expanded) rows.Add(sheetRow);
                 }
             }
             return rows;
+        }
+
+        // ---- the sheets seen last (Agents.md 12.186) ----
+
+        // Called by the sync: a sheet that became active (by a click, a key, a macro, the tabs of Excel) is put into the history;
+        // when sheets were added, renamed or deleted, the sheets that no longer exist are taken out.
+        private static void TrackHistory(Entry entry, object activeSheet, string activeName, string namesSignature)
+        {
+            try
+            {
+                if (activeName != null && activeSheet != null && activeName != entry.HistActive)
+                {
+                    entry.HistActive = activeName;
+                    entry.History.Push(FolderStore.KeyOf(activeSheet, true));
+                }
+                if (namesSignature != entry.HistNames)
+                {
+                    entry.HistNames = namesSignature;
+                    if (entry.History.Keys.Count > 0)
+                    {
+                        bool complete;
+                        List<string> keys = FolderStore.SheetKeys(entry.Workbook, false, true, out complete);
+                        if (complete) entry.History.Prune(new HashSet<string>(keys));
+                    }
+                }
+                entry.Control.SetNavigation(entry.History.CanBack, entry.History.CanForward);
+            }
+            catch (Exception)
+            {
+                // Excel is busy; the next tick tries again.
+            }
+        }
+
+        // The visible sheets by key (what the history can go to).
+        private static Dictionary<string, string> VisibleSheetsByKey(Entry entry)
+        {
+            var map = new Dictionary<string, string>();
+            List<string> keys = FolderStore.SheetKeys(entry.Workbook, false);
+            int i = 0;
+            foreach (object sheet in entry.Workbook.Sheets)
+            {
+                string name;
+                if (IsVisibleSheet(sheet, out name) && i < keys.Count) map[keys[i]] = name;
+                i++;
+            }
+            return map;
+        }
+
+        // 1 = back (older), -1 = forward (newer)
+        private void NavigateHistory(Entry entry, int direction)
+        {
+            try
+            {
+                Dictionary<string, string> map = VisibleSheetsByKey(entry);
+                int at = entry.History.Find(direction, map.ContainsKey);
+                if (at < 0) return;
+                GoToHistory(entry, at, map);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        private void JumpToHistory(Entry entry, string key)
+        {
+            try
+            {
+                Dictionary<string, string> map = VisibleSheetsByKey(entry);
+                int at = entry.History.Keys.IndexOf(key);
+                if (at < 0 || !map.ContainsKey(key)) return;
+                GoToHistory(entry, at, map);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        private void GoToHistory(Entry entry, int at, Dictionary<string, string> map)
+        {
+            string key = entry.History.Keys[at];
+            string name = map[key];
+            CommitCellEdit(entry);
+            entry.History.Cursor = at; // the sync then finds the active sheet where the history stands: nothing is added
+            // a sheet in a closed folder: the folder is opened to show it
+            FolderNode folder = entry.Folders.Nodes.Find(n => n.IsFolder && !n.Expanded && n.Sheets.Contains(key));
+            if (folder != null) ToggleFolder(entry, folder.FolderId);
+            SelectSheets(entry, new List<string> { name }, name);
+            entry.Control.SetNavigation(entry.History.CanBack, entry.History.CanForward);
+            FocusGrid(entry, true);
+        }
+
+        private static List<HistoryItem> HistoryItems(Entry entry)
+        {
+            var items = new List<HistoryItem>();
+            try
+            {
+                Dictionary<string, string> map = VisibleSheetsByKey(entry);
+                for (int i = 0; i < entry.History.Keys.Count && items.Count < 10; i++)
+                {
+                    string name;
+                    if (map.TryGetValue(entry.History.Keys[i], out name))
+                        items.Add(new HistoryItem { Key = entry.History.Keys[i], Name = name, Current = i == entry.History.Cursor });
+                }
+            }
+            catch (Exception)
+            {
+            }
+            return items;
         }
 
         // A folder's color as 0xBBGGRR, -1 for none.

@@ -32,6 +32,8 @@ namespace VerticalSheetTabs
         public bool InGroup;
         // Folder: its visible sheets (also while it is closed).
         public List<string> Members = new List<string>();
+        // Folder: its sheet rows, also while the folder is closed (the search shows them without opening the folder).
+        public List<StripRow> Children = new List<StripRow>();
 
         public bool IsFolder { get { return FolderId != null; } }
 
@@ -42,6 +44,14 @@ namespace VerticalSheetTabs
             return IsFolder ? "F|" + FolderId + "|" + FolderName + "|" + Expanded + "|" + ColorBgr + "|" + SyncColor + "|" + EditLimit + "|" + string.Join("|", Members)
                 : "S|" + Sheet + "|" + Indented + "|" + Display + "|" + EditLimit;
         }
+    }
+
+    // A line of the menu of the sheets seen last (Agents.md 12.186).
+    public class HistoryItem
+    {
+        public string Key;
+        public string Name;
+        public bool Current;
     }
 
     public class TabStrip : Control
@@ -173,6 +183,7 @@ namespace VerticalSheetTabs
             TabStop = true;
             AllowDrop = true;
             BackColor = _theme.BarBack;
+            CreateSearchBox();
             _scroll.Dock = DockStyle.None;
             _scroll.Scroll += (s, e) => { _scrollY = _scroll.Value; Invalidate(); };
             Controls.Add(_scroll);
@@ -253,10 +264,11 @@ namespace VerticalSheetTabs
             {
                 EndRename(false);
                 _names = new List<string>(names);
-                _rows = newRows;
+                _baseRows = newRows;
                 _folderCount = newRows.Count(r => r.IsFolder);
                 _rowSignature = newSignature;
-                UpdateScrollBar();
+                ApplyFilter();
+                LayoutSearch();
             }
             if (!userBusy)
             {
@@ -295,7 +307,9 @@ namespace VerticalSheetTabs
         private int _folderCount;
         private int _headerDown, _headerHot; // 0 none, 1 open all, 2 close all
         private bool ShowAllButtons { get { return !IsSample && _folderCount >= 1; } }
-        private int HeaderPx { get { return ShowAllButtons ? Px(HeaderHeight) : 0; } }
+        private int BandPx { get { return ShowAllButtons ? Px(HeaderHeight) : 0; } }
+        // The rows start below the tool row (back, forward, search) and the band.
+        private int HeaderPx { get { return ToolPx + BandPx; } }
         private int AreaHeight { get { return Math.Max(0, ViewHeight - HeaderPx); } }
 
         public event Action<bool> AllFoldersRequested;
@@ -305,13 +319,543 @@ namespace VerticalSheetTabs
         {
             int gap = Math.Max(1, Px(HeaderGap));
             int w = Math.Max(1, (ClientSize.Width - 3 * gap) / 2);
-            return new Rectangle(open ? gap : 2 * gap + w, gap, w, Math.Max(1, HeaderPx - 2 * gap));
+            return new Rectangle(open ? gap : 2 * gap + w, ToolPx + gap, w, Math.Max(1, BandPx - 2 * gap));
         }
 
         private int AllButtonAt(Point p)
         {
             if (!ShowAllButtons) return 0;
             return AllButtonRect(true).Contains(p) ? 1 : AllButtonRect(false).Contains(p) ? 2 : 0;
+        }
+
+
+        // ---- the tool row: back, forward, search box, folder switch (Agents.md 12.186) ----
+
+        private const double ToolHeight = 38, ToolGap = 2.4, ToolButton = 22, ToolBoxHeight = 24, ToolRadius = 4, ToolSmallGap = 1.6;
+        private List<StripRow> _baseRows = new List<StripRow>(); // the rows as the workbook has them
+        private TextBox _search;
+        private string _query = "";
+        private bool _folderSearch;                 // the folder switch: search the folder names instead of the sheet names
+        private int _searchSel = -1;                // the row Up/Down chose among the results
+        private int _toolHot, _toolDown;            // 1 back, 2 forward, 3 clear, 4 folder switch
+        private bool _canBack, _canForward;
+        private System.Windows.Forms.Timer _longPress;
+        private bool _longPressShown;
+
+        public event Action BackRequested;
+        public event Action ForwardRequested;
+        // The search is over (Esc, or a sheet was chosen with Enter): the keyboard focus goes back to the sheet.
+        public event Action GridFocusForced;
+        // Asks for the sheets seen last (the menu of the back / forward buttons); the list is made by the pane.
+        public Func<List<HistoryItem>> HistoryProvider;
+        public event Action<string> HistoryJumpRequested;
+
+        private int ToolPx { get { return IsSample ? 0 : Px(ToolHeight); } }
+        private bool Filtering { get { return !IsSample && _query.Length > 0; } }
+
+        public void SetNavigation(bool canBack, bool canForward)
+        {
+            if (_canBack == canBack && _canForward == canForward) return;
+            _canBack = canBack;
+            _canForward = canForward;
+            Invalidate();
+        }
+
+        private Rectangle ToolBackRect()
+        {
+            int s = Px(ToolButton);
+            return new Rectangle(Px(ToolGap), (ToolPx - s) / 2, s, s);
+        }
+
+        private Rectangle ToolForwardRect()
+        {
+            Rectangle b = ToolBackRect();
+            return new Rectangle(b.Right + Px(ToolSmallGap), b.Top, b.Width, b.Height);
+        }
+
+        private Rectangle ToolFolderRect()
+        {
+            int s = Px(ToolButton);
+            return new Rectangle(ClientSize.Width - Px(ToolGap) - s, (ToolPx - s) / 2, s, s);
+        }
+
+        private Rectangle ToolBoxRect()
+        {
+            int left = ToolForwardRect().Right + Px(ToolGap);
+            int right = ToolFolderRect().Left - Px(ToolGap);
+            int h = Px(ToolBoxHeight);
+            return new Rectangle(left, (ToolPx - h) / 2, Math.Max(Px(36), right - left), h);
+        }
+
+        private Rectangle ToolClearRect()
+        {
+            Rectangle box = ToolBoxRect();
+            int s = Px(16);
+            return new Rectangle(box.Right - s - Px(5), box.Top + (box.Height - s) / 2, s, s);
+        }
+
+        // The area of the text in the box, between the magnifier and the clear button.
+        private Rectangle ToolTextRect()
+        {
+            Rectangle box = ToolBoxRect();
+            int left = box.Left + Px(26);
+            int right = box.Right - Px(_query.Length > 0 ? 26 : 6);
+            return new Rectangle(left, box.Top + Px(3), Math.Max(Px(10), right - left), box.Height - Px(6));
+        }
+
+        private int ToolAt(Point p)
+        {
+            if (IsSample || p.Y >= ToolPx) return 0;
+            if (ToolBackRect().Contains(p)) return 1;
+            if (ToolForwardRect().Contains(p)) return 2;
+            if (_query.Length > 0 && ToolClearRect().Contains(p)) return 3;
+            if (ToolFolderRect().Contains(p)) return 4;
+            return ToolBoxRect().Contains(p) ? 5 : 0;
+        }
+
+        private void CreateSearchBox()
+        {
+            _search = new TextBox { BorderStyle = BorderStyle.None, Visible = false, TabStop = false, MaxLength = 64, AutoSize = false };
+            _search.TextChanged += (s, e) => OnQueryChanged();
+            _search.GotFocus += (s, e) => Invalidate();
+            _search.LostFocus += (s, e) => { UpdateSearchVisible(); Invalidate(); };
+            _search.KeyDown += SearchKeyDown;
+            Controls.Add(_search);
+        }
+
+        // The text box exists only while the box has the focus or a text (otherwise the box shows its hint).
+        private void UpdateSearchVisible()
+        {
+            if (_search == null) return;
+            bool show = !IsSample && (_search.Focused || _search.Text.Length > 0);
+            if (_search.Visible != show) _search.Visible = show;
+        }
+
+        private void LayoutSearch()
+        {
+            if (_search == null) return;
+            try
+            {
+                Rectangle t = ToolTextRect();
+                _search.Font = TabFont;
+                _search.BackColor = SearchFill();
+                _search.ForeColor = SearchText();
+                _search.Height = Math.Min(t.Height, _search.PreferredHeight);
+                _search.SetBounds(t.Left, t.Top + (t.Height - _search.Height) / 2, t.Width, _search.Height);
+                UpdateSearchVisible();
+            }
+            catch (Exception)
+            {
+                // The sizes are still settling during the first layout; the next resize fixes it.
+            }
+        }
+
+        private Color SearchFill() { return Theme.PlusHoverBack; }
+        private Color SearchText() { return Theme == TabTheme.Light ? TextColor : Color.FromArgb(235, 235, 235); }
+
+        // Ctrl+F, a click in the box, or typing in the pane.
+        public void FocusSearch(string first = null)
+        {
+            if (IsSample || _search == null) return;
+            _search.Visible = true;
+            LayoutSearch();
+            _search.Focus();
+            // (a click that activates the pane may give the focus back to the pane itself afterwards)
+            BeginInvoke(new Action(() =>
+            {
+                if (_search == null || _search.IsDisposed || _search.Focused) return;
+                _search.Visible = true;
+                _search.Focus();
+            }));
+            if (first != null)
+            {
+                _search.Text = first;
+                _search.SelectionStart = _search.Text.Length;
+            }
+            else _search.SelectAll();
+        }
+
+        private void OnQueryChanged()
+        {
+            string q = _search.Text.Trim();
+            _query = q;
+            ApplyFilter();
+            LayoutSearch();
+            UpdateSearchVisible();
+            Invalidate();
+        }
+
+        private void ClearSearch()
+        {
+            if (_search != null) _search.Text = "";
+        }
+
+        // Up / Down choose a result, Enter goes to it, Esc ends the search.
+        private void SearchKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Escape)
+            {
+                e.Handled = e.SuppressKeyPress = true;
+                if (_search.Text.Length > 0) ClearSearch();
+                else if (GridFocusForced != null) GridFocusForced();
+                return;
+            }
+            if (e.KeyCode == Keys.Down || e.KeyCode == Keys.Up)
+            {
+                e.Handled = e.SuppressKeyPress = true;
+                MoveSearchSelection(e.KeyCode == Keys.Down ? 1 : -1);
+                return;
+            }
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.Handled = e.SuppressKeyPress = true;
+                if (_searchSel < 0 || _searchSel >= _rows.Count) return;
+                StripRow row = _rows[_searchSel];
+                if (row.IsFolder)
+                {
+                    if (FolderToggleRequested != null) FolderToggleRequested(row.FolderId);
+                    return;
+                }
+                _selFolders.Clear();
+                _selected = new HashSet<string> { row.Sheet };
+                _active = row.Sheet;
+                ClearSearch();
+                Raise();
+                if (GridFocusForced != null) GridFocusForced();
+                return;
+            }
+            if (ModifierKeys == Keys.Control && e.KeyCode == Keys.S && ExcelCommandRequested != null)
+            {
+                e.Handled = e.SuppressKeyPress = true;
+                ExcelCommandRequested("FileSave");
+            }
+        }
+
+        private bool IsResultRow(StripRow r)
+        {
+            return _folderSearch ? r.IsFolder : !r.IsFolder;
+        }
+
+        private void MoveSearchSelection(int step)
+        {
+            if (_rows.Count == 0) return;
+            int i = _searchSel;
+            do { i += step; } while (i >= 0 && i < _rows.Count && !IsResultRow(_rows[i]));
+            if (i < 0 || i >= _rows.Count) return;
+            _searchSel = i;
+            EnsureVisible(i);
+            Invalidate();
+        }
+
+        // The number of results (sheets, or folders with the folder switch on).
+        private int ResultCount { get { return _rows.Count(IsResultRow); } }
+
+        // ---- the search itself ----
+
+        // Case and width are not told apart: letters are folded to lower case, full-width ASCII to half-width,
+        // half-width katakana (with their voiced marks) to full-width. The maps give, for each character of the
+        // folded text, where it came from in the original (so that the match can be marked in the name).
+        private static string Fold(string text, List<int> starts, List<int> ends)
+        {
+            const string kana = "ヲァィゥェォャュョッーアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン";
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                int len = 1;
+                char r;
+                if (c >= '\uFF01' && c <= '\uFF5E') r = char.ToLowerInvariant((char)(c - 0xFEE0));
+                else if (c == '\u3000') r = ' ';
+                else if (c >= '\uFF66' && c <= '\uFF9D')
+                {
+                    r = kana[c - 0xFF66];
+                    if (i + 1 < text.Length && text[i + 1] == '\uFF9E')
+                    {
+                        if ("カキクケコサシスセソタチツテトハヒフヘホ".IndexOf(r) >= 0) { r = (char)(r + 1); len = 2; }
+                        else if (r == 'ウ') { r = 'ヴ'; len = 2; }
+                    }
+                    else if (i + 1 < text.Length && text[i + 1] == '\uFF9F' && "ハヒフヘホ".IndexOf(r) >= 0) { r = (char)(r + 2); len = 2; }
+                }
+                else r = char.ToLowerInvariant(c);
+                sb.Append(r);
+                if (starts != null) { starts.Add(i); ends.Add(i + len); }
+                i += len - 1;
+            }
+            return sb.ToString();
+        }
+
+        private static bool FindMatch(string text, string query, out int start, out int length)
+        {
+            start = length = 0;
+            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(query)) return false;
+            var starts = new List<int>();
+            var ends = new List<int>();
+            string folded = Fold(text, starts, ends);
+            string q = Fold(query, null, null);
+            if (q.Length == 0) return false;
+            int at = folded.IndexOf(q, StringComparison.Ordinal);
+            if (at < 0) return false;
+            start = starts[at];
+            length = ends[at + q.Length - 1] - start;
+            return true;
+        }
+
+        private static bool Matches(string text, string query)
+        {
+            int s, l;
+            return FindMatch(text, query, out s, out l);
+        }
+
+        // The rows that are shown: all of them, or the results of the search. The sheets (with the folders around
+        // them, opened) whose names contain the text; with the folder switch on, the folders whose names do (each
+        // as it is, closed or open: opening it shows all its sheets).
+        private void ApplyFilter()
+        {
+            if (!Filtering)
+            {
+                MarkGroups(_baseRows); // (a search may have marked them for its own list)
+                _rows = _baseRows;
+                _searchSel = -1;
+            }
+            else
+            {
+                var result = new List<StripRow>();
+                foreach (StripRow row in _baseRows)
+                {
+                    if (row.Indented) continue; // the sheets of a folder are looked at through the folder
+                    if (row.IsFolder)
+                    {
+                        List<StripRow> kids = row.Children;
+                        if (_folderSearch)
+                        {
+                            if (!Matches(row.FolderName, _query)) continue;
+                            result.Add(row);
+                            if (row.Expanded) result.AddRange(kids);
+                        }
+                        else
+                        {
+                            List<StripRow> hits = kids.Where(k => Matches(k.Text, _query)).ToList();
+                            if (hits.Count == 0) continue;
+                            result.Add(new StripRow
+                            {
+                                FolderId = row.FolderId,
+                                FolderName = row.FolderName,
+                                Expanded = true,
+                                ColorBgr = row.ColorBgr,
+                                SyncColor = row.SyncColor,
+                                EditLimit = row.EditLimit,
+                                Members = row.Members
+                            });
+                            result.AddRange(hits);
+                        }
+                    }
+                    else if (!_folderSearch && Matches(row.Text, _query)) result.Add(row);
+                }
+                MarkGroups(result);
+                _rows = result;
+                int first = result.FindIndex(IsResultRow);
+                if (_searchSel < 0 || _searchSel >= result.Count || !IsResultRow(result[_searchSel])) _searchSel = first;
+            }
+            UpdateScrollBar();
+            if (_scrollY > 0 && !_scroll.Visible) _scrollY = 0;
+            Invalidate();
+        }
+
+        // The mark of the row Up / Down have chosen.
+        private void DrawSearchChoice(Graphics g)
+        {
+            if (!Filtering || _searchSel < 0 || _searchSel >= _rows.Count) return;
+            Rectangle row = RowRect(_searchSel);
+            var area = new Rectangle(row.Left + Px(1), row.Top + Px(PlainTop) - 1, row.Width - Px(2), row.Height - Px(PlainTop) - Px(BottomInset) + 2);
+            using (GraphicsPath path = RoundedRect(area, Px(7)))
+            using (var pen = new Pen(Underline, Math.Max(1.5f, Px(1.6))))
+                g.DrawPath(pen, path);
+        }
+
+        // Marks the part of a name the search found.
+        private void DrawMatch(Graphics g, string text, Font font, Rectangle textRect, StringFormat format, bool folder)
+        {
+            if (!Filtering || folder != _folderSearch) return;
+            int s, l;
+            if (!FindMatch(text, _query, out s, out l)) return;
+            try
+            {
+                using (var f = (StringFormat)format.Clone())
+                {
+                    f.SetMeasurableCharacterRanges(new[] { new CharacterRange(s, l) });
+                    Region[] regions = g.MeasureCharacterRanges(text, font, textRect, f);
+                    RectangleF b = regions[0].GetBounds(g);
+                    regions[0].Dispose();
+                    if (b.Width < 1) return;
+                    var box = Rectangle.Round(new RectangleF(b.Left - 1, b.Top + Px(3), b.Width + 2, Math.Max(1, b.Height - Px(5))));
+                    box.Intersect(textRect);
+                    using (GraphicsPath path = RoundedRect(box, Px(3)))
+                    using (var brush = new SolidBrush(Color.FromArgb(150, 255, 214, 0)))
+                        g.FillPath(brush, path);
+                }
+            }
+            catch (Exception)
+            {
+                // A mark that cannot be measured is left out.
+            }
+        }
+
+        // ---- drawing of the tool row ----
+
+        private void DrawToolRow(Graphics g)
+        {
+            DrawNavButton(g, ToolBackRect(), true, _canBack, _toolHot == 1, _toolDown == 1);
+            DrawNavButton(g, ToolForwardRect(), false, _canForward, _toolHot == 2, _toolDown == 2);
+
+            Rectangle box = ToolBoxRect();
+            bool focus = _search != null && _search.Focused;
+            using (GraphicsPath path = RoundedRect(box, Px(ToolRadius + 1)))
+            {
+                using (var brush = new SolidBrush(SearchFill())) g.FillPath(brush, path);
+                int count = Filtering ? ResultCount : -1;
+                using (var pen = new Pen(Filtering && count == 0 ? Color.FromArgb(200, 40, 60) : focus ? Underline : Theme.Separator, focus || (Filtering && count == 0) ? Math.Max(1.5f, Px(1.5)) : 1f))
+                    g.DrawPath(pen, path);
+            }
+            // the magnifier
+            int mx = box.Left + Px(12), my = box.Top + box.Height / 2 - Px(1);
+            using (var pen = new Pen(Theme.PlusColor, Math.Max(1.4f, Px(1.4))))
+            {
+                int r = Px(4.5);
+                g.DrawEllipse(pen, mx - r, my - r, 2 * r, 2 * r);
+                g.DrawLine(pen, mx + r - Px(1), my + r - Px(1), mx + r + Px(3), my + r + Px(3));
+            }
+            if (_search == null || !_search.Visible)
+            {
+                // the hint
+                using (var font = new Font(TabFont.FontFamily, TabFont.Size * 0.8f, FontStyle.Regular, TabFont.Unit))
+                using (var brush = new SolidBrush(Theme.InactiveText))
+                using (var format = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+                {
+                    g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                    Rectangle t = ToolTextRect();
+                    g.DrawString("検索", font, brush, new Rectangle(t.Left, t.Top, t.Width, t.Height), format);
+                }
+            }
+            if (Filtering)
+            {
+                // the clear button, and how many were found
+                Rectangle c = ToolClearRect();
+                using (var brush = new SolidBrush(_toolHot == 3 ? Theme.PlusColor : Theme.Separator)) g.FillEllipse(brush, c);
+                using (var pen = new Pen(Theme.PlusHoverBack, Math.Max(1.4f, Px(1.4))))
+                {
+                    int q = Px(3.2);
+                    g.DrawLine(pen, c.Left + c.Width / 2 - q, c.Top + c.Height / 2 - q, c.Left + c.Width / 2 + q, c.Top + c.Height / 2 + q);
+                    g.DrawLine(pen, c.Left + c.Width / 2 - q, c.Top + c.Height / 2 + q, c.Left + c.Width / 2 + q, c.Top + c.Height / 2 - q);
+                }
+                int n = ResultCount;
+                string label = n + "件";
+                using (var font = new Font(TabFont.FontFamily, TabFont.Size * 0.72f, FontStyle.Bold, TabFont.Unit))
+                {
+                    SizeF size = g.MeasureString(label, font);
+                    Rectangle t = ToolTextRect();
+                    // only when there is room next to the typed text
+                    int textWidth = _search != null ? TextRenderer.MeasureText(_search.Text, TabFont, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding).Width : 0;
+                    if (t.Width > textWidth + size.Width + Px(14))
+                    {
+                        var badge = new Rectangle((int)(c.Left - size.Width - Px(14)), box.Top + Px(4), (int)size.Width + Px(10), box.Height - Px(8));
+                        using (GraphicsPath path = RoundedRect(badge, badge.Height / 2))
+                        using (var brush = new SolidBrush(n == 0 ? Color.FromArgb(250, 225, 228) : Color.FromArgb(220, 238, 227)))
+                            g.FillPath(brush, path);
+                        using (var brush = new SolidBrush(n == 0 ? Color.FromArgb(170, 30, 50) : Underline))
+                        using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                        {
+                            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                            g.DrawString(label, font, brush, badge, format);
+                        }
+                    }
+                }
+            }
+            // the folder switch
+            Rectangle f = ToolFolderRect();
+            bool hot = _toolHot == 4, down = _toolDown == 4;
+            using (GraphicsPath path = RoundedRect(f, Px(ToolRadius)))
+            {
+                using (var brush = new SolidBrush(_folderSearch ? Color.FromArgb(70, Underline) : down ? Theme.TabBorder : Theme.PlusHoverBack)) g.FillPath(brush, path);
+                using (var pen = new Pen(_folderSearch ? Underline : hot || down ? Theme.PlusColor : Theme.Separator, _folderSearch ? Math.Max(1.5f, Px(1.5)) : 1f)) g.DrawPath(pen, path);
+            }
+            DrawFolderIcon(g, f, _folderSearch ? Underline : Theme.PlusColor);
+        }
+
+        private void DrawFolderIcon(Graphics g, Rectangle r, Color color)
+        {
+            int w = Px(14), h = Px(10);
+            int x = r.Left + (r.Width - w) / 2, y = r.Top + (r.Height - h) / 2 + Px(1);
+            var points = new[]
+            {
+                new Point(x, y + h), new Point(x, y + Px(1)), new Point(x + Px(5), y + Px(1)), new Point(x + Px(7), y + Px(3)),
+                new Point(x + w, y + Px(3)), new Point(x + w, y + h)
+            };
+            using (var pen = new Pen(color, Math.Max(1.4f, Px(1.4))) { LineJoin = LineJoin.Round })
+            {
+                g.DrawPolygon(pen, points);
+            }
+        }
+
+        private void DrawNavButton(Graphics g, Rectangle r, bool back, bool enabled, bool hot, bool down)
+        {
+            using (GraphicsPath path = RoundedRect(r, Px(ToolRadius)))
+            {
+                using (var brush = new SolidBrush(enabled && down ? Theme.TabBorder : Theme.PlusHoverBack)) g.FillPath(brush, path);
+                using (var pen = new Pen(enabled && (hot || down) ? Theme.PlusColor : Theme.Separator)) g.DrawPath(pen, path);
+            }
+            int cx = r.Left + r.Width / 2, cy = r.Top + r.Height / 2;
+            int a = Px(3.5), b = Px(6.5);
+            Color color = enabled ? Theme.PlusColor : Color.FromArgb(90, Theme.PlusColor);
+            using (var pen = new Pen(color, Math.Max(1.8f, Px(1.8))) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
+            {
+                Point[] chevron = back
+                    ? new[] { new Point(cx + a, cy - b), new Point(cx - a, cy), new Point(cx + a, cy + b) }
+                    : new[] { new Point(cx - a, cy - b), new Point(cx + a, cy), new Point(cx - a, cy + b) };
+                g.DrawLines(pen, chevron);
+            }
+        }
+
+        // The sheets seen last, as a menu under the back button.
+        private void ShowHistoryMenu()
+        {
+            List<HistoryItem> items = null;
+            try { items = HistoryProvider != null ? HistoryProvider() : null; } catch (Exception) { }
+            var menu = new ContextMenuStrip();
+            menu.Items.Add(new ToolStripMenuItem("最近見たシート") { Enabled = false });
+            if (items == null || items.Count == 0) menu.Items.Add(new ToolStripMenuItem("(まだありません)") { Enabled = false });
+            else
+            {
+                foreach (HistoryItem item in items)
+                {
+                    HistoryItem it = item;
+                    var mi = new ToolStripMenuItem((it.Current ? "✓ " : "　") + it.Name);
+                    mi.Click += (s, e) => { if (HistoryJumpRequested != null) HistoryJumpRequested(it.Key); };
+                    menu.Items.Add(mi);
+                }
+            }
+            menu.Closed += (s, e) => BeginInvoke(new Action(menu.Dispose));
+            Rectangle b = ToolBackRect();
+            menu.Show(this, new Point(b.Left, b.Bottom + Px(2)));
+        }
+
+        private void StartLongPress()
+        {
+            if (_longPress == null)
+            {
+                _longPress = new System.Windows.Forms.Timer { Interval = 450 };
+                _longPress.Tick += (s, e) =>
+                {
+                    _longPress.Stop();
+                    if (_toolDown != 1 && _toolDown != 2) return;
+                    _longPressShown = true;
+                    _toolDown = 0;
+                    Invalidate();
+                    ShowHistoryMenu();
+                };
+            }
+            _longPressShown = false;
+            _longPress.Stop();
+            _longPress.Start();
         }
 
         private int ViewHeight { get { return IsSample ? ClientSize.Height : Math.Max(0, ClientSize.Height - RowPx); } }
@@ -356,11 +900,11 @@ namespace VerticalSheetTabs
         {
             var gone = _selFolders.Where(id =>
             {
-                StripRow r = _rows.FirstOrDefault(x => x.IsFolder && x.FolderId == id);
+                StripRow r = _baseRows.FirstOrDefault(x => x.IsFolder && x.FolderId == id);
                 return r == null;
             }).ToList();
             foreach (string id in gone) _selFolders.Remove(id);
-            if (_anchorFolder != null && !_rows.Any(x => x.IsFolder && x.FolderId == _anchorFolder)) _anchorFolder = null;
+            if (_anchorFolder != null && !_baseRows.Any(x => x.IsFolder && x.FolderId == _anchorFolder)) _anchorFolder = null;
         }
 
         private StripRow FolderRow(string id)
@@ -453,6 +997,7 @@ namespace VerticalSheetTabs
         {
             base.OnResize(e);
             UpdateScrollBar();
+            LayoutSearch();
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -566,7 +1111,9 @@ namespace VerticalSheetTabs
                 DrawDropMarker(g, y, _dropInside ? Px(FolderIndent) : 0);
             }
             DrawGhost(g);
+            DrawSearchChoice(g);
             g.ResetClip();
+            if (!IsSample) DrawToolRow(g);
 
             if (ShowAllButtons) DrawAllButtons(g);
             if (!IsSample) DrawPlus(g);
@@ -1213,6 +1760,7 @@ namespace VerticalSheetTabs
                     format.LineAlignment = StringAlignment.Center;
                     format.Trimming = StringTrimming.EllipsisCharacter;
                     format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
+                    DrawMatch(g, folder.FolderName, bold, textRect, format, true);
                     g.DrawString(folder.FolderName, bold, brush, textRect, format);
                 }
             }
@@ -1399,6 +1947,7 @@ namespace VerticalSheetTabs
                     format.LineAlignment = StringAlignment.Center;
                     format.Trimming = StringTrimming.EllipsisCharacter;
                     format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
+                    DrawMatch(g, text, font ?? TabFont, textRect, format, false);
                     g.DrawString(text, font ?? TabFont, brush, textRect, format);
                 }
             }
@@ -1906,6 +2455,23 @@ namespace VerticalSheetTabs
             if (IsSample) { if (SampleClicked != null) SampleClicked(); return; }
             if (!_noFocusClick) Focus();
             _toggleOffFolder = null; // a drag swallows the button release, so nothing may be left over
+            int tool = ToolAt(e.Location);
+            if (tool != 0)
+            {
+                if (e.Button == MouseButtons.Left)
+                {
+                    if (tool == 5) { FocusSearch(); return; }
+                    _toolDown = tool;
+                    if (tool == 1 || tool == 2) StartLongPress();
+                    Invalidate();
+                }
+                else if (e.Button == MouseButtons.Right)
+                {
+                    ContextMenuStrip = null; // (the menu of the sheets must not open on top of the history)
+                    if (tool == 1 || tool == 2) ShowHistoryMenu();
+                }
+                return;
+            }
             int all = e.Button == MouseButtons.Left ? AllButtonAt(e.Location) : 0;
             if (all != 0)
             {
@@ -2066,6 +2632,30 @@ namespace VerticalSheetTabs
                 Invalidate();
                 return;
             }
+            if (_toolDown != 0)
+            {
+                int down = _toolDown;
+                _toolDown = 0;
+                if (_longPress != null) _longPress.Stop();
+                Invalidate();
+                if (e.Button == MouseButtons.Left && !_longPressShown && ToolAt(e.Location) == down)
+                {
+                    if (down == 1 && _canBack && BackRequested != null) BackRequested();
+                    else if (down == 2 && _canForward && ForwardRequested != null) ForwardRequested();
+                    else if (down == 3) { ClearSearch(); FocusSearch(); }
+                    else if (down == 4)
+                    {
+                        _folderSearch = !_folderSearch;
+                        _searchSel = -1;
+                        ApplyFilter();
+                        LayoutSearch();
+                        if (_query.Length > 0) FocusSearch();
+                        Invalidate();
+                    }
+                }
+                _longPressShown = false;
+                return;
+            }
             if (_headerDown != 0)
             {
                 int down = _headerDown;
@@ -2089,6 +2679,13 @@ namespace VerticalSheetTabs
         // Keys that Excel would handle if the pane did not have the focus (save, save as).
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            // Ctrl+F: the search box, only while the pane has the focus (Excel's own find otherwise)
+            if (keyData == (Keys.Control | Keys.F) && !IsSample && _editor == null)
+            {
+                // (moved after the key has been dealt with: Excel gives the focus back to where it was when the key came)
+                BeginInvoke(new Action(() => FocusSearch()));
+                return true;
+            }
             string command = keyData == (Keys.Control | Keys.S) ? "FileSave" : keyData == Keys.F12 ? "FileSaveAs" : null;
             if (command != null && _editor == null && ExcelCommandRequested != null)
             {
@@ -2104,10 +2701,26 @@ namespace VerticalSheetTabs
             return keyData == Keys.Up || keyData == Keys.Down || base.IsInputKey(keyData);
         }
 
+        // Typing in the pane (not in a name being edited) goes into the search box.
+        protected override void OnKeyPress(KeyPressEventArgs e)
+        {
+            base.OnKeyPress(e);
+            if (IsSample || _editor != null || e.Handled) return;
+            if (char.IsControl(e.KeyChar) || (ModifierKeys & Keys.Control) != 0 || (e.KeyChar == ' ' && _search.Text.Length == 0)) return;
+            e.Handled = true;
+            FocusSearch(e.KeyChar.ToString());
+        }
+
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
             if (IsSample) return;
+            if (e.KeyCode == Keys.Escape && Filtering)
+            {
+                e.Handled = true;
+                ClearSearch();
+                return;
+            }
             if (e.KeyCode == Keys.Delete)
             {
                 e.Handled = true;
@@ -2140,12 +2753,23 @@ namespace VerticalSheetTabs
             base.OnMouseLeave(e);
             SetPlusHot(false);
             if (_headerHot != 0) { _headerHot = 0; Invalidate(); }
+            if (_toolHot != 0) { _toolHot = 0; Invalidate(); }
             _hoverIndex = -1;
             _tip.Hide(this);
         }
 
         private void UpdateTip(Point p)
         {
+            int tool = ToolAt(p);
+            if (tool >= 1 && tool <= 4)
+            {
+                if (_hoverIndex == -2 - tool) return;
+                _hoverIndex = -2 - tool;
+                _tip.Hide(this);
+                string tip = tool == 1 ? "戻る (長押し・右クリックで、履歴)" : tool == 2 ? "進む" : tool == 3 ? "検索を終わる (Esc)" : (_folderSearch ? "フォルダ名で検索中 (押すと、シート名の検索に切り替え)" : "シート名で検索中 (押すと、フォルダ名の検索に切り替え)");
+                if (Control.MouseButtons == MouseButtons.None) _tip.Show(tip, this, p.X, ToolPx + Px(2), 3000);
+                return;
+            }
             int index = IndexFromPoint(p);
             if (index == _hoverIndex) return;
             _hoverIndex = index;
@@ -2186,8 +2810,12 @@ namespace VerticalSheetTabs
             SetPlusHot(!StructureProtected && PlusButtonRect().Contains(e.Location));
             int hotAll = AllButtonAt(e.Location);
             if (hotAll != _headerHot) { _headerHot = hotAll; Invalidate(); }
+            int hotTool = ToolAt(e.Location);
+            if (hotTool == 5) hotTool = 0;
+            if (hotTool != _toolHot) { _toolHot = hotTool; Invalidate(); }
+            if (Filtering) { if (e.Button == MouseButtons.Left) _dragIndex = -1; } // the rows can be dragged only in the whole list
             UpdateTip(e.Location);
-            if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected) return;
+            if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected || Filtering) return;
             Size drag = SystemInformation.DragSize;
             if (Math.Abs(e.X - _dragOrigin.X) < drag.Width && Math.Abs(e.Y - _dragOrigin.Y) < drag.Height) return;
 
@@ -2488,6 +3116,7 @@ namespace VerticalSheetTabs
             {
                 if (_font != null) _font.Dispose();
                 if (_animTimer != null) _animTimer.Dispose();
+                if (_longPress != null) _longPress.Dispose();
                 _tip.Dispose();
             }
             base.Dispose(disposing);
