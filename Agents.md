@@ -2435,5 +2435,5 @@ gitGraph
 
 ### 12.202 インストーラの更新 (バージョン1.1.81.0)
 
-- 12.201 (「完了」の印のクリックで、シートの保護。「完了 + ロック」のバッジ) を含めて、バージョンを 1.1.81.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映した。`master` への反映とタグ `v1.1.81` は、ユーザーの指示のあと)
+- 12.201 (「完了」の印のクリックで、シートの保護。「完了 + ロック」のバッジ) を含めて、バージョンを 1.1.81.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.81` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.81.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_81_0\`)。インストールの実機確認は、未実施
