@@ -456,7 +456,7 @@ gitGraph
 
 #### 5-6 横タブのメニューへの追加の結果
 
-- Excel標準の横タブを右クリックしたときのメニューにも、先頭に「タブ表示の設定」を追加した。リボンのボタンと同じ設定画面を開く
+- Excel標準の横タブを右クリックしたときのメニューにも、先頭に「タブ表示の設定」を追加した (→ 12.243 で、最後に移した)。リボンのボタンと同じ設定画面を開く
 - 実装: リボンのカスタムUI (`RibbonController.cs`) の`contextMenus`で、`ContextMenuWorkbookPly`のメニューに、`insertBeforeMso="SheetInsertPage"` (= 先頭の「挿入」) のボタンを挿入する
   - 「挿入」の`idMso`は`SheetInsertPage`。ExcelBabyの`idMso`一覧 (Windows版) から候補を選び、メニューに挿入して位置を確かめて特定した。`SheetInsert`などは、このメニューの項目ではない
   - 同じ方法で確認できたこのメニューの`idMso`: `SheetDelete`、`SheetMoveOrCopy`、`SheetTabColorGallery` (シート見出しの色)、`SelectAllSheets`
@@ -2756,3 +2756,10 @@ gitGraph
 - コミットの作者とコミットした人のメールアドレスを、すべて GitHub の noreply アドレスに書き換えた (git-filter-repo の --mailmap。691件。ファイルの中身は変えていない)。そのため、すべてのコミット ID が変わった
 - この文書に書いていた古いコミット ID (4か所) を、書き換え後の ID に直した: 12.75 の `d342c70` → `d70a099`、12.85 の `5f56bbf` → `9216e34`、12.208 の `88bbe0b` → `19f7ad2`、`5e23e5f` → `2d34168` (対応は、git-filter-repo が残した `.git/filter-repo/commit-map`)。コミットメッセージの中の ID は、git-filter-repo が書き換えのときに直した
 - 直したのは、今の版だけ。履歴の中の古い版のこの文書には、古い ID が残る (直すには、履歴をもう一度書き換える必要があり、そのたびに ID が変わるため)
+
+### 12.243 変更: 横タブの右クリックメニューの「タブ表示の設定」を、最後に置く
+
+- ユーザーの要望により、Excel標準の横タブの右クリックメニュー (`ContextMenuWorkbookPly`) に足している「タブ表示の設定」を、先頭 (5-6。「挿入」の前、`insertBeforeMso="SheetInsertPage"`) から、メニューの最後に移した (`RibbonController.GetCustomUI`。位置の指定を外すと、最後に付く)。その上に、区切り線 (`menuSeparator`) を入れた。5-6 の「`separator` を入れると、カスタムUI全体が読み込まれない」は、右クリックメニューでは `separator` ではなく `menuSeparator` が正しい要素のためだった
+- 縦タブの右クリックメニュー (シート、フォルダ) の「タブ表示の設定」は、これまでどおり先頭
+- 実機で確認 (拡大率125%): 横タブを右クリックすると、メニューの最後 (「このシートへのリンク」の下、区切り線の下) に「タブ表示の設定」が出る。↑キーで最後の項目を選んで Enter を押すと、設定画面が開く。リボンの「縦タブ」グループも、これまでどおり出る
+- README: 横タブのメニューの「先頭」を「最後」に直した (1.1、2章、4.1、4.2、8章)
