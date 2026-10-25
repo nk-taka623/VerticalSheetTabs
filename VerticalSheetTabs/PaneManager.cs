@@ -63,6 +63,14 @@ namespace VerticalSheetTabs
             // The active sheet and the sheet names the history was last updated for.
             public string HistActive;
             public string HistNames;
+            // The name each sheet of the history had when it was last seen (by key): a change of the sheet names is checked against these
+            // few sheets, and all keys are read only when one of them is not where it was (Agents.md 12.226).
+            public Dictionary<string, string> HistHints = new Dictionary<string, string>();
+            // The keys of all sheets read in the running sync (for the folders), for the sheet names TickSignature: the history uses them
+            // instead of reading them again. Null when the sync read none.
+            public List<string> TickKeys;
+            public bool TickKeysComplete;
+            public string TickSignature;
             // What the sheets hold (errors, notes) for the badges (Agents.md 12.190), by sheet name, and the sheets to look at again
             // with the time of the change that makes them so (looked at again when it has been quiet for a while).
             public Dictionary<string, BadgeInfo> Badges = new Dictionary<string, BadgeInfo>();
@@ -626,10 +634,12 @@ namespace VerticalSheetTabs
 
                 bool activeProtected = IsSheetProtected(activeSheet);
                 entry.Control.ActiveSheetProtected = activeProtected;
-                TrackHistory(entry, activeSheet, active, string.Join("|", allNames));
-                UpdateBadges(entry, names, active, activeProtected);
+                // The rows first: the badges may take a while to look at a sheet, and the history uses the keys the folders read.
+                entry.TickKeys = null;
                 List<StripRow> rows = BuildRows(entry, allNames, visibleAt);
                 entry.Control.SetSheets(names, active, selected, colors, rows);
+                TrackHistory(entry, activeSheet, active, allNames);
+                UpdateBadges(entry, names, active, activeProtected);
                 return true;
             }
             catch (Exception)
@@ -661,6 +671,9 @@ namespace VerticalSheetTabs
             {
                 bool complete;
                 List<string> keys = FolderStore.SheetKeys(entry.Workbook, true, true, out complete);
+                entry.TickKeys = keys;
+                entry.TickKeysComplete = complete;
+                entry.TickSignature = signature;
                 if (!complete && ++entry.KeyMisses < 3)
                 {
                     // A sheet could not be read (Excel is busy): a guessed key would take the sheet out of its
@@ -998,23 +1011,39 @@ namespace VerticalSheetTabs
 
         // Called by the sync: a sheet that became active (by a click, a key, a macro, the tabs of Excel) is put into the history;
         // when sheets were added, renamed or deleted, the sheets that no longer exist are taken out.
-        private static void TrackHistory(Entry entry, object activeSheet, string activeName, string namesSignature)
+        private static void TrackHistory(Entry entry, object activeSheet, string activeName, List<string> allNames)
         {
             try
             {
                 if (activeName != null && activeSheet != null && activeName != entry.HistActive)
                 {
                     entry.HistActive = activeName;
-                    entry.History.Push(FolderStore.KeyOf(activeSheet, true));
+                    string key = FolderStore.KeyOf(activeSheet, true);
+                    entry.History.Push(key);
+                    if (key != null) entry.HistHints[key] = activeName;
                 }
+                string namesSignature = string.Join("|", allNames);
                 if (namesSignature != entry.HistNames)
                 {
                     entry.HistNames = namesSignature;
                     if (entry.History.Keys.Count > 0)
                     {
-                        bool complete;
-                        List<string> keys = FolderStore.SheetKeys(entry.Workbook, false, true, out complete);
-                        if (complete) entry.History.Prune(new HashSet<string>(keys));
+                        // The keys the folders read in this sync are used; else, when every sheet of the history is still where it was seen
+                        // (its name has its key), no sheet of the history is gone and nothing is read; else all keys are read, as before.
+                        bool complete = false;
+                        List<string> keys;
+                        if (entry.TickKeys != null && entry.TickSignature == namesSignature)
+                        {
+                            keys = entry.TickKeys;
+                            complete = entry.TickKeysComplete;
+                        }
+                        else if (HistoryInPlace(entry, allNames)) keys = null;
+                        else keys = FolderStore.SheetKeys(entry.Workbook, false, true, out complete);
+                        if (keys != null && complete)
+                        {
+                            entry.History.Prune(new HashSet<string>(keys));
+                            NoteHistoryHints(entry, keys, allNames);
+                        }
                     }
                 }
                 entry.Control.SetNavigation(entry.History.CanBack, entry.History.CanForward);
@@ -1023,6 +1052,49 @@ namespace VerticalSheetTabs
             {
                 // Excel is busy; the next tick tries again.
             }
+        }
+
+        // True when every sheet of the history is found under the name it was last seen with, with its key: then none of them is gone.
+        // False when one of them could not be found that way (renamed, deleted, made again under the same name, or not seen yet since the
+        // workbook was opened); the caller then reads all keys. With few sheets, reading all is as quick, and is done.
+        private static bool HistoryInPlace(Entry entry, List<string> allNames)
+        {
+            if (entry.History.Keys.Count >= allNames.Count) return false;
+            try
+            {
+                var names = new HashSet<string>(allNames);
+                foreach (string key in entry.History.Keys)
+                {
+                    if (key.StartsWith("n:", StringComparison.Ordinal))
+                    {
+                        // a chart sheet's key is its name
+                        string chartName = key.Substring(2);
+                        if (!names.Contains(chartName) || !(entry.Workbook.Sheets[chartName] is Excel.Chart)) return false;
+                        continue;
+                    }
+                    string hint;
+                    if (!entry.HistHints.TryGetValue(key, out hint) || !names.Contains(hint)) return false;
+                    var ws = entry.Workbook.Sheets[hint] as Excel.Worksheet;
+                    if (ws == null || FolderStore.KeyOf(ws, false) != key) return false;
+                }
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        // The names the sheets of the history have now (keys and names: all sheets in Excel's order).
+        private static void NoteHistoryHints(Entry entry, List<string> keys, List<string> allNames)
+        {
+            var hints = new Dictionary<string, string>();
+            var inHistory = new HashSet<string>(entry.History.Keys);
+            for (int i = 0; i < keys.Count && i < allNames.Count; i++)
+            {
+                if (inHistory.Contains(keys[i])) hints[keys[i]] = allNames[i];
+            }
+            entry.HistHints = hints;
         }
 
         // The visible sheets by key (what the history can go to).
