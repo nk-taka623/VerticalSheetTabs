@@ -2610,6 +2610,8 @@ namespace VerticalSheetTabs
             finally
             {
                 entry.Busy = false;
+                // the new row shows at once, not at the next tick of the timer (as after "Insert")
+                SyncSheets(entry);
             }
         }
 
