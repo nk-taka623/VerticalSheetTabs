@@ -295,6 +295,7 @@ namespace VerticalSheetTabs
                 if (activeChanged) EnsureVisible(RowIndexOf(_active));
                 PruneFolders();
             }
+            DropRowAnimPictures(); // (a row that is coming in looks as the rows look now)
             Invalidate();
         }
 
@@ -1247,19 +1248,23 @@ namespace VerticalSheetTabs
         // ring of light around it. A deleted row: it swells a little, shrinks and fades away, a few dots fly out, and the rows below
         // slide up. The sheets that move into a folder, or out of a deleted one, slide sideways to their new place. It runs 0.4 seconds
         // (the length is fixed) and makes no sound. It is off unless it is chosen in the settings.
+        // Any number of rows may come or go: only the rows that are in view are drawn (and pictured, once); the rows out of view take
+        // their part in the sliding of the rows below without being drawn (Agents.md 12.228).
 
         private const int RowAnimMs = 400;
-        private const int RowAnimMaxRows = 14;
         private bool _rowAnimation;
         private System.Windows.Forms.Timer _raTimer;
         private System.Diagnostics.Stopwatch _raClock;
         private HashSet<string> _raAdded;                 // the keys ("S:name", "F:id") of the rows that come in
         private List<RowAnimGhost> _raGhosts;
         private Dictionary<string, bool> _raIndent;       // sheet name -> whether it was indented before
+        private int[] _raAddedAt;                         // the indexes of the rows that come in, in order (for the rows below them)
+        private int[] _raGhostAt;                         // the At of the rows that go, in order
+        private Dictionary<string, Bitmap> _raPictures;   // the pictures of the rows that come in (made when first drawn)
 
         private class RowAnimGhost
         {
-            public Bitmap Bmp;
+            public Bitmap Bmp;  // null for a row that was out of view (it is not drawn)
             public int At;      // the number of rows of the new list that stand before it
             public Color Color;
         }
@@ -1315,8 +1320,8 @@ namespace VerticalSheetTabs
             var newFolders = new HashSet<string>(newRows.Where(r => r.IsFolder).Select(r => r.FolderId));
             var added = names.Where(n => !_names.Contains(n)).Select(n => "S:" + n).Concat(newFolders.Where(f => !oldFolders.Contains(f)).Select(f => "F:" + f)).ToList();
             var removed = new HashSet<string>(_names.Where(n => !names.Contains(n)).Select(n => "S:" + n).Concat(oldFolders.Where(f => !newFolders.Contains(f)).Select(f => "F:" + f)));
-            // only rows that came, or only rows that went (a rename or a regrouping does both; a bulk change is not shown)
-            if ((added.Count == 0) == (removed.Count == 0) || added.Count + removed.Count > RowAnimMaxRows) return null;
+            // only rows that came, or only rows that went (a rename or a regrouping does both)
+            if ((added.Count == 0) == (removed.Count == 0)) return null;
             var p = new RowAnimPending { Added = new HashSet<string>(added) };
             foreach (StripRow r in _rows) if (!r.IsFolder && r.Sheet != null) p.OldIndented[r.Sheet] = r.Indented;
             int before = 0;
@@ -1324,7 +1329,10 @@ namespace VerticalSheetTabs
             {
                 StripRow r = _rows[i];
                 if (!removed.Contains(RowKey(r))) continue;
-                p.Ghosts.Add(new RowAnimGhost { Bmp = RenderRowBitmap(r, ContentWidth), At = i - before, Color = RowAnimColor(r) });
+                // a picture only of a row the user sees now; the others go without being drawn
+                Rectangle rect = RowRect(i);
+                bool inView = rect.Bottom > HeaderPx && rect.Top < ViewHeight;
+                p.Ghosts.Add(new RowAnimGhost { Bmp = inView ? RenderRowBitmap(r, ContentWidth) : null, At = i - before, Color = RowAnimColor(r) });
                 before++;
             }
             if (added.Count == 0 && p.Ghosts.Count == 0) return null;
@@ -1341,11 +1349,15 @@ namespace VerticalSheetTabs
                 var set = new HashSet<string>(_rows.Select(RowKey).Where(k => p.Added.Contains(k)));
                 if (set.Count == 0) return; // (the sheet is in a closed folder: no row)
                 _raAdded = set;
+                var at = new List<int>();
+                for (int i = 0; i < _rows.Count; i++) if (set.Contains(RowKey(_rows[i]))) at.Add(i);
+                _raAddedAt = at.ToArray();
             }
             else
             {
                 foreach (RowAnimGhost g in p.Ghosts) g.At = Math.Min(g.At, _rows.Count);
                 _raGhosts = p.Ghosts;
+                _raGhostAt = p.Ghosts.Select(g => g.At).ToArray(); // (in order: the rows that go were taken from the top down)
             }
             // the sheets whose indent changes (a folder came or went around them) slide to their new place
             var indent = new Dictionary<string, bool>();
@@ -1375,6 +1387,9 @@ namespace VerticalSheetTabs
             _raClock = null;
             _raAdded = null;
             _raIndent = null;
+            _raAddedAt = null;
+            _raGhostAt = null;
+            DropRowAnimPictures();
             if (_raGhosts != null)
             {
                 foreach (RowAnimGhost g in _raGhosts) if (g.Bmp != null) g.Bmp.Dispose();
@@ -1383,19 +1398,38 @@ namespace VerticalSheetTabs
             if (was) Invalidate();
         }
 
+        // The pictures of the rows that come in are made again when the rows' look changes (a selection, a color, a badge).
+        private void DropRowAnimPictures()
+        {
+            if (_raPictures == null) return;
+            foreach (Bitmap bmp in _raPictures.Values) bmp.Dispose();
+            _raPictures = null;
+        }
+
+        // The number of values in a sorted array that are below (or, with orEqual, not above) the value.
+        private static int CountBelow(int[] sorted, int value, bool orEqual)
+        {
+            int lo = 0, hi = sorted.Length;
+            while (lo < hi)
+            {
+                int mid = (lo + hi) / 2;
+                if (sorted[mid] < value || (orEqual && sorted[mid] == value)) lo = mid + 1; else hi = mid;
+            }
+            return lo;
+        }
+
         // How far a row is from its place (the rows below an added or a deleted one are on their way).
         private int RowAnimDy(int index)
         {
             if (_raClock == null) return 0;
-            if (_raAdded != null)
+            if (_raAddedAt != null)
             {
-                int before = 0;
-                for (int j = 0; j < index && j < _rows.Count; j++) if (_raAdded.Contains(RowKey(_rows[j]))) before++;
+                int before = CountBelow(_raAddedAt, index, false);
                 return -(int)Math.Round(RowPx * before * (1 - RowAnimSlide()));
             }
-            if (_raGhosts != null)
+            if (_raGhostAt != null)
             {
-                int before = _raGhosts.Count(g => g.At <= index);
+                int before = CountBelow(_raGhostAt, index, true);
                 return (int)Math.Round(RowPx * before * (1 - RowAnimSlide()));
             }
             return 0;
@@ -1455,10 +1489,16 @@ namespace VerticalSheetTabs
             {
                 Rectangle row = RowRect(index);
                 double s = EaseOutBack((t - 0.12) / 0.6), a = (t - 0.12) / 0.2;
-                using (Bitmap bmp = RenderRowBitmap(_rows[index], row.Width))
+                if (_raPictures == null) _raPictures = new Dictionary<string, Bitmap>();
+                string key = RowKey(_rows[index]);
+                Bitmap bmp;
+                if (!_raPictures.TryGetValue(key, out bmp) || bmp.Width != Math.Max(1, row.Width))
                 {
-                    DrawRowImage(g, bmp, row, Math.Min(1.0, s), s, a);
+                    if (bmp != null) bmp.Dispose();
+                    bmp = RenderRowBitmap(_rows[index], row.Width);
+                    _raPictures[key] = bmp;
                 }
+                DrawRowImage(g, bmp, row, Math.Min(1.0, s), s, a);
                 // a ring of light that spreads and fades
                 if (t > 0.1 && t < 0.7)
                 {
@@ -1477,7 +1517,9 @@ namespace VerticalSheetTabs
             for (int j = 0; j < _raGhosts.Count; j++)
             {
                 RowAnimGhost gh = _raGhosts[j];
+                if (gh.Bmp == null) continue; // (out of view when it went)
                 var row = new Rectangle(0, HeaderPx + (gh.At + j) * RowPx - _scrollY, gh.Bmp.Width, gh.Bmp.Height);
+                if (row.Bottom < HeaderPx - RowPx || row.Top > ViewHeight + RowPx) continue; // (out of view now: the particles too)
                 double shrink = EaseOut((t - 0.1) / 0.55);
                 double sy = t < 0.1 ? 1 + 0.06 * (t / 0.1) : 1 - shrink;
                 double sx = t < 0.1 ? sy : 1 - 0.25 * shrink;
@@ -1732,6 +1774,7 @@ namespace VerticalSheetTabs
             }
             _rowBadges = copy;
             if (becameDone != null) StartDoneAnim(becameDone);
+            DropRowAnimPictures();
             Invalidate();
         }
 
