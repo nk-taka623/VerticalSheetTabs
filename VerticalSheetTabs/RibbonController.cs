@@ -35,9 +35,10 @@ namespace VerticalSheetTabs
   </ribbon>
   <contextMenus>
     <contextMenu idMso=""ContextMenuWorkbookPly"">
-      <menuSeparator id=""VTabSettingsTabMenuSeparator"" />
       <button id=""VTabSettingsTabMenu"" label=""タブ表示の設定""
+              insertBeforeMso=""SheetInsertPage""
               onAction=""OnSettingsClick"" />
+      <menuSeparator id=""VTabSettingsTabMenuSeparator"" insertBeforeMso=""SheetInsertPage"" />
     </contextMenu>
   </contextMenus>
 </customUI>";
