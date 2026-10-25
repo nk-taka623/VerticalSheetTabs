@@ -263,8 +263,9 @@ namespace VerticalSheetTabs
             bool sameRows = newSignature == _rowSignature;
             bool sameColors = _colors.Count == colors.Count && _colors.All(kv => { int v; return colors.TryGetValue(kv.Key, out v) && v == kv.Value; });
             bool sameNames = _names.SequenceEqual(names);
-            // While a mouse button is down the user is changing the selection; do not fight them.
-            bool userBusy = Control.MouseButtons != MouseButtons.None;
+            // While a mouse button is down the user is changing the selection; do not fight them. A sample of the settings form takes no
+            // clicks for that, and it is set up while the button that chose a tab of the form is still down (Agents.md 12.232).
+            bool userBusy = !IsSample && Control.MouseButtons != MouseButtons.None;
             bool sameSelection = userBusy || (_active == activeName && _selected.SetEquals(selected));
             if (sameNames && sameRows && sameSelection && sameColors) return;
 
