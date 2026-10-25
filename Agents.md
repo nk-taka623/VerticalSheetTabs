@@ -2766,5 +2766,5 @@ gitGraph
 
 ### 12.244 インストーラの更新 (バージョン1.2.0.0)
 
-- 12.242 (履歴の書き換えで変わったコミット ID の直し)、12.243 (横タブの右クリックメニューの「タブ表示の設定」の下に、区切り線) を含めて、バージョンを 1.2.0.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映した。`master` への反映とタグ `v1.2.0` は、ユーザーの指示のあと)
+- 12.242 (履歴の書き換えで変わったコミット ID の直し)、12.243 (横タブの右クリックメニューの「タブ表示の設定」の下に、区切り線) を含めて、バージョンを 1.2.0.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.2.0` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.2.0.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_2_0_0\`)。インストールの実機確認は、未実施
