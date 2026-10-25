@@ -235,6 +235,7 @@
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="DialogPlacer.cs" />
     <Compile Include="DpiHelper.cs" />
     <Compile Include="PaneManager.cs" />
     <Compile Include="RibbonController.cs" />

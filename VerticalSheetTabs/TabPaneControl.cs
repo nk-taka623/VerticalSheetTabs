@@ -72,6 +72,8 @@ namespace VerticalSheetTabs
 
         // Opens Excel's "Colors" dialog for "More colors"; returns 0xBBGGRR or null.
         public Func<int?> MoreColorsProvider { get; set; }
+        // The palette opened by a click on a folder's paint can (closed like the menus before a color dialog opens).
+        private ToolStripDropDown _paletteDrop;
 
         private readonly ContextMenuStrip _menu = new ContextMenuStrip();
         private readonly ContextMenuStrip _folderMenu = new ContextMenuStrip();
@@ -100,6 +102,8 @@ namespace VerticalSheetTabs
 
             // The "+" (adds a sheet after the active one, like Excel's own) is drawn by the strip.
             _strip.AddRequested += () => { if (AddRequested != null) AddRequested(); };
+            _strip.FolderColorMarkClicked += ShowFolderColorPalette;
+            _strip.FolderColorMarkDoubleClicked += PickFolderMoreColor;
             Controls.Add(_strip);
 
             // The first item is ours; the sheet items follow Excel's own tab menu order.
@@ -241,8 +245,43 @@ namespace VerticalSheetTabs
             if (MoreColorsProvider == null) return null;
             _menu.Close();
             _folderMenu.Close();
+            if (_paletteDrop != null && !_paletteDrop.IsDisposed) _paletteDrop.Close();
             Application.DoEvents();
             return MoreColorsProvider();
+        }
+
+        // The folders a click on a folder's paint can is for: the selected folders when it is one of them (as the menu does), else that folder.
+        private List<string> PaintCanFolders(string folderId)
+        {
+            List<string> selected = _strip.SelectedFolders();
+            return selected.Contains(folderId) ? selected : new List<string> { folderId };
+        }
+
+        // A click on the paint can of a folder: the palette of "フォルダの色", below the mark (Agents.md 12.234).
+        private void ShowFolderColorPalette(string folderId, Point screen)
+        {
+            var palette = new TabColorPalette { MoreColorsProvider = RequestMoreColor };
+            palette.SetTheme(ThemeColorProvider != null ? ThemeColorProvider() : null);
+            var host = new ToolStripControlHost(palette) { Padding = Padding.Empty, Margin = Padding.Empty, AutoSize = false, Size = palette.Size };
+            var drop = new ToolStripDropDown { Padding = Padding.Empty };
+            drop.Items.Add(host);
+            List<string> folders = PaintCanFolders(folderId);
+            palette.ColorChosen += choice =>
+            {
+                drop.Close();
+                if (FolderColorRequested != null) FolderColorRequested(folders, choice);
+            };
+            drop.Closed += (s, e) => BeginInvoke(new Action(drop.Dispose));
+            _paletteDrop = drop;
+            drop.Show(screen);
+        }
+
+        // A double click on the paint can: the color dialog of "その他の色" of that palette.
+        private void PickFolderMoreColor(string folderId)
+        {
+            List<string> folders = PaintCanFolders(folderId);
+            int? picked = RequestMoreColor();
+            if (picked.HasValue && FolderColorRequested != null) FolderColorRequested(folders, new TabColorChoice { Kind = TabColorKind.Rgb, Bgr = picked.Value });
         }
 
         // A menu item that opens the tab color palette (the same one as for sheets).

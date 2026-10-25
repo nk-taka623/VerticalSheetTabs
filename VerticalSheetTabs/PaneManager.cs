@@ -2542,7 +2542,13 @@ namespace VerticalSheetTabs
         // Excel's dialog cannot be shown in every state (a cell is being edited, another window is active, the
         // workbook does not accept a change of its palette). Then the system color dialog takes its place, so
         // that choosing "More colors" never silently does nothing. Null: cancelled (or nothing could be shown).
+        // The dialog opens where the user clicked: the double click of a folder's paint can, or "その他の色" of a palette (Agents.md 12.234).
         private int? PickMoreColor(Entry entry)
+        {
+            using (new DialogPlacer(Cursor.Position)) return PickMoreColorCore(entry);
+        }
+
+        private int? PickMoreColorCore(Entry entry)
         {
             int start = -1;
             try
