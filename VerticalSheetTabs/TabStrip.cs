@@ -2408,7 +2408,7 @@ namespace VerticalSheetTabs
         // The text of the tip of the badge under the pointer (null = none).
         private string BadgeTipAt(int index, Point p)
         {
-            if (PaintCanHit(index, p)) return "中の全てを常にフォルダと同一色 (クリック: フォルダの色、ダブルクリック: その他の色)";
+            if (PaintCanHit(index, p)) return "フォルダと中のシートを同一色に設定 (クリック: フォルダの色、ダブルクリック: その他の色)";
             if (index < 0 || index >= _rows.Count || _shownBadges == BadgeKinds.None) return null;
             foreach (RowBadgeSpec s in RowBadges(_rows[index], RowRect(index)))
             {
