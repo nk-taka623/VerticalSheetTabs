@@ -1843,7 +1843,7 @@ namespace VerticalSheetTabs
                 }
                 if (command == "closeall" || command == "openall")
                 {
-                    // all folders of the pane, whatever is selected
+                    // all folders of the pane, whatever is selected (the buttons "全開" and "全閉"; the folder menu no longer has these, Agents.md 12.240)
                     bool open = command == "openall";
                     bool changed = false;
                     foreach (FolderNode node in entry.Folders.Nodes)
