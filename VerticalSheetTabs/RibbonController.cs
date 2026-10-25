@@ -38,6 +38,7 @@ namespace VerticalSheetTabs
       <button id=""VTabSettingsTabMenu"" label=""タブ表示の設定""
               insertBeforeMso=""SheetInsertPage""
               onAction=""OnSettingsClick"" />
+      <menuSeparator id=""VTabSettingsTabMenuSeparator"" insertBeforeMso=""SheetInsertPage"" />
     </contextMenu>
   </contextMenus>
 </customUI>";
