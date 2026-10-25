@@ -44,6 +44,10 @@ namespace VerticalSheetTabs
         private readonly CheckBox _doneAnim = new CheckBox();
         private readonly CheckBox _badgeProgress = new CheckBox();
         private GroupBox _animGroup;
+        // The groups in four tabs; the sample of the animation only moves while its tab is shown.
+        private readonly TabControl _tabs = new TabControl();
+        private TabPage _animPage;
+        private DateTime _wobblePlayed = DateTime.MinValue;
         private readonly RadioButton[] _wobbleTypes = new RadioButton[8]; // index = WobbleType (None, 1 to 6, Random)
         private readonly TrackBar _wobbleAmp = new TrackBar();
         private readonly CheckBox _wobbleSound = new CheckBox();
@@ -135,61 +139,51 @@ namespace VerticalSheetTabs
             AcceptButton = ok;
             CancelButton = cancel;
 
-            // One column: both group boxes and the button row get the width of the widest one.
-            var layout = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Fill };
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            _outlineGroup.Dock = DockStyle.Fill;
-            _outlineGroup.Margin = new Padding(3, 8, 3, 3);
-            _markerGroup.Dock = DockStyle.Fill;
-            _markerGroup.Margin = new Padding(3, 8, 3, 3);
-            layout.Controls.Add(_markerGroup);
-            _styleGroup.Dock = DockStyle.Fill;
-            _styleGroup.Margin = new Padding(3, 8, 3, 3);
-            layout.Controls.Add(_styleGroup);
-            _wobbleGroup.Dock = DockStyle.Fill;
-            _wobbleGroup.Margin = new Padding(3, 8, 3, 3);
-            layout.Controls.Add(_wobbleGroup);
-            // the display mode and the side of the vertical tabs stand side by side in the top row: the side group takes about a third of the width, the mode group the rest
+            // The groups are sorted into four tabs (Agents.md 12.230); the form always opens on the first one, "基本". Every group is as wide
+            // as the widest one (the looks of selected rows).
+            int width = _styleGroup.Width;
+            // 基本: the display mode and the side of the vertical tabs side by side (the side takes about a third of the width), and the sheet-name rule
             modeGroup.Dock = DockStyle.None;
             _sideGroup.Dock = DockStyle.None;
             int topHeight = Math.Max(modeGroup.Height, _sideGroup.Height);
-            int sideWidth = (_styleGroup.Width - 12) * 34 / 100;
-            modeGroup.Size = new Size(_styleGroup.Width - sideWidth - 12, topHeight);
+            int sideWidth = (width - 12) * 34 / 100;
+            modeGroup.Size = new Size(width - sideWidth - 6, topHeight);
             _sideGroup.Size = new Size(sideWidth, topHeight);
             modeGroup.Margin = new Padding(3);
             _sideGroup.Margin = new Padding(3);
             var top = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
             top.Controls.Add(modeGroup);
             top.Controls.Add(_sideGroup);
-            layout.Controls.Add(top);
-            layout.Controls.SetChildIndex(top, 0);
-            // the add and delete animation (left) and the badges (right) stand side by side, each half the width, both as high as the higher one
-            _animGroup.Dock = DockStyle.None;
-            _badgeGroup.Dock = DockStyle.None;
-            int halfWidth = (_styleGroup.Width - 12) / 2;
-            int halfHeight = Math.Max(_animGroup.Height, _badgeGroup.Height);
-            _animGroup.Size = new Size(halfWidth, halfHeight);
-            _badgeGroup.Size = new Size(halfWidth, halfHeight);
-            _animGroup.Margin = new Padding(3);
-            _badgeGroup.Margin = new Padding(3);
-            var animBadge = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 5, 0, 0) };
-            animBadge.Controls.Add(_animGroup);
-            animBadge.Controls.Add(_badgeGroup);
-            layout.Controls.Add(animBadge);
-            layout.Controls.SetChildIndex(animBadge, 1);
-            // the dotted outline and the sheet-name rule stand side by side, each half the width of the groups above, both as high as the higher one
-            _outlineGroup.Dock = DockStyle.None;
-            _ruleGroup.Dock = DockStyle.None;
-            int half = (_styleGroup.Width - 12) / 2;
-            int pairHeight = Math.Max(_outlineGroup.Height, _ruleGroup.Height);
-            _outlineGroup.Size = new Size(half, pairHeight);
-            _ruleGroup.Size = new Size(half, pairHeight);
-            _outlineGroup.Margin = new Padding(3);
-            _ruleGroup.Margin = new Padding(3);
-            var pair = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 5, 0, 0) };
-            pair.Controls.Add(_outlineGroup);
-            pair.Controls.Add(_ruleGroup);
-            layout.Controls.Add(pair);
+            _tabs.Padding = new Point(16, 5); // (room around the titles of the tabs)
+            _tabs.TabPages.Add(CreatePage("基本", width, top, _ruleGroup));
+            _tabs.TabPages.Add(CreatePage("デザイン", width, _markerGroup, _styleGroup, _outlineGroup));
+            _animPage = CreatePage("アニメーション", width, _wobbleGroup, _animGroup);
+            _tabs.TabPages.Add(_animPage);
+            _tabs.TabPages.Add(CreatePage("バッジ", width, _badgeGroup));
+            // the tabs are as large as the largest page
+            var inner = Size.Empty;
+            foreach (TabPage page in _tabs.TabPages)
+            {
+                Size s = page.Controls[0].PreferredSize;
+                inner = new Size(Math.Max(inner.Width, s.Width + page.Padding.Horizontal), Math.Max(inner.Height, s.Height + page.Padding.Vertical));
+            }
+            IntPtr created = _tabs.Handle; // (the size of the tab headers is known once the control exists)
+            _tabs.Size = new Size(1000, 1000);
+            Rectangle shown = _tabs.DisplayRectangle;
+            _tabs.Size = new Size(inner.Width + 1000 - shown.Width, inner.Height + 1000 - shown.Height);
+            _tabs.Margin = new Padding(3);
+            // the sample of the animation moves (and sounds) while its tab is shown; it plays at once when the tab is chosen
+            _tabs.SelectedIndexChanged += (s, e) =>
+            {
+                if (_tabs.SelectedTab != _animPage) return;
+                RefreshWobbleSample();
+                BeginInvoke(new Action(PlayWobbleSample));
+                if (_wobbleTimer != null) { _wobbleTimer.Stop(); _wobbleTimer.Start(); }
+            };
+
+            var layout = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Fill };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            layout.Controls.Add(_tabs);
             // The bottom row: the add-in's version (the same as the release tag), copyright and license at the left, the buttons at the right.
             var version = new Label
             {
@@ -444,9 +438,35 @@ namespace VerticalSheetTabs
         }
 
         // Plays the sample's wobble, with its sound while the check box "効果音を鳴らす" is checked: every round of the timer sounds as well, so the sound can be heard properly.
+        // Only while the tab of the animation is shown (no sound from a tab that cannot be seen), and not twice at once (the tab chosen and the
+        // sample made at the same moment).
         private void PlayWobbleSample()
         {
-            if (_wobbleSample != null) _wobbleSample.PlayWobble(true);
+            if (_wobbleSample == null || !_wobbleSample.Visible) return;
+            if ((DateTime.Now - _wobblePlayed).TotalMilliseconds < 300) return;
+            _wobblePlayed = DateTime.Now;
+            _wobbleSample.PlayWobble(true);
+        }
+
+        // A tab with the groups one below the other, each as wide as the widest group of the form.
+        private static TabPage CreatePage(string title, int width, params Control[] rows)
+        {
+            var page = new TabPage(title) { Padding = new Padding(6), UseVisualStyleBackColor = true };
+            var layout = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Location = new Point(6, 6), Margin = Padding.Empty };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            for (int i = 0; i < rows.Length; i++)
+            {
+                Control row = rows[i];
+                if (row is GroupBox)
+                {
+                    row.Dock = DockStyle.None;
+                    row.Width = width;
+                    row.Margin = new Padding(3, i == 0 ? 3 : 8, 3, 3);
+                }
+                layout.Controls.Add(row);
+            }
+            page.Controls.Add(layout);
+            return page;
         }
 
         public bool OutlineVisible { get { return _outlineShow.Checked; } }
