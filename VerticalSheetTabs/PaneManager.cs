@@ -492,16 +492,6 @@ namespace VerticalSheetTabs
             _entries.Clear();
         }
 
-        public void RemovePane(Excel.Window window)
-        {
-            if (window == null) return;
-            int hwnd = window.Hwnd;
-            Entry entry;
-            if (!_entries.TryGetValue(hwnd, out entry)) return;
-            _entries.Remove(hwnd);
-            _collection.Remove(entry.Pane);
-        }
-
         // Reading every sheet's name, visibility and tab color costs several COM calls per sheet, so
         // with hundreds of sheets a fixed 300 ms period would keep Excel busy. The period follows the
         // measured cost of one pass (at most about 1/8 of the time is spent here), between 0.3 and 3 s.
