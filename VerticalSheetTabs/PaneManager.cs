@@ -27,6 +27,11 @@ namespace VerticalSheetTabs
             public System.Drawing.Color[] ThemeCache;   // the workbook's theme colors, read at most every few seconds (Agents.md 12.218)
             public DateTime ThemeCacheAt = DateTime.MinValue;
             public int ThemeCacheSeconds = 5;
+            // The theme of the saved file, kept while the file is the same (path, time, size), and the names of the built-in styles that
+            // gave each theme color the last time (they are read directly while they still give it), Agents.md 12.226.
+            public string FileThemeStamp;
+            public System.Drawing.Color[] FileTheme;
+            public Dictionary<int, string> StyleSources = new Dictionary<int, string>();
             public bool InitPending;
             // Visibility changes we cause ourselves must not be mistaken for the user closing the pane.
             public DateTime IgnoreVisibleUntil;
@@ -63,6 +68,14 @@ namespace VerticalSheetTabs
             // The active sheet and the sheet names the history was last updated for.
             public string HistActive;
             public string HistNames;
+            // The name each sheet of the history had when it was last seen (by key): a change of the sheet names is checked against these
+            // few sheets, and all keys are read only when one of them is not where it was (Agents.md 12.226).
+            public Dictionary<string, string> HistHints = new Dictionary<string, string>();
+            // The keys of all sheets read in the running sync (for the folders), for the sheet names TickSignature: the history uses them
+            // instead of reading them again. Null when the sync read none.
+            public List<string> TickKeys;
+            public bool TickKeysComplete;
+            public string TickSignature;
             // What the sheets hold (errors, notes) for the badges (Agents.md 12.190), by sheet name, and the sheets to look at again
             // with the time of the change that makes them so (looked at again when it has been quiet for a while).
             public Dictionary<string, BadgeInfo> Badges = new Dictionary<string, BadgeInfo>();
@@ -479,16 +492,6 @@ namespace VerticalSheetTabs
             _entries.Clear();
         }
 
-        public void RemovePane(Excel.Window window)
-        {
-            if (window == null) return;
-            int hwnd = window.Hwnd;
-            Entry entry;
-            if (!_entries.TryGetValue(hwnd, out entry)) return;
-            _entries.Remove(hwnd);
-            _collection.Remove(entry.Pane);
-        }
-
         // Reading every sheet's name, visibility and tab color costs several COM calls per sheet, so
         // with hundreds of sheets a fixed 300 ms period would keep Excel busy. The period follows the
         // measured cost of one pass (at most about 1/8 of the time is spent here), between 0.3 and 3 s.
@@ -526,8 +529,42 @@ namespace VerticalSheetTabs
             foreach (Entry entry in new List<Entry>(_entries.Values))
             {
                 AllowPaneInput(entry);
-                if (SyncSheets(entry)) entry.Failures = 0;
+                if (SyncSheets(entry, true)) entry.Failures = 0; // (the dialog check above holds for this tick)
                 else if (++entry.Failures > 20) PurgeEntry(entry); // about 6 seconds without an answer
+            }
+        }
+
+        // Excel raised SheetActivate: the windows of that sheet's workbook are synced at once. The other workbooks did not change; the
+        // timer syncs them as always (Agents.md 12.226).
+        public void SyncSheetOf(object sheet)
+        {
+            string book = null;
+            try
+            {
+                var ws = sheet as Excel.Worksheet;
+                var ch = sheet as Excel.Chart;
+                var wb = (ws != null ? ws.Parent : ch != null ? ch.Parent : null) as Excel.Workbook;
+                if (wb != null) book = wb.Name;
+            }
+            catch (Exception)
+            {
+                // Excel is busy
+            }
+            if (book == null)
+            {
+                SyncAll();
+                return;
+            }
+            if (ExcelMainWindowDisabled(null)) return;
+            foreach (Entry entry in new List<Entry>(_entries.Values))
+            {
+                string name;
+                try { name = entry.Workbook.Name; }
+                catch (Exception) { continue; } // (the timer looks after a window that is gone)
+                if (name != book) continue;
+                AllowPaneInput(entry);
+                if (SyncSheets(entry, true)) entry.Failures = 0;
+                else if (++entry.Failures > 20) PurgeEntry(entry);
             }
         }
 
@@ -549,7 +586,8 @@ namespace VerticalSheetTabs
         }
 
         // Returns false when Excel could not be asked (busy, or the window/workbook is gone).
-        private static bool SyncSheets(Entry entry)
+        // dialogChecked: the caller has just found no dialog of Excel open (the timer's sync of all windows).
+        private static bool SyncSheets(Entry entry, bool dialogChecked = false)
         {
             if (entry.Busy) return true;
             // While Excel's "Protect Sheet" dialog is open the sync stays out of Excel (Agents.md 12.214).
@@ -557,7 +595,7 @@ namespace VerticalSheetTabs
             // While one of Excel's dialogs is open (Excel disables its main window), the sync stays out of Excel: some questions it
             // asks (the workbook's theme colors, for one) are answered with the message "this command cannot be used on a protected
             // sheet" as soon as the workbook has a protected sheet (Agents.md 12.218).
-            if (ExcelMainWindowDisabled(entry)) return true;
+            if (!dialogChecked && ExcelMainWindowDisabled(entry)) return true;
             // A sync that is already running is not started again: the moves the sync makes itself (the
             // sheet-name rule) make Excel raise SheetActivate, whose handler would start a sync inside
             // the running one, which sees the sheets half moved and moves more; and Excel delivers timer
@@ -626,10 +664,14 @@ namespace VerticalSheetTabs
 
                 bool activeProtected = IsSheetProtected(activeSheet);
                 entry.Control.ActiveSheetProtected = activeProtected;
-                TrackHistory(entry, activeSheet, active, string.Join("|", allNames));
-                UpdateBadges(entry, names, active, activeProtected);
+                // The rows first: the badges may take a while to look at a sheet, and the history uses the keys the folders read.
+                entry.TickKeys = null;
                 List<StripRow> rows = BuildRows(entry, allNames, visibleAt);
                 entry.Control.SetSheets(names, active, selected, colors, rows);
+                // a change of the rows is drawn now: the badges below may take a while (the sync would draw only at its end)
+                if (entry.Settings.Badges != BadgeKinds.None) entry.Control.PaintNow();
+                TrackHistory(entry, activeSheet, active, allNames);
+                UpdateBadges(entry, names, active, activeProtected);
                 return true;
             }
             catch (Exception)
@@ -661,6 +703,9 @@ namespace VerticalSheetTabs
             {
                 bool complete;
                 List<string> keys = FolderStore.SheetKeys(entry.Workbook, true, true, out complete);
+                entry.TickKeys = keys;
+                entry.TickKeysComplete = complete;
+                entry.TickSignature = signature;
                 if (!complete && ++entry.KeyMisses < 3)
                 {
                     // A sheet could not be read (Excel is busy): a guessed key would take the sheet out of its
@@ -998,23 +1043,39 @@ namespace VerticalSheetTabs
 
         // Called by the sync: a sheet that became active (by a click, a key, a macro, the tabs of Excel) is put into the history;
         // when sheets were added, renamed or deleted, the sheets that no longer exist are taken out.
-        private static void TrackHistory(Entry entry, object activeSheet, string activeName, string namesSignature)
+        private static void TrackHistory(Entry entry, object activeSheet, string activeName, List<string> allNames)
         {
             try
             {
                 if (activeName != null && activeSheet != null && activeName != entry.HistActive)
                 {
                     entry.HistActive = activeName;
-                    entry.History.Push(FolderStore.KeyOf(activeSheet, true));
+                    string key = FolderStore.KeyOf(activeSheet, true);
+                    entry.History.Push(key);
+                    if (key != null) entry.HistHints[key] = activeName;
                 }
+                string namesSignature = string.Join("|", allNames);
                 if (namesSignature != entry.HistNames)
                 {
                     entry.HistNames = namesSignature;
                     if (entry.History.Keys.Count > 0)
                     {
-                        bool complete;
-                        List<string> keys = FolderStore.SheetKeys(entry.Workbook, false, true, out complete);
-                        if (complete) entry.History.Prune(new HashSet<string>(keys));
+                        // The keys the folders read in this sync are used; else, when every sheet of the history is still where it was seen
+                        // (its name has its key), no sheet of the history is gone and nothing is read; else all keys are read, as before.
+                        bool complete = false;
+                        List<string> keys;
+                        if (entry.TickKeys != null && entry.TickSignature == namesSignature)
+                        {
+                            keys = entry.TickKeys;
+                            complete = entry.TickKeysComplete;
+                        }
+                        else if (HistoryInPlace(entry, allNames)) keys = null;
+                        else keys = FolderStore.SheetKeys(entry.Workbook, false, true, out complete);
+                        if (keys != null && complete)
+                        {
+                            entry.History.Prune(new HashSet<string>(keys));
+                            NoteHistoryHints(entry, keys, allNames);
+                        }
                     }
                 }
                 entry.Control.SetNavigation(entry.History.CanBack, entry.History.CanForward);
@@ -1023,6 +1084,49 @@ namespace VerticalSheetTabs
             {
                 // Excel is busy; the next tick tries again.
             }
+        }
+
+        // True when every sheet of the history is found under the name it was last seen with, with its key: then none of them is gone.
+        // False when one of them could not be found that way (renamed, deleted, made again under the same name, or not seen yet since the
+        // workbook was opened); the caller then reads all keys. With few sheets, reading all is as quick, and is done.
+        private static bool HistoryInPlace(Entry entry, List<string> allNames)
+        {
+            if (entry.History.Keys.Count >= allNames.Count) return false;
+            try
+            {
+                var names = new HashSet<string>(allNames);
+                foreach (string key in entry.History.Keys)
+                {
+                    if (key.StartsWith("n:", StringComparison.Ordinal))
+                    {
+                        // a chart sheet's key is its name
+                        string chartName = key.Substring(2);
+                        if (!names.Contains(chartName) || !(entry.Workbook.Sheets[chartName] is Excel.Chart)) return false;
+                        continue;
+                    }
+                    string hint;
+                    if (!entry.HistHints.TryGetValue(key, out hint) || !names.Contains(hint)) return false;
+                    var ws = entry.Workbook.Sheets[hint] as Excel.Worksheet;
+                    if (ws == null || FolderStore.KeyOf(ws, false) != key) return false;
+                }
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        // The names the sheets of the history have now (keys and names: all sheets in Excel's order).
+        private static void NoteHistoryHints(Entry entry, List<string> keys, List<string> allNames)
+        {
+            var hints = new Dictionary<string, string>();
+            var inHistory = new HashSet<string>(entry.History.Keys);
+            for (int i = 0; i < keys.Count && i < allNames.Count; i++)
+            {
+                if (inHistory.Contains(keys[i])) hints[keys[i]] = allNames[i];
+            }
+            entry.HistHints = hints;
         }
 
         // The visible sheets by key (what the history can go to).
@@ -2064,10 +2168,14 @@ namespace VerticalSheetTabs
         // (light 2) is not used by any built-in style. Found by the theme index of the style, not by its (translated) name.
         private static void OverrideFromStyles(Entry entry, System.Drawing.Color[] colors)
         {
+            // The styles that gave the 9 colors the last time are read directly; when one of them no longer gives its color, all styles are
+            // looked at again (any built-in style with that theme color and no tint shows the same color, so the result is the same).
+            if (entry.StyleSources.Count >= 9 && FromKnownStyles(entry, colors)) return;
             try
             {
                 // position in colors[]: 0 light1, 1 dark1, 2 light2, 3 dark2, 4..9 accent1..6; Excel's theme index of the style: font 1 light1, 2 dark1, 4 dark2; fill 5..10 accents
                 var found = new HashSet<int>();
+                var sources = new Dictionary<int, string>();
                 foreach (Excel.Style style in entry.Workbook.Styles)
                 {
                     try
@@ -2075,10 +2183,16 @@ namespace VerticalSheetTabs
                         if (!style.BuiltIn) continue;
                         int fillIndex = style.Interior.ThemeColor;
                         if (fillIndex >= 5 && fillIndex <= 10 && style.Interior.TintAndShade == 0 && found.Add(fillIndex))
+                        {
                             colors[fillIndex - 1] = FromBgr(Convert.ToInt32(style.Interior.Color));
+                            sources[fillIndex] = style.Name;
+                        }
                         int fontIndex = style.Font.ThemeColor;
                         if ((fontIndex == 1 || fontIndex == 2 || fontIndex == 4) && style.Font.TintAndShade == 0 && found.Add(fontIndex))
+                        {
                             colors[fontIndex == 1 ? 0 : fontIndex == 2 ? 1 : 3] = FromBgr(Convert.ToInt32(style.Font.Color));
+                            sources[-fontIndex] = style.Name; // (the fonts as negative numbers, apart from the fills' 5..10)
+                        }
                     }
                     catch (Exception)
                     {
@@ -2086,11 +2200,49 @@ namespace VerticalSheetTabs
                     }
                     if (found.Count >= 9) break;
                 }
+                entry.StyleSources = sources;
             }
             catch (Exception)
             {
                 // the colors of the file (or the Office theme) stay
+                entry.StyleSources = new Dictionary<int, string>();
             }
+        }
+
+        // The colors from the styles noted the last time; false (colors untouched) when one of them does not give its color any more.
+        private static bool FromKnownStyles(Entry entry, System.Drawing.Color[] colors)
+        {
+            var found = new System.Drawing.Color[10];
+            var got = new bool[10];
+            try
+            {
+                foreach (KeyValuePair<int, string> source in entry.StyleSources)
+                {
+                    Excel.Style style = entry.Workbook.Styles[source.Value];
+                    if (!style.BuiltIn) return false;
+                    int index = source.Key;
+                    if (index > 0)
+                    {
+                        if (style.Interior.ThemeColor != index || style.Interior.TintAndShade != 0) return false;
+                        found[index - 1] = FromBgr(Convert.ToInt32(style.Interior.Color));
+                        got[index - 1] = true;
+                    }
+                    else
+                    {
+                        int fontIndex = -index;
+                        if (style.Font.ThemeColor != fontIndex || style.Font.TintAndShade != 0) return false;
+                        int at = fontIndex == 1 ? 0 : fontIndex == 2 ? 1 : 3;
+                        found[at] = FromBgr(Convert.ToInt32(style.Font.Color));
+                        got[at] = true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+            for (int i = 0; i < 10; i++) if (got[i]) colors[i] = found[i];
+            return true;
         }
 
         private static System.Drawing.Color FromBgr(int bgr)
@@ -2122,6 +2274,32 @@ namespace VerticalSheetTabs
         // The theme colors of the saved file (xl/theme/theme1.xml of the .xlsx): light1, dark1, light2, dark2, accent1..6; null when
         // the workbook has no file of that kind or the file cannot be read.
         private static System.Drawing.Color[] ReadThemeColorsFromFile(Entry entry)
+        {
+            // the file is read again only when it changed (saved): the colors of the same file are the same
+            string stamp = null;
+            try
+            {
+                string path = entry.Workbook.FullName;
+                if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+                {
+                    var info = new System.IO.FileInfo(path);
+                    stamp = path + "|" + info.LastWriteTimeUtc.Ticks + "|" + info.Length;
+                }
+            }
+            catch (Exception)
+            {
+                stamp = null;
+            }
+            if (stamp == null) return null;
+            if (stamp != entry.FileThemeStamp)
+            {
+                entry.FileTheme = ReadThemeFile(entry);
+                entry.FileThemeStamp = stamp;
+            }
+            return entry.FileTheme == null ? null : (System.Drawing.Color[])entry.FileTheme.Clone(); // (a copy: the styles' colors are put into it)
+        }
+
+        private static System.Drawing.Color[] ReadThemeFile(Entry entry)
         {
             try
             {
@@ -2610,6 +2788,8 @@ namespace VerticalSheetTabs
             finally
             {
                 entry.Busy = false;
+                // the new row shows at once, not at the next tick of the timer (as after "Insert")
+                SyncSheets(entry);
             }
         }
 
@@ -2858,27 +3038,25 @@ namespace VerticalSheetTabs
         private const byte VkF6 = 0x75;
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+        private static extern bool EnumThreadWindows(uint threadId, EnumWindowsProc callback, IntPtr lParam);
 
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         // A dialog of Excel (a message, "save changes?", a command's dialog) is open: Excel disables its main window (the main window of
         // every workbook window, when there are several). While that lasts, nothing here asks Excel anything (Agents.md 12.218).
+        // Excel's main windows belong to its UI thread, the thread the add-in runs on: only that thread's windows are looked at, not
+        // every window of the desktop (Agents.md 12.226).
         private static bool ExcelMainWindowDisabled(Entry entry)
         {
             try
             {
-                uint mine = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
                 bool disabled = false;
                 var name = new System.Text.StringBuilder(32);
-                EnumWindows((h, l) =>
+                EnumThreadWindows(GetCurrentThreadId(), (h, l) =>
                 {
-                    uint pid;
-                    GetWindowThreadProcessId(h, out pid);
-                    if (pid != mine) return true;
                     name.Clear();
                     GetClassName(h, name, name.Capacity);
                     if (name.ToString() == "XLMAIN" && !IsWindowEnabled(h)) { disabled = true; return false; }

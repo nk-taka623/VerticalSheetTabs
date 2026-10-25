@@ -929,11 +929,6 @@ namespace VerticalSheetTabs
             if (_anchorFolder != null && !_baseRows.Any(x => x.IsFolder && x.FolderId == _anchorFolder)) _anchorFolder = null;
         }
 
-        private StripRow FolderRow(string id)
-        {
-            return _rows.FirstOrDefault(x => x.IsFolder && x.FolderId == id);
-        }
-
         // Right of the open/closed mark: a click left of this opens or closes the folder.
         private int FolderMarkRight()
         {

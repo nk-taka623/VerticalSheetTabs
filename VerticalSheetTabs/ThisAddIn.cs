@@ -35,7 +35,7 @@ namespace VerticalSheetTabs
                 _panes = new PaneManager(this.CustomTaskPanes, this.Application);
 
                 this.Application.WindowActivate += Application_WindowActivate;
-                this.Application.SheetActivate += sh => Guard(() => _panes.SyncAll());
+                this.Application.SheetActivate += sh => Guard(() => _panes.SyncSheetOf(sh));
                 // the badges of the rows (errors, notes): the sheet is looked at again when it has been changed or calculated, or left
                 this.Application.SheetChange += (sh, rng) => Guard(() => _panes.MarkBadgesDirty(sh));
                 this.Application.SheetCalculate += sh => Guard(() => _panes.MarkBadgesDirty(sh));

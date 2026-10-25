@@ -416,18 +416,5 @@ namespace VerticalSheetTabs
             Nodes.InsertRange(index < 0 ? Nodes.Count : index, units);
             return true;
         }
-
-        // A short text form for tests and logs: "[Name: a,b] c [Other:]".
-        public string Describe()
-        {
-            var sb = new StringBuilder();
-            foreach (FolderNode n in Nodes)
-            {
-                if (sb.Length > 0) sb.Append(' ');
-                if (n.IsFolder) sb.Append('[').Append(n.Name).Append(':').Append(string.Join(",", n.Sheets)).Append(']');
-                else sb.Append(n.SheetCode);
-            }
-            return sb.ToString();
-        }
     }
 }
