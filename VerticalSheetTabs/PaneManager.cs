@@ -534,8 +534,42 @@ namespace VerticalSheetTabs
             foreach (Entry entry in new List<Entry>(_entries.Values))
             {
                 AllowPaneInput(entry);
-                if (SyncSheets(entry)) entry.Failures = 0;
+                if (SyncSheets(entry, true)) entry.Failures = 0; // (the dialog check above holds for this tick)
                 else if (++entry.Failures > 20) PurgeEntry(entry); // about 6 seconds without an answer
+            }
+        }
+
+        // Excel raised SheetActivate: the windows of that sheet's workbook are synced at once. The other workbooks did not change; the
+        // timer syncs them as always (Agents.md 12.226).
+        public void SyncSheetOf(object sheet)
+        {
+            string book = null;
+            try
+            {
+                var ws = sheet as Excel.Worksheet;
+                var ch = sheet as Excel.Chart;
+                var wb = (ws != null ? ws.Parent : ch != null ? ch.Parent : null) as Excel.Workbook;
+                if (wb != null) book = wb.Name;
+            }
+            catch (Exception)
+            {
+                // Excel is busy
+            }
+            if (book == null)
+            {
+                SyncAll();
+                return;
+            }
+            if (ExcelMainWindowDisabled(null)) return;
+            foreach (Entry entry in new List<Entry>(_entries.Values))
+            {
+                string name;
+                try { name = entry.Workbook.Name; }
+                catch (Exception) { continue; } // (the timer looks after a window that is gone)
+                if (name != book) continue;
+                AllowPaneInput(entry);
+                if (SyncSheets(entry, true)) entry.Failures = 0;
+                else if (++entry.Failures > 20) PurgeEntry(entry);
             }
         }
 
@@ -557,7 +591,8 @@ namespace VerticalSheetTabs
         }
 
         // Returns false when Excel could not be asked (busy, or the window/workbook is gone).
-        private static bool SyncSheets(Entry entry)
+        // dialogChecked: the caller has just found no dialog of Excel open (the timer's sync of all windows).
+        private static bool SyncSheets(Entry entry, bool dialogChecked = false)
         {
             if (entry.Busy) return true;
             // While Excel's "Protect Sheet" dialog is open the sync stays out of Excel (Agents.md 12.214).
@@ -565,7 +600,7 @@ namespace VerticalSheetTabs
             // While one of Excel's dialogs is open (Excel disables its main window), the sync stays out of Excel: some questions it
             // asks (the workbook's theme colors, for one) are answered with the message "this command cannot be used on a protected
             // sheet" as soon as the workbook has a protected sheet (Agents.md 12.218).
-            if (ExcelMainWindowDisabled(entry)) return true;
+            if (!dialogChecked && ExcelMainWindowDisabled(entry)) return true;
             // A sync that is already running is not started again: the moves the sync makes itself (the
             // sheet-name rule) make Excel raise SheetActivate, whose handler would start a sync inside
             // the running one, which sees the sheets half moved and moves more; and Excel delivers timer
@@ -2932,27 +2967,25 @@ namespace VerticalSheetTabs
         private const byte VkF6 = 0x75;
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+        private static extern bool EnumThreadWindows(uint threadId, EnumWindowsProc callback, IntPtr lParam);
 
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         // A dialog of Excel (a message, "save changes?", a command's dialog) is open: Excel disables its main window (the main window of
         // every workbook window, when there are several). While that lasts, nothing here asks Excel anything (Agents.md 12.218).
+        // Excel's main windows belong to its UI thread, the thread the add-in runs on: only that thread's windows are looked at, not
+        // every window of the desktop (Agents.md 12.226).
         private static bool ExcelMainWindowDisabled(Entry entry)
         {
             try
             {
-                uint mine = (uint)System.Diagnostics.Process.GetCurrentProcess().Id;
                 bool disabled = false;
                 var name = new System.Text.StringBuilder(32);
-                EnumWindows((h, l) =>
+                EnumThreadWindows(GetCurrentThreadId(), (h, l) =>
                 {
-                    uint pid;
-                    GetWindowThreadProcessId(h, out pid);
-                    if (pid != mine) return true;
                     name.Clear();
                     GetClassName(h, name, name.Capacity);
                     if (name.ToString() == "XLMAIN" && !IsWindowEnabled(h)) { disabled = true; return false; }
