@@ -167,6 +167,10 @@ namespace VerticalSheetTabs
         public event Action AddRequested;
         // The mark of a folder row was clicked (folder id).
         public event Action<string> FolderToggleRequested;
+        // The paint can mark of a folder (Agents.md 12.234): a click asks for the palette of the folder color (the folder, and the point
+        // on the screen below the mark), a double click for the color dialog of "その他の色".
+        public event Action<string, Point> FolderColorMarkClicked;
+        public event Action<string> FolderColorMarkDoubleClicked;
         // (sheets, folders, the folder they are dropped into or null, the loose sheet or the folder
         // they are dropped in front of; all null = at the end, copy instead of move)
         public event Action<IList<string>, IList<string>, string, string, string, bool> FolderMoveRequested;
@@ -1942,6 +1946,61 @@ namespace VerticalSheetTabs
             return false;
         }
 
+        // The paint can mark at the right end of a folder row that keeps its sheets in the folder's color (where DrawCheck draws it).
+        private Rectangle PaintCanRect(int index)
+        {
+            if (index < 0 || index >= _rows.Count || !_rows[index].IsFolder || !_rows[index].SyncColor) return Rectangle.Empty;
+            Rectangle row = RowRect(index);
+            int right = row.Right - RightInset(_rows[index]);
+            int width = Px(CheckWidth);
+            int cx = right - Px(CheckPadRight) - width / 2;
+            int top = row.Top + Px(PlainTop), bottom = row.Bottom - Px(BottomInset);
+            int height = Px(CanRadius * 2);
+            return new Rectangle(cx - width / 2, (top + bottom) / 2 - height / 2, width, height);
+        }
+
+        private bool PaintCanHit(int index, Point p)
+        {
+            Rectangle r = PaintCanRect(index);
+            return !r.IsEmpty && Rectangle.Inflate(r, Px(3), Px(3)).Contains(p);
+        }
+
+        // A click on the paint can waits for the time of a double click: a second click within it is a double click (the color dialog),
+        // else the palette opens.
+        private System.Windows.Forms.Timer _canTimer;
+        private string _canFolder;
+        private Point _canScreen;
+
+        private void PaintCanDown(int index, int clicks)
+        {
+            _tip.Hide(this); // (the tip of the mark would stay behind the palette; it is shown again only when the pointer comes back to the mark)
+            string id = _rows[index].FolderId;
+            if (clicks >= 2 && _canFolder == id && _canTimer != null && _canTimer.Enabled)
+            {
+                _canTimer.Stop();
+                _canFolder = null;
+                if (FolderColorMarkDoubleClicked != null) FolderColorMarkDoubleClicked(id);
+                return;
+            }
+            Rectangle r = PaintCanRect(index);
+            _canFolder = id;
+            _canScreen = PointToScreen(new Point(r.Left, r.Bottom + Px(2)));
+            if (_canTimer == null)
+            {
+                _canTimer = new System.Windows.Forms.Timer();
+                _canTimer.Tick += (s, e) =>
+                {
+                    _canTimer.Stop();
+                    string folder = _canFolder;
+                    _canFolder = null;
+                    if (folder != null && FolderColorMarkClicked != null) FolderColorMarkClicked(folder, _canScreen);
+                };
+            }
+            _canTimer.Interval = Math.Max(100, SystemInformation.DoubleClickTime);
+            _canTimer.Stop();
+            _canTimer.Start();
+        }
+
         private bool _protectAsking;
 
         private void CycleProgress(string sheet)
@@ -2347,6 +2406,7 @@ namespace VerticalSheetTabs
         // The text of the tip of the badge under the pointer (null = none).
         private string BadgeTipAt(int index, Point p)
         {
+            if (PaintCanHit(index, p)) return "中の全てを常にフォルダと同一色 (クリック: フォルダの色、ダブルクリック: その他の色)";
             if (index < 0 || index >= _rows.Count || _shownBadges == BadgeKinds.None) return null;
             foreach (RowBadgeSpec s in RowBadges(_rows[index], RowRect(index)))
             {
@@ -3624,6 +3684,13 @@ namespace VerticalSheetTabs
                 return;
             }
 
+            // the paint can of a folder: the folder's color (and the folder is not selected)
+            if (e.Button == MouseButtons.Left && PaintCanHit(index, e.Location))
+            {
+                PaintCanDown(index, e.Clicks);
+                return;
+            }
+
             if (row.IsFolder)
             {
                 if (e.Button == MouseButtons.Left && e.X <= FolderMarkRight())
@@ -4180,6 +4247,7 @@ namespace VerticalSheetTabs
             if (index < 0) return;
             if (_rows[index].IsFolder)
             {
+                if (PaintCanHit(index, e.Location)) return; // (the double click of the paint can: the color dialog)
                 if (e.X > FolderMarkRight()) BeginRenameFolder(_rows[index].FolderId);
                 return;
             }
