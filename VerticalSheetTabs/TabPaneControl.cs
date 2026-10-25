@@ -304,6 +304,12 @@ namespace VerticalSheetTabs
         public void SetWobble(WobbleType type, int amp, int dur) { _strip.SetWobble(type, amp, dur); }
         public void SetWobbleSound(bool on, int volume) { _strip.SetWobbleSound(on, volume); }
 
+        // Draws what has changed at once (nothing when nothing has).
+        public void PaintNow()
+        {
+            _strip.Update();
+        }
+
         public void SetSheets(IList<string> names, string activeName, ICollection<string> selected, IDictionary<string, int> colors, IList<StripRow> rows)
         {
             _strip.StructureProtected = StructureProtected;

@@ -668,6 +668,8 @@ namespace VerticalSheetTabs
                 entry.TickKeys = null;
                 List<StripRow> rows = BuildRows(entry, allNames, visibleAt);
                 entry.Control.SetSheets(names, active, selected, colors, rows);
+                // a change of the rows is drawn now: the badges below may take a while (the sync would draw only at its end)
+                if (entry.Settings.Badges != BadgeKinds.None) entry.Control.PaintNow();
                 TrackHistory(entry, activeSheet, active, allNames);
                 UpdateBadges(entry, names, active, activeProtected);
                 return true;
