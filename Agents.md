@@ -2722,5 +2722,5 @@ gitGraph
 
 ### 12.237 インストーラの更新 (バージョン1.1.97.0)
 
-- 12.236 (フォルダの行の、シート数のバッジと進捗の丸薬の間に、すき間を空ける) を含めて、バージョンを 1.1.97.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映した。`master` への反映とタグ `v1.1.97` は、ユーザーの指示のあと)
+- 12.236 (フォルダの行の、シート数のバッジと進捗の丸薬の間に、すき間を空ける) を含めて、バージョンを 1.1.97.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.1.97` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.1.97.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_1_97_0\`)。インストールの実機確認は、未実施
