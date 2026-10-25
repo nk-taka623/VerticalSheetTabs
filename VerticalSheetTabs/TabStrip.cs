@@ -1799,6 +1799,8 @@ namespace VerticalSheetTabs
         }
 
         private const double RowBadgePillWidth = 34, RowBadgePillHeight = 17;
+        // a little more room to the left of a folder's progress pill, before the badge with the number of sheets (Agents.md 12.236)
+        private const double RowBadgePillGap = 4;
 
         // the done + lock mark and the count badge of a folder are a little larger than the others (Agents.md 12.203)
         private const double BadgeBigScale = 1.2;
@@ -1903,7 +1905,7 @@ namespace VerticalSheetTabs
                 int h = s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillHeight) : side;
                 s.Bounds = new Rectangle(x - w, cy - h / 2, w, h);
                 list.Add(s);
-                x -= w + gap;
+                x -= w + gap + (s.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillGap) : 0);
             }
             return list;
         }
@@ -1914,7 +1916,7 @@ namespace VerticalSheetTabs
             if (_shownBadges == BadgeKinds.None) return 0;
             List<RowBadgeSpec> specs = RowBadges(r, new Rectangle(0, 0, ContentWidth, RowPx));
             if (specs.Count == 0) return 0;
-            return specs.Sum(s => s.Bounds.Width + Px(3)) + Px(RowBadgeEdge - 2);
+            return specs.Sum(s => s.Bounds.Width + Px(3) + (s.Kind == RowBadgeKind.ProgressPill && specs.Count > 1 ? Px(RowBadgePillGap) : 0)) + Px(RowBadgeEdge - 2);
         }
 
         private bool IsProgressDone(string sheet)
