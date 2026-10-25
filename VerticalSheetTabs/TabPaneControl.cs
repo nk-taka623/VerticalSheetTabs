@@ -196,7 +196,7 @@ namespace VerticalSheetTabs
             var fHide = FolderItem("フォルダ内のシートをすべて非表示(&H)", "hide");
             var fUnhide = FolderItem("フォルダ内のシートをすべて再表示(&U)", "unhide");
             var fColor = PaletteItem("フォルダの色(&C)", c => { if (FolderColorRequested != null) FolderColorRequested(_strip.SelectedFolders(), c); });
-            var fSyncColor = FolderItem("中の全てを常にフォルダと同一色に設定(&F)", "synccolor");
+            var fSyncColor = FolderItem("フォルダと中のシートを同一色に設定(&F)", "synccolor");
             var fCloseAll = FolderItem("全てのフォルダを閉じる(&L)", "closeall");
             var fOpenAll = FolderItem("全てのフォルダを開く(&O)", "openall");
             var folderSettings = new ToolStripMenuItem("タブ表示の設定");
