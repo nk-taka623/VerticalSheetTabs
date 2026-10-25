@@ -27,6 +27,11 @@ namespace VerticalSheetTabs
             public System.Drawing.Color[] ThemeCache;   // the workbook's theme colors, read at most every few seconds (Agents.md 12.218)
             public DateTime ThemeCacheAt = DateTime.MinValue;
             public int ThemeCacheSeconds = 5;
+            // The theme of the saved file, kept while the file is the same (path, time, size), and the names of the built-in styles that
+            // gave each theme color the last time (they are read directly while they still give it), Agents.md 12.226.
+            public string FileThemeStamp;
+            public System.Drawing.Color[] FileTheme;
+            public Dictionary<int, string> StyleSources = new Dictionary<int, string>();
             public bool InitPending;
             // Visibility changes we cause ourselves must not be mistaken for the user closing the pane.
             public DateTime IgnoreVisibleUntil;
@@ -2171,10 +2176,14 @@ namespace VerticalSheetTabs
         // (light 2) is not used by any built-in style. Found by the theme index of the style, not by its (translated) name.
         private static void OverrideFromStyles(Entry entry, System.Drawing.Color[] colors)
         {
+            // The styles that gave the 9 colors the last time are read directly; when one of them no longer gives its color, all styles are
+            // looked at again (any built-in style with that theme color and no tint shows the same color, so the result is the same).
+            if (entry.StyleSources.Count >= 9 && FromKnownStyles(entry, colors)) return;
             try
             {
                 // position in colors[]: 0 light1, 1 dark1, 2 light2, 3 dark2, 4..9 accent1..6; Excel's theme index of the style: font 1 light1, 2 dark1, 4 dark2; fill 5..10 accents
                 var found = new HashSet<int>();
+                var sources = new Dictionary<int, string>();
                 foreach (Excel.Style style in entry.Workbook.Styles)
                 {
                     try
@@ -2182,10 +2191,16 @@ namespace VerticalSheetTabs
                         if (!style.BuiltIn) continue;
                         int fillIndex = style.Interior.ThemeColor;
                         if (fillIndex >= 5 && fillIndex <= 10 && style.Interior.TintAndShade == 0 && found.Add(fillIndex))
+                        {
                             colors[fillIndex - 1] = FromBgr(Convert.ToInt32(style.Interior.Color));
+                            sources[fillIndex] = style.Name;
+                        }
                         int fontIndex = style.Font.ThemeColor;
                         if ((fontIndex == 1 || fontIndex == 2 || fontIndex == 4) && style.Font.TintAndShade == 0 && found.Add(fontIndex))
+                        {
                             colors[fontIndex == 1 ? 0 : fontIndex == 2 ? 1 : 3] = FromBgr(Convert.ToInt32(style.Font.Color));
+                            sources[-fontIndex] = style.Name; // (the fonts as negative numbers, apart from the fills' 5..10)
+                        }
                     }
                     catch (Exception)
                     {
@@ -2193,11 +2208,49 @@ namespace VerticalSheetTabs
                     }
                     if (found.Count >= 9) break;
                 }
+                entry.StyleSources = sources;
             }
             catch (Exception)
             {
                 // the colors of the file (or the Office theme) stay
+                entry.StyleSources = new Dictionary<int, string>();
             }
+        }
+
+        // The colors from the styles noted the last time; false (colors untouched) when one of them does not give its color any more.
+        private static bool FromKnownStyles(Entry entry, System.Drawing.Color[] colors)
+        {
+            var found = new System.Drawing.Color[10];
+            var got = new bool[10];
+            try
+            {
+                foreach (KeyValuePair<int, string> source in entry.StyleSources)
+                {
+                    Excel.Style style = entry.Workbook.Styles[source.Value];
+                    if (!style.BuiltIn) return false;
+                    int index = source.Key;
+                    if (index > 0)
+                    {
+                        if (style.Interior.ThemeColor != index || style.Interior.TintAndShade != 0) return false;
+                        found[index - 1] = FromBgr(Convert.ToInt32(style.Interior.Color));
+                        got[index - 1] = true;
+                    }
+                    else
+                    {
+                        int fontIndex = -index;
+                        if (style.Font.ThemeColor != fontIndex || style.Font.TintAndShade != 0) return false;
+                        int at = fontIndex == 1 ? 0 : fontIndex == 2 ? 1 : 3;
+                        found[at] = FromBgr(Convert.ToInt32(style.Font.Color));
+                        got[at] = true;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+            for (int i = 0; i < 10; i++) if (got[i]) colors[i] = found[i];
+            return true;
         }
 
         private static System.Drawing.Color FromBgr(int bgr)
@@ -2229,6 +2282,32 @@ namespace VerticalSheetTabs
         // The theme colors of the saved file (xl/theme/theme1.xml of the .xlsx): light1, dark1, light2, dark2, accent1..6; null when
         // the workbook has no file of that kind or the file cannot be read.
         private static System.Drawing.Color[] ReadThemeColorsFromFile(Entry entry)
+        {
+            // the file is read again only when it changed (saved): the colors of the same file are the same
+            string stamp = null;
+            try
+            {
+                string path = entry.Workbook.FullName;
+                if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+                {
+                    var info = new System.IO.FileInfo(path);
+                    stamp = path + "|" + info.LastWriteTimeUtc.Ticks + "|" + info.Length;
+                }
+            }
+            catch (Exception)
+            {
+                stamp = null;
+            }
+            if (stamp == null) return null;
+            if (stamp != entry.FileThemeStamp)
+            {
+                entry.FileTheme = ReadThemeFile(entry);
+                entry.FileThemeStamp = stamp;
+            }
+            return entry.FileTheme == null ? null : (System.Drawing.Color[])entry.FileTheme.Clone(); // (a copy: the styles' colors are put into it)
+        }
+
+        private static System.Drawing.Color[] ReadThemeFile(Entry entry)
         {
             try
             {
