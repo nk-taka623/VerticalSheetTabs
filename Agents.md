@@ -2807,5 +2807,5 @@ gitGraph
 
 ### 12.248 インストーラの更新 (バージョン1.2.2.0)
 
-- 12.247 (コピーアイコンを、左ボタンを押したまま右ボタンも押す方式に置き換える) を含めて、バージョンを 1.2.2.0 に上げ、ClickOnce のインストーラを作り直した (`develop` に反映した。`master` への反映とタグ `v1.2.2` は、ユーザーの指示のあと)
+- 12.247 (コピーアイコンを、左ボタンを押したまま右ボタンも押す方式に置き換える) を含めて、バージョンを 1.2.2.0 に上げ、ClickOnce のインストーラを作り直した (`develop` と `master` に反映し、`v1.2.2` のタグを付けた。配布用zip: `配布用zip\VerticalSheetTabs_v1.2.2.zip`)
 - 成果物: `VerticalSheetTabs\bin\Release\app.publish\` (`setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\VerticalSheetTabs_1_2_2_0\`)。インストールの実機確認は、未実施
