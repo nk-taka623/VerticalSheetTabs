@@ -72,7 +72,7 @@ namespace VerticalSheetTabs
             try
             {
                 XNamespace ns = Namespace;
-                XElement root = XDocument.Parse(xml).Root;
+                XElement root = SafeXml.Parse(xml, SafeXml.PartMaxChars).Root;
                 if (root == null) return history;
                 foreach (XElement e in root.Elements(ns + "sheet"))
                 {

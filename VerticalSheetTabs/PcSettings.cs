@@ -109,10 +109,19 @@ namespace VerticalSheetTabs
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 var text = new StringBuilder();
                 foreach (KeyValuePair<string, string> pair in values) text.Append(pair.Key).Append('=').Append(pair.Value).Append("\r\n");
-                string temp = path + ".tmp";
-                File.WriteAllText(temp, text.ToString(), new UTF8Encoding(false));
-                if (File.Exists(path)) File.Replace(temp, path, null);
-                else File.Move(temp, path);
+                // a name of its own: two Excel processes can write at the same time
+                string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    File.WriteAllText(temp, text.ToString(), new UTF8Encoding(false));
+                    if (File.Exists(path)) File.Replace(temp, path, null);
+                    else File.Move(temp, path);
+                }
+                finally
+                {
+                    try { if (File.Exists(temp)) File.Delete(temp); }
+                    catch (Exception) { }
+                }
             }
             catch (Exception)
             {
