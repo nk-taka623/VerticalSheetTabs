@@ -213,7 +213,7 @@ namespace VerticalSheetTabs
             _folderMenu.Items.Add(new ToolStripSeparator());
             _folderMenu.Items.Add(folderDelete);
             _folderMenu.Items.Add(folderDeleteAll);
-            // (opening and closing all folders is done with the buttons "全開" and "全閉" above the list, Agents.md 12.240)
+            // (opening and closing all folders is done with the buttons "全開" and "全閉" above the list)
             _folderMenu.Opening += (s, e) =>
             {
                 bool free = !StructureProtected;
@@ -253,7 +253,7 @@ namespace VerticalSheetTabs
             return selected.Contains(folderId) ? selected : new List<string> { folderId };
         }
 
-        // A click on the paint can of a folder: the palette of "フォルダの色", below the mark (Agents.md 12.234).
+        // A click on the paint can of a folder: the palette of "フォルダの色", below the mark.
         private void ShowFolderColorPalette(string folderId, Point screen)
         {
             var palette = new TabColorPalette { MoreColorsProvider = RequestMoreColor };

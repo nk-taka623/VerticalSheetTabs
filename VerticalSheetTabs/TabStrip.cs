@@ -10,8 +10,8 @@ using System.Windows.Forms;
 
 namespace VerticalSheetTabs
 {
-    // The vertical stack of sheet tabs, drawn like Excel's own horizontal tabs (measurements in
-    // Agents.md 9.2). Each tab is one row of the height of Excel's tab bar. The control owns the
+    // The vertical stack of sheet tabs, drawn like Excel's own horizontal tabs (measured on a real Excel).
+    // Each tab is one row of the height of Excel's tab bar. The control owns the
     // selection model (click, Ctrl+click, Shift+click), drag and drop, in-place renaming and
     // scrolling; the sheet commands themselves are reported to the pane through events.
     // One row of the list: a sheet, or a folder (FolderId != null).
@@ -48,7 +48,7 @@ namespace VerticalSheetTabs
         }
     }
 
-    // What a sheet holds that a badge tells of (Agents.md 12.190): the number of cells with an error, and of notes and comments.
+    // What a sheet holds that a badge tells of: the number of cells with an error, and of notes and comments.
     public class BadgeInfo
     {
         public int Errors;
@@ -57,7 +57,7 @@ namespace VerticalSheetTabs
         public int Progress; // 0 = none, 1 = not started, 2 = in progress, 3 = done
     }
 
-    // A line of the menu of the sheets seen last (Agents.md 12.186).
+    // A line of the menu of the sheets seen last.
     public class HistoryItem
     {
         public string Key;
@@ -88,11 +88,11 @@ namespace VerticalSheetTabs
         private const double MarkerInset = 13, MarkerHalfHeight = 5, MarkerBack = 4, MarkerFront = 3, MarkerRoom = 15;
         // The bars at the ends of the active sheet: width, distance from the ends of the body and from its top and
         // bottom, and the room the text keeps free at each end.
-        private const double BarWidth = 6, BarInset = 9, BarMargin = 4, BarRoom = 12, BarScale = 0.75; // 0.75 times the first size (8 wide); moved in by one bar width (Agents.md 12.132)
-        // the check badge marker at the left of the name of the active sheet: the room it takes before the text (Agents.md 12.131)
-        // The badges at the right end of a row: each takes a step of 18 DIP, the first one stands 6 DIP from the end (Agents.md 12.190).
+        private const double BarWidth = 6, BarInset = 9, BarMargin = 4, BarRoom = 12, BarScale = 0.75; // 0.75 times the first size (8 wide); moved in by one bar width
+        // the check badge marker at the left of the name of the active sheet: the room it takes before the text
+        // The badges at the right end of a row: each takes a step of 18 DIP, the first one stands 6 DIP from the end.
         private const double RowBadgeStep = 18, RowBadgeRadius = 7.5, RowBadgeEdge = 6;
-        private const double BadgeRoom = 12, BadgeScale = 0.75; // the badge is 0.75 times the first size (Agents.md 12.132)
+        private const double BadgeRoom = 12, BadgeScale = 0.75; // the badge is 0.75 times the first size
         private const double SeparatorLength = 19;
         private const double TextPadLeft = 12, TextPadRight = 8;
         // Folders: sheets inside a folder are indented; the folder row has an open/closed mark and,
@@ -167,7 +167,7 @@ namespace VerticalSheetTabs
         public event Action AddRequested;
         // The mark of a folder row was clicked (folder id).
         public event Action<string> FolderToggleRequested;
-        // The paint can mark of a folder (Agents.md 12.234): a click asks for the palette of the folder color (the folder, and the point
+        // The paint can mark of a folder: a click asks for the palette of the folder color (the folder, and the point
         // on the screen below the mark), a double click for the color dialog of "その他の色".
         public event Action<string, Point> FolderColorMarkClicked;
         public event Action<string> FolderColorMarkDoubleClicked;
@@ -268,7 +268,7 @@ namespace VerticalSheetTabs
             bool sameColors = _colors.Count == colors.Count && _colors.All(kv => { int v; return colors.TryGetValue(kv.Key, out v) && v == kv.Value; });
             bool sameNames = _names.SequenceEqual(names);
             // While a mouse button is down the user is changing the selection; do not fight them. A sample of the settings form takes no
-            // clicks for that, and it is set up while the button that chose a tab of the form is still down (Agents.md 12.232).
+            // clicks for that, and it is set up while the button that chose a tab of the form is still down.
             bool userBusy = !IsSample && Control.MouseButtons != MouseButtons.None;
             bool sameSelection = userBusy || (_active == activeName && _selected.SetEquals(selected));
             if (sameNames && sameRows && sameSelection && sameColors) return;
@@ -325,7 +325,7 @@ namespace VerticalSheetTabs
         // and can be pressed repeatedly. The tabs scroll above it when they do not fit.
         private bool NeedScroll { get { return _rows.Count * RowPx > AreaHeight; } }
 
-        // With one or more folders, a band at the top holds the "open all" and "close all" buttons (Agents.md 12.151); the rows start below it.
+        // With one or more folders, a band at the top holds the "open all" and "close all" buttons; the rows start below it.
         private const double HeaderHeight = 24, HeaderGap = 1.6, HeaderRadius = 3.2, HeaderTextShift = 1.5;
         private int _folderCount;
         private int _headerDown, _headerHot; // 0 none, 1 open all, 2 close all
@@ -352,7 +352,7 @@ namespace VerticalSheetTabs
         }
 
 
-        // ---- the tool row: back, forward, search box, folder switch (Agents.md 12.186) ----
+        // ---- the tool row: back, forward, search box, folder switch ----
 
         private const double ToolHeight = 38, ToolGap = 2.4, ToolButton = 22, ToolBoxHeight = 24, ToolRadius = 4, ToolSmallGap = 1.6;
         private List<StripRow> _baseRows = new List<StripRow>(); // the rows as the workbook has them
@@ -1153,7 +1153,7 @@ namespace VerticalSheetTabs
             if (!IsSample) DrawPlus(g);
         }
 
-        // ---- the burst of a progress mark that turns to "done" (Agents.md 12.199) ----
+        // ---- the burst of a progress mark that turns to "done" ----
         // The mark swells a little and falls back, rays and dots fly out of it, and a soft green light crosses the row. 0.5 seconds, no sound.
 
         private const int DoneAnimMs = 500;
@@ -1250,13 +1250,13 @@ namespace VerticalSheetTabs
             }
         }
 
-        // ---- the rows of added and deleted sheets and folders (Agents.md 12.194, 12.196) ----
+        // ---- the rows of added and deleted sheets and folders ----
         // An added row: the rows below make room (they slide down), and the new row grows in with a little spring, fading in, with a
         // ring of light around it. A deleted row: it swells a little, shrinks and fades away, a few dots fly out, and the rows below
         // slide up. The sheets that move into a folder, or out of a deleted one, slide sideways to their new place. It runs 0.4 seconds
         // (the length is fixed) and makes no sound. It is off unless it is chosen in the settings.
         // Any number of rows may come or go: only the rows that are in view are drawn (and pictured, once); the rows out of view take
-        // their part in the sliding of the rows below without being drawn (Agents.md 12.228).
+        // their part in the sliding of the rows below without being drawn.
 
         private const int RowAnimMs = 400;
         private bool _rowAnimation;
@@ -1746,7 +1746,7 @@ namespace VerticalSheetTabs
 
         private bool Crystal { get { return _selectStyle == SelectStyle.Crystal; } }
 
-        // ---- the badges at the right end of the rows (Agents.md 12.190) ----
+        // ---- the badges at the right end of the rows ----
 
         private BadgeKinds _shownBadges = BadgeKinds.None;
         private Dictionary<string, BadgeInfo> _rowBadges = new Dictionary<string, BadgeInfo>();
@@ -1801,17 +1801,17 @@ namespace VerticalSheetTabs
         }
 
         private const double RowBadgePillWidth = 34, RowBadgePillHeight = 17;
-        // a little more room to the left of a folder's progress pill, before the badge with the number of sheets (Agents.md 12.236)
+        // a little more room to the left of a folder's progress pill, before the badge with the number of sheets
         private const double RowBadgePillGap = 4;
 
-        // the done + lock mark and the count badge of a folder are a little larger than the others (Agents.md 12.203)
+        // the done + lock mark and the count badge of a folder are a little larger than the others
         private const double BadgeBigScale = 1.2;
         private static readonly Color BadgeProgressGray = Color.FromArgb(150, 150, 155), BadgeProgressBlue = Color.FromArgb(58, 128, 233), BadgeProgressGreen = Color.FromArgb(16, 124, 65);
         private static readonly string[] ProgressNames = { "なし", "未着手", "作業中", "完了" };
 
         private bool IsActiveRow(StripRow r) { return !r.IsFolder && _selected.Contains(r.Sheet) && r.Sheet == _active; }
 
-        // The badges of a row from the right, left to right: the progress comes first, at the right end (Agents.md 12.199), then what each
+        // The badges of a row from the right, left to right: the progress comes first, at the right end, then what each
         // other badge tells. A folder shows a pill with the number of its sheets that are done out of those that have a progress; a closed
         // folder also shows one round badge with the number of its sheets that have something else to tell (red when one of them has an
         // error, else amber).
@@ -1872,7 +1872,7 @@ namespace VerticalSheetTabs
             {
                 BadgeInfo b;
                 if (!_rowBadges.TryGetValue(r.Sheet, out b)) return list;
-                // done and protected: one mark, a padlock that carries the check (Agents.md 12.201), and no lock of its own
+                // done and protected: one mark, a padlock that carries the check, and no lock of its own
                 bool doneLocked = (_shownBadges & BadgeKinds.Progress) != 0 && b.Progress == 3 && b.Protected;
                 if ((_shownBadges & BadgeKinds.Progress) != 0 && b.Progress > 0)
                     found.Add(new RowBadgeSpec
@@ -1933,7 +1933,7 @@ namespace VerticalSheetTabs
             return specs.Sum(s => s.Bounds.Width + Px(3) + (s.Kind == RowBadgeKind.ProgressPill && specs.Count > 1 ? Px(RowBadgePillGap) : 0)) + Px(RowBadgeEdge - 2);
         }
 
-        // ---- the copy icon (Agents.md 12.245, 12.247) ----
+        // ---- the copy icon ----
         // With the left button held down on a row, a press of the right button shows an icon under the pointer. When both buttons are
         // let go (with the pointer still on the row), the name of the sheet (the name Excel's own tab shows, with the sheet-name rule
         // "folder | sheet" too) or of the folder is copied to the clipboard, and nothing else happens: the sheet does not become the
@@ -2201,7 +2201,7 @@ namespace VerticalSheetTabs
             if (now == 3)
             {
                 // "done": the dialog of Excel to protect the sheet. A sheet that is already protected stays so: the mark does not take the
-                // protection off (that is done by "Unprotect Sheet" of the menu or of the ribbon, Agents.md 12.207)
+                // protection off (that is done by "Unprotect Sheet" of the menu or of the ribbon)
                 if (b == null || b.Protected || ProgressProtectRequested == null || _protectAsking) return;
                 _protectAsking = true; // (the request opens Excel's dialog and does not return until it is closed: clicks that come meanwhile are ignored)
                 try { ProgressProtectRequested(sheet); }
@@ -2229,7 +2229,7 @@ namespace VerticalSheetTabs
             else DrawCountBadge(g, s.Bounds, s.Color, s.Count, outline);
         }
 
-        // The white rim and the soft glow around every badge (Agents.md 12.203): the badges stand out on a dark row. The glows of the badges of a
+        // The white rim and the soft glow around every badge: the badges stand out on a dark row. The glows of the badges of a
         // row are added up first (where they overlap they sum, up to white), the badges are drawn on top.
         private sealed class GlowMask { public byte[] A; public int W, H, Pad; }
 
@@ -2606,7 +2606,7 @@ namespace VerticalSheetTabs
             return null;
         }
 
-        // The mark of the active sheet, with every look (Agents.md 12.110).
+        // The mark of the active sheet, with every look.
         private ActiveMarker _activeMarker = ActiveMarker.Underline;
 
         public ActiveMarker ActiveMarker
@@ -2615,7 +2615,7 @@ namespace VerticalSheetTabs
             set { if (_activeMarker != value) { _activeMarker = value; Invalidate(); } }
         }
 
-        // The wobble of the sheet that has just been selected (Agents.md 12.141): a timer repaints the strip while it runs, and the row of that
+        // The wobble of the sheet that has just been selected: a timer repaints the strip while it runs, and the row of that
         // sheet is drawn last (so it lies over its neighbors) through a move, a turn and a scale.
         private WobbleType _wobbleType = WobbleType.None;
         private int _wobbleAmp = WobbleMotion.AmpDefault;
@@ -2637,7 +2637,7 @@ namespace VerticalSheetTabs
         private int _soundVolume = WobbleSounds.VolumeDefault;
         private bool _muteNext;
 
-        // The sound effect of the wobble (Agents.md 12.172).
+        // The sound effect of the wobble.
         public void SetWobbleSound(bool on, int volume)
         {
             _soundOn = on;
@@ -2717,7 +2717,7 @@ namespace VerticalSheetTabs
         // A click on a sample.
         public event Action SampleClicked;
 
-        // One row, the active sheet in orange with the given name: the sample of the wobble (Agents.md 12.141).
+        // One row, the active sheet in orange with the given name: the sample of the wobble.
         public void SetSingleSample(SelectStyle style, ActiveMarker marker, string name)
         {
             _activeMarker = marker;
@@ -2824,7 +2824,7 @@ namespace VerticalSheetTabs
             return Visible(HasHue(rowColor, colored) ? OppositeColor(rowColor) : Underline, colored ? rowColor : Color.White);
         }
 
-        // Marks must stand out from the row they are on (Agents.md 12.134): when the color of a mark is too near to the color
+        // Marks must stand out from the row they are on: when the color of a mark is too near to the color
         // behind it (a color difference, CIE76 delta E, below MinMarkerDistance), the mark is made darker or lighter, by the smallest
         // step that gives enough difference (the direction that gives more); when no shade of it does, black or white.
         private const double MinMarkerDistance = 45;
@@ -3062,7 +3062,7 @@ namespace VerticalSheetTabs
             DrawSeparator(g, row);
         }
 
-        // The mark at the right end of a folder row that keeps its sheets in the folder's color (Agents.md 12.216): a paint can
+        // The mark at the right end of a folder row that keeps its sheets in the folder's color: a paint can
         // tipped to the left (silver metal, a white label band) and a blue drop of paint falling from its lip, over a floor
         // line. It has a soft light halo (a few pixels wide, white pens of growing width with a little opacity each, which
         // looks like a blur), so that it can be seen on the dark bar of the dark Office themes and on any folder color alike.
@@ -3263,10 +3263,10 @@ namespace VerticalSheetTabs
                 textColor = luma >= 150 ? TextColor : Color.White;
             }
 
-            // the badges at the right end (Agents.md 12.190), over the look of the row (on glass they were drawn above, under the glass)
+            // the badges at the right end, over the look of the row (on glass they were drawn above, under the glass)
             if (!(selected && Glass)) DrawRowBadges(g, tabRow, row);
 
-            // the check badge marker (Agents.md 12.131), over whichever look the row has
+            // the check badge marker, over whichever look the row has
             if (badge && !(selected && Glass)) DrawCheckBadge(g, new Rectangle(left, row.Top + Px(PlainTop), right - left, row.Height - Px(PlainTop) - Px(BottomInset)), colored, tabColor);
 
             // the separator between tabs: Excel's thin line, turned to lie across the stack
@@ -3317,7 +3317,7 @@ namespace VerticalSheetTabs
             }
         }
 
-        // The inset type (Agents.md 12.115): the row looks pressed in. The body is a little darker than the bar
+        // The inset type: the row looks pressed in. The body is a little darker than the bar
         // (a colored row a little darker than its color), with a shadow that fades inward from its upper and
         // left edges and a thin light line along its bottom. Returns the color of the text on it.
         private Color DrawInset(Graphics g, Rectangle body, int radius, bool colored, Color color)
@@ -3350,7 +3350,7 @@ namespace VerticalSheetTabs
             return TextOn(fill);
         }
 
-        // The stripes look (Agents.md 12.131): a white body (a colored row: its color) with fine diagonal stripes
+        // The stripes look: a white body (a colored row: its color) with fine diagonal stripes
         // (green on white, white on a dark color, dark on a light one) and an outline in the green (a colored row: a dark shade of its color).
         // Returns the color of the text on it.
         private Color DrawStripes(Graphics g, Rectangle body, int radius, bool colored, Color color)
@@ -3362,7 +3362,7 @@ namespace VerticalSheetTabs
                 using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
                 Region clip = g.Clip;
                 g.SetClip(path, CombineMode.Intersect);
-                // white stripes on a dark color, dark ones (the color, 55% darker) on a light color (Agents.md 12.137)
+                // white stripes on a dark color, dark ones (the color, 55% darker) on a light color
                 Color stripe = !colored ? Color.FromArgb(55, Underline.R, Underline.G, Underline.B)
                     : TextOn(color) == TextColor ? Color.FromArgb(95, Mix(color, Color.Black, 0.55)) : Color.FromArgb(70, 255, 255, 255);
                 using (var pen = new Pen(stripe, Math.Max(2f, Px(2.6))))
@@ -3379,7 +3379,7 @@ namespace VerticalSheetTabs
             return TextOn(fill);
         }
 
-        // The crystal look (Agents.md 12.139): the row is cut by a diagonal line into a light face at the left (the color of the row made
+        // The crystal look: the row is cut by a diagonal line into a light face at the left (the color of the row made
         // lighter, or a pale blue for a row without color) and a dark one at the right; the light color fades out into the dark one, going
         // right from the cut (over about 40% of the width), and a white line marks the cut (with a faint light line along its left side).
         // The body is a little raised: half of the shadow of the neumorphic sketch (a light shadow at the lower right, a white glow at the
@@ -3449,7 +3449,7 @@ namespace VerticalSheetTabs
             return TextColor;
         }
 
-        // The check badge marker (Agents.md 12.131): a round badge at the left end of the active sheet, with a check mark: a green
+        // The check badge marker: a round badge at the left end of the active sheet, with a check mark: a green
         // badge with a white check; on a colored row a white badge with a check in the color of the row.
         private void DrawCheckBadge(Graphics g, Rectangle body, bool colored, Color color)
         {
@@ -3457,7 +3457,7 @@ namespace VerticalSheetTabs
             int d = Math.Max(5, (int)Math.Round(full * BadgeScale));
             var badge = new Rectangle(body.Left + (body.Height - full) / 2 + Px(1), body.Top + (body.Height - d) / 2, d, d);
             // a light colored row: a dark badge (the row's color, 60% darker) with a white check; a dark colored row: a white badge with
-            // a check in the row's color (a lighter or darker one when it is too near to white) (Agents.md 12.135)
+            // a check in the row's color (a lighter or darker one when it is too near to white)
             bool lightRow = colored && TextOn(color) == TextColor;
             Color fill = !colored ? Underline : lightRow ? Mix(color, Color.Black, 0.6) : Color.White;
             Color mark = colored && !lightRow ? Visible(color, Color.White) : Color.White;
@@ -3495,7 +3495,7 @@ namespace VerticalSheetTabs
             return Theme.BarBack.GetBrightness() < 0.4f ? Color.White : TextColor;
         }
 
-        // The glass types (Agents.md 12.105): a pane of glass over the row, through which the row (its color,
+        // The glass types: a pane of glass over the row, through which the row (its color,
         // the separator line) shows. Frosted: a fine grain, and edges that glow from inside. Glossy: a reflection
         // on the upper half. GDI+ has no blur: the glass is translucent white, the grain a fixed texture and the
         // glow a few rings of growing inset. The shadow is drawn outside the glass only (it would show through).
@@ -3636,7 +3636,7 @@ namespace VerticalSheetTabs
             if (markers) DrawMarkers(g, body, 0, marker);
         }
 
-        // The bars at both ends of the active sheet (Agents.md 12.116): thick rounded bars in the color of the other
+        // The bars at both ends of the active sheet: thick rounded bars in the color of the other
         // marks, with a white edge so that they can be seen on any color of the row and on the dark Office themes.
         private void DrawEdgeBars(Graphics g, Rectangle body, Color color)
         {
@@ -3669,7 +3669,7 @@ namespace VerticalSheetTabs
             using (var brush = new SolidBrush(color)) g.FillRectangle(brush, ux, uy, Math.Max(1, uw), thick);
         }
 
-        // The triangles at both ends of the active sheet (Agents.md 12.109: every type has them), raise pixels above
+        // The triangles at both ends of the active sheet, raise pixels above
         // the middle of the body.
         private void DrawMarkers(Graphics g, Rectangle body, int raise, Color marker)
         {

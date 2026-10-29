@@ -7,7 +7,7 @@ using Office = Microsoft.Office.Core;
 
 namespace VerticalSheetTabs
 {
-    // The sheets seen last, newest first (Agents.md 12.186). The sheets are known by their keys (the id in a
+    // The sheets seen last, newest first. The sheets are known by their keys (the id in a
     // hidden custom property of the worksheet, see FolderStore.SheetKeys), so a sheet that is renamed stays in
     // the history under its new name and one that is deleted can be taken out. The cursor is the place of the
     // sheet that is shown now: "back" goes to the older ones, "forward" back to the newer ones.

@@ -2,7 +2,7 @@
 
 namespace VerticalSheetTabs
 {
-    // The wobble of the selected sheet (Agents.md 12.141). 1 to 6 are the motions, 7 picks one of them at each selection.
+    // The wobble of the selected sheet. 1 to 6 are the motions, 7 picks one of them at each selection.
     public enum WobbleType
     {
         None = 0,

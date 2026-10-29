@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace VerticalSheetTabs
 {
-    // The sheet-name rule (Agents.md chapter 12.56): a sheet named "A | B" is the sheet "B" in the
+    // The sheet-name rule: a sheet named "A | B" is the sheet "B" in the
     // folder "A" of the vertical tabs. These are the pure parts of it (parsing, grouping, building the
     // folder model from the names); PaneManager applies them to the workbook.
     public static class NameRule

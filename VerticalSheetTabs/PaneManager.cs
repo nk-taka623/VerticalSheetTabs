@@ -24,11 +24,11 @@ namespace VerticalSheetTabs
             public bool Initialized;
             // Excel's "Protect Sheet" dialog is open because of a click on a done mark: a second request must not start another one.
             public bool ProtectAsking;
-            public System.Drawing.Color[] ThemeCache;   // the workbook's theme colors, read at most every few seconds (Agents.md 12.218)
+            public System.Drawing.Color[] ThemeCache;   // the workbook's theme colors, read at most every few seconds
             public DateTime ThemeCacheAt = DateTime.MinValue;
             public int ThemeCacheSeconds = 5;
             // The theme of the saved file, kept while the file is the same (path, time, size), and the names of the built-in styles that
-            // gave each theme color the last time (they are read directly while they still give it), Agents.md 12.226.
+            // gave each theme color the last time (they are read directly while they still give it).
             public string FileThemeStamp;
             public System.Drawing.Color[] FileTheme;
             public Dictionary<int, string> StyleSources = new Dictionary<int, string>();
@@ -37,7 +37,7 @@ namespace VerticalSheetTabs
             public DateTime IgnoreVisibleUntil;
             // Consecutive failed syncs: the window is probably gone.
             public int Failures;
-            // The folder structure (Agents.md chapter 12); written to the workbook when it is saved.
+            // The folder structure; written to the workbook when it is saved.
             public FolderModel Folders = new FolderModel();
             // The sheet names (hidden ones too) the keys below were read for.
             public string KeySignature;
@@ -48,7 +48,7 @@ namespace VerticalSheetTabs
             public bool Busy;
             // True while a sync of this window is running (see SyncSheets).
             public bool Syncing;
-            // The sheet-name rule (Agents.md 12.56): the names the grouping was last checked for, and a
+            // The sheet-name rule: the names the grouping was last checked for, and a
             // flag for a sheet move the sync made itself (the workbook is then really changed).
             // Folders that keep their sheets in the folder's color: the sheets each had at the last look
             // (a sheet that is new in the list is colored).
@@ -63,20 +63,20 @@ namespace VerticalSheetTabs
             public bool KeysGuessed;
             // The last SelectSheets really changed the selection of Excel (and the focus may go to the sheet).
             public bool SelectionChanged;
-            // The sheets seen last (Agents.md 12.186); written to the workbook when it is saved.
+            // The sheets seen last; written to the workbook when it is saved.
             public SheetHistory History = new SheetHistory();
             // The active sheet and the sheet names the history was last updated for.
             public string HistActive;
             public string HistNames;
             // The name each sheet of the history had when it was last seen (by key): a change of the sheet names is checked against these
-            // few sheets, and all keys are read only when one of them is not where it was (Agents.md 12.226).
+            // few sheets, and all keys are read only when one of them is not where it was.
             public Dictionary<string, string> HistHints = new Dictionary<string, string>();
             // The keys of all sheets read in the running sync (for the folders), for the sheet names TickSignature: the history uses them
             // instead of reading them again. Null when the sync read none.
             public List<string> TickKeys;
             public bool TickKeysComplete;
             public string TickSignature;
-            // What the sheets hold (errors, notes) for the badges (Agents.md 12.190), by sheet name, and the sheets to look at again
+            // What the sheets hold (errors, notes) for the badges, by sheet name, and the sheets to look at again
             // with the time of the change that makes them so (looked at again when it has been quiet for a while).
             public Dictionary<string, BadgeInfo> Badges = new Dictionary<string, BadgeInfo>();
             public Dictionary<string, DateTime> BadgeDirty = new Dictionary<string, DateTime>();
@@ -535,7 +535,7 @@ namespace VerticalSheetTabs
         }
 
         // Excel raised SheetActivate: the windows of that sheet's workbook are synced at once. The other workbooks did not change; the
-        // timer syncs them as always (Agents.md 12.226).
+        // timer syncs them as always.
         public void SyncSheetOf(object sheet)
         {
             string book = null;
@@ -590,11 +590,11 @@ namespace VerticalSheetTabs
         private static bool SyncSheets(Entry entry, bool dialogChecked = false)
         {
             if (entry.Busy) return true;
-            // While Excel's "Protect Sheet" dialog is open the sync stays out of Excel (Agents.md 12.214).
+            // While Excel's "Protect Sheet" dialog is open the sync stays out of Excel.
             if (entry.ProtectAsking) return true;
             // While one of Excel's dialogs is open (Excel disables its main window), the sync stays out of Excel: some questions it
             // asks (the workbook's theme colors, for one) are answered with the message "this command cannot be used on a protected
-            // sheet" as soon as the workbook has a protected sheet (Agents.md 12.218).
+            // sheet" as soon as the workbook has a protected sheet.
             if (!dialogChecked && ExcelMainWindowDisabled(entry)) return true;
             // A sync that is already running is not started again: the moves the sync makes itself (the
             // sheet-name rule) make Excel raise SheetActivate, whose handler would start a sync inside
@@ -784,7 +784,7 @@ namespace VerticalSheetTabs
             return rows;
         }
 
-        // ---- the badges of the rows: errors and notes (Agents.md 12.190) ----
+        // ---- the badges of the rows: errors and notes ----
 
         // How long a sheet has to be left alone (no edit, no recalculation) before it is looked at again, and how long one tick may look.
         private static readonly TimeSpan BadgeQuiet = TimeSpan.FromMilliseconds(500);
@@ -872,7 +872,7 @@ namespace VerticalSheetTabs
             entry.BadgeCost[name] = (int)clock.ElapsedMilliseconds;
         }
 
-        // ---- the progress of a sheet (Agents.md 12.199): a custom property of the sheet, "todo" / "doing" / "done" ----
+        // ---- the progress of a sheet: a custom property of the sheet, "todo" / "doing" / "done" ----
 
         private const string ProgressProperty = "VTab.Progress";
 
@@ -916,7 +916,7 @@ namespace VerticalSheetTabs
                 if (target != null && target.ProtectContents) return; // (already protected: the mark never takes the protection off)
                 CommitCellEdit(entry);
                 // Only this sheet is selected: SelectSheets keeps a group when the sheet is in it, and Excel's "Protect Sheet" on a group that has
-                // a protected sheet is refused ("this command cannot be used on a protected sheet"), Agents.md 12.211.
+                // a protected sheet is refused ("this command cannot be used on a protected sheet").
                 if (target != null) target.Select(true);
                 else SelectSheets(entry, new List<string> { sheet }, sheet);
                 RunExcelCommand(entry, "SheetProtect");
@@ -1039,7 +1039,7 @@ namespace VerticalSheetTabs
             }
         }
 
-        // ---- the sheets seen last (Agents.md 12.186) ----
+        // ---- the sheets seen last ----
 
         // Called by the sync: a sheet that became active (by a click, a key, a macro, the tabs of Excel) is put into the history;
         // when sheets were added, renamed or deleted, the sheets that no longer exist are taken out.
@@ -1229,7 +1229,7 @@ namespace VerticalSheetTabs
             return c.R | (c.G << 8) | (c.B << 16);
         }
 
-        // ---- folder commands (Agents.md chapter 12) ----
+        // ---- folder commands ----
 
         // Reads the sheets of the workbook now, gives them ids and brings the model in line with them.
         private static void RefreshKeys(Entry entry)
@@ -1243,7 +1243,7 @@ namespace VerticalSheetTabs
             else entry.Folders.Reconcile(entry.Keys);
         }
 
-        // ---- the sheet-name rule (Agents.md 12.56) ----
+        // ---- the sheet-name rule ----
 
         private static bool RuleOn(Entry entry)
         {
@@ -1829,7 +1829,7 @@ namespace VerticalSheetTabs
             return names;
         }
 
-        // Bulk commands on the sheets of folders (Agents.md 12.4). Excel's own commands work on the
+        // Bulk commands on the sheets of folders. Excel's own commands work on the
         // selected sheets, so the visible sheets of the folders are selected first.
         private void FolderCommand(Entry entry, string command, IList<string> folderIds)
         {
@@ -1843,7 +1843,7 @@ namespace VerticalSheetTabs
                 }
                 if (command == "closeall" || command == "openall")
                 {
-                    // all folders of the pane, whatever is selected (the buttons "全開" and "全閉"; the folder menu no longer has these, Agents.md 12.240)
+                    // all folders of the pane, whatever is selected (the buttons "全開" and "全閉"; the folder menu no longer has these)
                     bool open = command == "openall";
                     bool changed = false;
                     foreach (FolderNode node in entry.Folders.Nodes)
@@ -2145,7 +2145,7 @@ namespace VerticalSheetTabs
         {
             // The sync asks at every tick for the folders that are colored by a theme color; the workbook's theme is read again after a few seconds only
             if (entry.ThemeCache != null && DateTime.Now - entry.ThemeCacheAt < TimeSpan.FromSeconds(entry.ThemeCacheSeconds)) return entry.ThemeCache;
-            // Excel gives no theme (Workbook.Theme is null) while any sheet of the workbook is protected (Agents.md 12.222, 12.224). The colors
+            // Excel gives no theme (Workbook.Theme is null) while any sheet of the workbook is protected. The colors
             // are then taken from the built-in cell styles, which Excel answers all the same (9 of the 10 colors; the live theme), and the
             // rest from the saved file's theme, or, when the workbook was never saved, from the Office theme. Never null, so that a folder
             // colored with a theme color shows that color, and the palette shows the same colors as the folders get.
@@ -2542,7 +2542,7 @@ namespace VerticalSheetTabs
         // Excel's dialog cannot be shown in every state (a cell is being edited, another window is active, the
         // workbook does not accept a change of its palette). Then the system color dialog takes its place, so
         // that choosing "More colors" never silently does nothing. Null: cancelled (or nothing could be shown).
-        // The dialog opens where the user clicked: the double click of a folder's paint can, or "その他の色" of a palette (Agents.md 12.234).
+        // The dialog opens where the user clicked: the double click of a folder's paint can, or "その他の色" of a palette.
         private int? PickMoreColor(Entry entry)
         {
             using (new DialogPlacer(Cursor.Position)) return PickMoreColorCore(entry);
@@ -2962,7 +2962,7 @@ namespace VerticalSheetTabs
                 entry.SelectionChanged = true;
 
                 // The same group with another active sheet: activating a sheet of the group keeps the group, so it
-                // is not taken apart and put together again on screen (Agents.md 12.123).
+                // is not taken apart and put together again on screen.
                 HashSet<string> current = CurrentGroup(entry);
                 if (current != null && current.Count > 1 && current.SetEquals(names))
                 {
@@ -3052,9 +3052,9 @@ namespace VerticalSheetTabs
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
         // A dialog of Excel (a message, "save changes?", a command's dialog) is open: Excel disables its main window (the main window of
-        // every workbook window, when there are several). While that lasts, nothing here asks Excel anything (Agents.md 12.218).
+        // every workbook window, when there are several). While that lasts, nothing here asks Excel anything.
         // Excel's main windows belong to its UI thread, the thread the add-in runs on: only that thread's windows are looked at, not
-        // every window of the desktop (Agents.md 12.226).
+        // every window of the desktop.
         private static bool ExcelMainWindowDisabled(Entry entry)
         {
             try
@@ -3171,7 +3171,7 @@ namespace VerticalSheetTabs
                 {
                     // F6, the key with which Excel itself moves the focus on to the next part of its window, ends the
                     // pane's hold. Hiding and showing the pane again (as before) also ended it, but Excel then laid the
-                    // window out twice and it flickered (Agents.md 12.123).
+                    // window out twice and it flickered.
                     keybd_event(VkF6, 0, 0, UIntPtr.Zero);
                     keybd_event(VkF6, 0, KeyUp, UIntPtr.Zero);
                     for (int i = 0; i < 10; i++)
