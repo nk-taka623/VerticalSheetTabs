@@ -1034,8 +1034,6 @@ namespace VerticalSheetTabs
             base.OnMouseWheel(e);
             if (IsSample) return;
             SetScroll(_scrollY - Math.Sign(e.Delta) * RowPx);
-            Point at = PointToClient(Cursor.Position);
-            if (ClientRectangle.Contains(at)) UpdateCopyHover(at);
         }
 
         // ---- drawing ----
@@ -1926,28 +1924,31 @@ namespace VerticalSheetTabs
             return right;
         }
 
-        // The width the badges of a row take (the name stays clear of them), and the copy icon, on the row the pointer is on.
+        // The width the badges of a row take (the name stays clear of them).
         private int RowBadgeReserve(StripRow r)
         {
-            int copy = CopyReserve(r);
-            if (_shownBadges == BadgeKinds.None) return copy == 0 ? 0 : copy + Px(RowBadgeEdge - 2);
+            if (_shownBadges == BadgeKinds.None) return 0;
             List<RowBadgeSpec> specs = RowBadges(r, new Rectangle(0, 0, ContentWidth, RowPx));
-            if (specs.Count == 0) return copy == 0 ? 0 : copy + Px(RowBadgeEdge - 2);
-            return specs.Sum(s => s.Bounds.Width + Px(3) + (s.Kind == RowBadgeKind.ProgressPill && specs.Count > 1 ? Px(RowBadgePillGap) : 0)) + Px(RowBadgeEdge - 2) + copy;
+            if (specs.Count == 0) return 0;
+            return specs.Sum(s => s.Bounds.Width + Px(3) + (s.Kind == RowBadgeKind.ProgressPill && specs.Count > 1 ? Px(RowBadgePillGap) : 0)) + Px(RowBadgeEdge - 2);
         }
 
-        // ---- the copy icon (Agents.md 12.245) ----
-        // A press of the middle button on a row shows an icon left of its badges. A click on it copies the name of the sheet (the name
-        // Excel's own tab shows, with the sheet-name rule "folder | sheet" too) or of the folder to the clipboard, and does nothing else:
-        // the sheet does not become the active one, the selection and the keyboard focus stay as they are. The icon goes away when the
-        // pointer leaves the row, when another button is pressed (not on the icon), and a second after the name has been copied.
-        // (The middle button itself changes nothing and takes no focus.)
+        // ---- the copy icon (Agents.md 12.245, 12.247) ----
+        // With the left button held down on a row, a press of the right button shows an icon under the pointer. When both buttons are
+        // let go (with the pointer still on the row), the name of the sheet (the name Excel's own tab shows, with the sheet-name rule
+        // "folder | sheet" too) or of the folder is copied to the clipboard, and nothing else happens: the sheet does not become the
+        // active one, the selection is as it was, no menu opens. A pointer moved off the row before the buttons are let go cancels it.
 
         private const double CopyScale = 0.8; // (the icon is 0.8 times as large as when it was first made)
-        private const double CopyChipWidth = 24 * CopyScale, CopyChipHeight = 22 * CopyScale, CopyIconSize = 16 * CopyScale, CopyGap = 3;
-        private string _copyKey;       // the row that shows the icon ("S:name" / "F:id")
-        private bool _copyHot;         // the pointer is on the icon
-        private string _copiedKey;     // the row whose name has just been copied (a check mark, for a second)
+        private const double CopyChipWidth = 24 * CopyScale, CopyChipHeight = 22 * CopyScale, CopyIconSize = 16 * CopyScale;
+        private bool _chordArmed;              // the left button is held down on a row
+        private string _chordKey;              // that row ("S:name" / "F:id")
+        private HashSet<string> _chordSelected, _chordSelFolders; // what the left press has changed on screen (taken back when the right button joins)
+        private string _chordActive, _chordAnchor;
+        private bool _chord;                   // both buttons are held: the icon shows
+        private bool _chordOnRow;              // the pointer is still on the row
+        private Point _chordAt;                // where the right button was pressed: the middle of the icon
+        private string _copiedKey;             // the row whose name has just been copied (a check mark, for a second)
         private System.Windows.Forms.Timer _copiedTimer;
 
         private bool CopyIconApplies(StripRow r)
@@ -1957,68 +1958,74 @@ namespace VerticalSheetTabs
 
         private static string NameToCopy(StripRow r) { return r.IsFolder ? r.FolderName : r.Sheet; }
 
-        private bool IsCopyRow(StripRow r) { return _copyKey != null && r != null && RowKey(r) == _copyKey; }
-
-        private int CopyReserve(StripRow r)
+        // The left button goes down on a row: remember what it is about to change on screen.
+        private void ArmChord(StripRow row)
         {
-            return IsCopyRow(r) && CopyIconApplies(r) ? Px(CopyChipWidth + CopyGap) : 0;
+            _chordArmed = CopyIconApplies(row);
+            if (!_chordArmed) return;
+            _chordKey = RowKey(row);
+            _chordSelected = new HashSet<string>(_selected);
+            _chordSelFolders = new HashSet<string>(_selFolders);
+            _chordActive = _active;
+            _chordAnchor = _anchorFolder;
         }
 
-        // The square of the icon: left of the badges of the row (at the place of the first badge, when there is none).
-        private Rectangle CopyChipRect(int index)
+        // The right button goes down while the left one is held on a row.
+        private bool TryStartChord(Point p)
         {
-            StripRow r = _rows[index];
-            Rectangle row = RowRect(index);
-            int w = Px(CopyChipWidth), h = Px(CopyChipHeight);
-            int right = BadgeRightEdge(r, row);
-            List<RowBadgeSpec> specs = RowBadges(r, row);
-            if (specs.Count > 0)
-            {
-                RowBadgeSpec last = specs[specs.Count - 1];
-                right = last.Bounds.Left - Px(CopyGap) - (last.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillGap) : 0);
-            }
-            return new Rectangle(right - w, BodyCenterY(r, row) - h / 2, w, h);
-        }
-
-        private bool CopyChipHit(int index, Point p)
-        {
-            if (index < 0 || index >= _rows.Count || !CopyIconApplies(_rows[index]) || !IsCopyRow(_rows[index])) return false;
-            return Rectangle.Inflate(CopyChipRect(index), Px(2), Px(3)).Contains(p);
-        }
-
-        private bool CopyIconAt(Point p)
-        {
-            return CopyChipHit(IndexFromPoint(p), p);
-        }
-
-        // A press of the middle button: the row under the pointer shows the icon (a press anywhere else takes it away).
-        private void ShowCopyIcon(Point p)
-        {
+            if (!_chordArmed || (Control.MouseButtons & MouseButtons.Left) == 0 || _dragging || _ghostOn) return false;
             int index = IndexFromPoint(p);
-            string key = index >= 0 && CopyIconApplies(_rows[index]) ? RowKey(_rows[index]) : null;
-            _copyKey = key;
-            _copyHot = key != null && CopyChipHit(index, p);
+            if (index < 0 || RowKey(_rows[index]) != _chordKey || !CopyIconApplies(_rows[index])) return false;
+            // what the left press has changed on screen is taken back: nothing is chosen, and Excel is told nothing
+            _selected = _chordSelected;
+            _selFolders = _chordSelFolders;
+            _active = _chordActive;
+            _anchorFolder = _chordAnchor;
+            _selectionPending = false;
+            _toggleOffFolder = null;
+            _dragIndex = -1;
+            ContextMenuStrip = null; // (the menu of the row must not open when the right button is let go)
+            _chord = true;
+            _chordOnRow = true;
+            _chordAt = p;
+            _copiedKey = null;
             _badgeTip = null;
             _tip.Hide(this);
             Invalidate();
+            return true;
         }
 
-        private void HideCopyIcon()
+        // A button is let go during the copy: when both are, the name is copied (or not, with the pointer off the row).
+        private void ChordMouseUp()
         {
-            if (_copyKey == null && !_copyHot) return;
-            _copyKey = null;
-            _copyHot = false;
+            if ((Control.MouseButtons & (MouseButtons.Left | MouseButtons.Right)) != 0) return;
+            bool copy = _chordOnRow;
+            _chord = false;
+            _chordArmed = false;
+            int index = _chordKey == null ? -1 : _rows.FindIndex(r => RowKey(r) == _chordKey);
+            if (copy && index >= 0 && CopyIconApplies(_rows[index])) CopyRowName(index);
+            else Invalidate();
+        }
+
+        // The pointer moves during the copy: off the row, the icon goes (and letting go copies nothing).
+        private void UpdateChordPointer(Point p)
+        {
+            if (!_chord) return;
+            int index = IndexFromPoint(p);
+            bool on = index >= 0 && RowKey(_rows[index]) == _chordKey;
+            if (on == _chordOnRow) return;
+            _chordOnRow = on;
             Invalidate();
         }
 
-        // Called when the pointer moves (and when the list scrolls): whether it is on the icon; off the row of the icon, the icon goes.
-        private void UpdateCopyHover(Point p)
+        // The square of the icon: its middle where the right button was pressed, kept inside the row.
+        private Rectangle CopyChipRect(int index)
         {
-            if (_copyKey == null) return;
-            int index = IndexFromPoint(p);
-            if (index < 0 || !CopyIconApplies(_rows[index]) || !IsCopyRow(_rows[index])) { HideCopyIcon(); return; }
-            bool hot = CopyChipHit(index, p);
-            if (hot != _copyHot) { _copyHot = hot; Invalidate(); }
+            Rectangle row = RowRect(index);
+            int w = Px(CopyChipWidth), h = Px(CopyChipHeight);
+            int x = Math.Max(row.Left + 2, Math.Min(row.Right - w - 2, _chordAt.X - w / 2));
+            int y = Math.Max(row.Top + 1, Math.Min(row.Bottom - h - 1, _chordAt.Y - h / 2));
+            return new Rectangle(x, y, w, h);
         }
 
         private void CopyRowName(int index)
@@ -2045,9 +2052,7 @@ namespace VerticalSheetTabs
                 _copiedTimer.Tick += (s, e) =>
                 {
                     _copiedTimer.Stop();
-                    _copiedKey = null;
-                    _copyKey = null; // (the icon has done its work)
-                    _copyHot = false;
+                    _copiedKey = null; // (the icon has done its work)
                     _badgeTip = null;
                     _tip.Hide(this);
                     Invalidate();
@@ -2060,29 +2065,21 @@ namespace VerticalSheetTabs
             Invalidate();
         }
 
-        private string CopyTip(int index)
-        {
-            StripRow r = _rows[index];
-            if (_copiedKey != null && _copiedKey == RowKey(r)) return "コピーしました: " + NameToCopy(r);
-            return (r.IsFolder ? "フォルダ名をコピー: " : "シート名をコピー: ") + NameToCopy(r);
-        }
-
         private void DrawCopyIcon(Graphics g, List<int> wobbling)
         {
-            if (_copyKey == null) return;
-            int index = _rows.FindIndex(r => RowKey(r) == _copyKey);
+            bool done = _copiedKey != null && _copiedKey == _chordKey;
+            if (!done && !(_chord && _chordOnRow)) return;
+            int index = _chordKey == null ? -1 : _rows.FindIndex(r => RowKey(r) == _chordKey);
             if (index < 0 || !CopyIconApplies(_rows[index]) || wobbling.Contains(index)) return;
             Rectangle chip = CopyChipRect(index);
             if (chip.Bottom < HeaderPx || chip.Top > ViewHeight) return;
-            bool done = _copiedKey == _copyKey;
-            bool hot = _copyHot;
             GraphicsState state = g.Save();
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            // the chip behind the icon: it shows on any color of a row (a little see-through, until the pointer is on it)
+            // the chip behind the icon: it shows on any color of a row
             using (GraphicsPath path = RoundedRectF(new RectangleF(chip.Left + 0.5f, chip.Top + 0.5f, chip.Width - 1f, chip.Height - 1f), Px(4 * CopyScale)))
             {
-                using (var fill = new SolidBrush(Color.FromArgb(hot || done ? 255 : 205, Theme.PlusHoverBack))) g.FillPath(fill, path);
-                using (var pen = new Pen(Color.FromArgb(hot || done ? 255 : 150, hot ? Theme.PlusColor : Theme.Separator))) g.DrawPath(pen, path);
+                using (var fill = new SolidBrush(Theme.PlusHoverBack)) g.FillPath(fill, path);
+                using (var pen = new Pen(Theme.PlusColor)) g.DrawPath(pen, path);
             }
             float s = Px(CopyIconSize);
             float ix = chip.Left + (chip.Width - s) / 2f, iy = chip.Top + (chip.Height - s) / 2f;
@@ -2094,9 +2091,8 @@ namespace VerticalSheetTabs
             }
             else
             {
-                Color ink = Color.FromArgb(hot ? 255 : 190, Theme.PlusColor);
                 float w = Math.Max(1.2f, s * 0.085f);
-                using (var pen = new Pen(ink, w) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
+                using (var pen = new Pen(Theme.PlusColor, w) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
                 {
                     // the sheet behind (an outline), the sheet in front (with lines of text)
                     using (GraphicsPath back = RoundedRectF(new RectangleF(ix + s * 0.30f, iy + s * 0.08f, s * 0.52f, s * 0.58f), s * 0.09f)) g.DrawPath(pen, back);
@@ -2601,7 +2597,6 @@ namespace VerticalSheetTabs
         // The text of the tip of the badge under the pointer (null = none).
         private string BadgeTipAt(int index, Point p)
         {
-            if (CopyChipHit(index, p)) return CopyTip(index);
             if (PaintCanHit(index, p)) return "フォルダと中のシートを同一色に設定 (クリック: フォルダの色、ダブルクリック: その他の色)";
             if (index < 0 || index >= _rows.Count || _shownBadges == BadgeKinds.None) return null;
             foreach (RowBadgeSpec s in RowBadges(_rows[index], RowRect(index)))
@@ -3795,18 +3790,15 @@ namespace VerticalSheetTabs
 
         private const int WM_LBUTTONDOWN = 0x0201;
         private const int WM_LBUTTONDBLCLK = 0x0203;
-        private const int WM_MBUTTONDOWN = 0x0207;
-        private const int WM_MBUTTONDBLCLK = 0x0209;
 
         protected override void WndProc(ref Message m)
         {
             if (IsSample) { base.WndProc(ref m); return; }
-            if ((m.Msg == WM_LBUTTONDOWN || m.Msg == WM_LBUTTONDBLCLK || m.Msg == WM_MBUTTONDOWN || m.Msg == WM_MBUTTONDBLCLK) && _editor == null)
+            if ((m.Msg == WM_LBUTTONDOWN || m.Msg == WM_LBUTTONDBLCLK) && _editor == null)
             {
                 long l = m.LParam.ToInt64();
                 var point = new Point((short)(l & 0xFFFF), (short)((l >> 16) & 0xFFFF));
-                bool middle = m.Msg == WM_MBUTTONDOWN || m.Msg == WM_MBUTTONDBLCLK; // (shows the copy icon, and leaves the focus where it is)
-                if (middle || ClickChangesSheet(point) || CopyIconAt(point) || (IsExcelEditing != null && IsExcelEditing()))
+                if (ClickChangesSheet(point) || (IsExcelEditing != null && IsExcelEditing()))
                 {
                     _hadFocusAtClick = ContainsFocus;
                     _noFocusClick = true;
@@ -3839,12 +3831,7 @@ namespace VerticalSheetTabs
         {
             base.OnMouseDown(e);
             if (IsSample) { if (SampleClicked != null) SampleClicked(); return; }
-            if (e.Button == MouseButtons.Middle)
-            {
-                ShowCopyIcon(e.Location);
-                return;
-            }
-            if (_copyKey != null && !(e.Button == MouseButtons.Left && CopyChipHit(IndexFromPoint(e.Location), e.Location))) HideCopyIcon();
+            if (e.Button == MouseButtons.Right && TryStartChord(e.Location)) return; // (the left button is held: the copy icon, no menu, no focus)
             if (!_noFocusClick) Focus();
             _toggleOffFolder = null; // a drag swallows the button release, so nothing may be left over
             int tool = ToolAt(e.Location);
@@ -3882,13 +3869,6 @@ namespace VerticalSheetTabs
             bool ctrl = (ModifierKeys & Keys.Control) != 0;
             bool shift = (ModifierKeys & Keys.Shift) != 0;
 
-            // the copy icon: a click copies the name, and nothing else happens (the sheet is not chosen, the focus is not taken)
-            if (e.Button == MouseButtons.Left && CopyChipHit(index, e.Location))
-            {
-                CopyRowName(index);
-                return;
-            }
-
             // the progress mark of a sheet: a click changes it (and does not select the sheet)
             if (e.Button == MouseButtons.Left && ProgressBadgeHit(index, e.Location))
             {
@@ -3915,6 +3895,7 @@ namespace VerticalSheetTabs
                 {
                     _dragIndex = index;
                     _dragOrigin = e.Location;
+                    ArmChord(row);
                     if (_selFolders.Contains(row.FolderId) && !ctrl && !shift)
                     {
                         // a click on a selected folder deselects it, when the button is released
@@ -3942,6 +3923,7 @@ namespace VerticalSheetTabs
             {
                 _dragIndex = index;
                 _dragOrigin = e.Location;
+                ArmChord(row);
 
                 if (ctrl)
                 {
@@ -4035,6 +4017,8 @@ namespace VerticalSheetTabs
         {
             base.OnMouseUp(e);
             if (IsSample) return;
+            if (_chord) { ChordMouseUp(); return; }
+            if (e.Button == MouseButtons.Left) _chordArmed = false;
             bool noDrag = _dragIndex >= 0;
             _dragIndex = -1;
             string toggleOff = _toggleOffFolder;
@@ -4165,7 +4149,7 @@ namespace VerticalSheetTabs
         {
             base.OnMouseLeave(e);
             SetPlusHot(false);
-            if (_copyKey != null) { _copyKey = null; _copyHot = false; Invalidate(); }
+            if (_chord && _chordOnRow) { _chordOnRow = false; Invalidate(); }
             if (_headerHot != 0) { _headerHot = 0; Invalidate(); }
             if (_toolHot != 0) { _toolHot = 0; Invalidate(); }
             _hoverIndex = -1;
@@ -4241,7 +4225,7 @@ namespace VerticalSheetTabs
             if (hotTool == 5) hotTool = 0;
             if (hotTool != _toolHot) { _toolHot = hotTool; Invalidate(); }
             if (Filtering) { if (e.Button == MouseButtons.Left) _dragIndex = -1; } // the rows can be dragged only in the whole list
-            UpdateCopyHover(e.Location);
+            UpdateChordPointer(e.Location);
             UpdateTip(e.Location);
             if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected || Filtering) return;
             Size drag = SystemInformation.DragSize;
@@ -4250,6 +4234,7 @@ namespace VerticalSheetTabs
             int index = _dragIndex;
             _dragIndex = -1;
             _selectionPending = false; // a drag does not change the selection in Excel by itself
+            _chordArmed = false;
             _toggleOffFolder = null;
             if (index >= _rows.Count) return;
 
@@ -4459,7 +4444,6 @@ namespace VerticalSheetTabs
             if (e.Button != MouseButtons.Left) return;
             int index = IndexFromPoint(e.Location);
             if (index < 0) return;
-            if (CopyChipHit(index, e.Location)) return; // (two clicks on the copy icon: no renaming)
             if (_rows[index].IsFolder)
             {
                 if (PaintCanHit(index, e.Location)) return; // (the double click of the paint can: the color dialog)
