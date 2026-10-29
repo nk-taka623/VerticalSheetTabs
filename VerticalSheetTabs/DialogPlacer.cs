@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace VerticalSheetTabs
 {
-    // Puts the color dialog of "その他の色" where the user clicked (Agents.md 12.234). Excel's own dialog cannot be told where to open, so the
+    // Puts the color dialog of "その他の色" where the user clicked. Excel's own dialog cannot be told where to open, so the
     // first dialog window that is shown on this thread while the placer lives is moved: its top left corner to the point, kept inside the
     // work area of the screen of the point. Windows tells of the window as it is shown (a WinEvent), before the user can work with it.
     internal sealed class DialogPlacer : IDisposable

@@ -4,8 +4,8 @@ using Microsoft.Win32;
 
 namespace VerticalSheetTabs
 {
-    // The colors of Excel's tab bar in the current Office theme (measured on a real Excel, see
-    // Agents.md 9.2 and 9.5). The selected tab (white, dark text), the colored tabs and the green
+    // The colors of Excel's tab bar in the current Office theme (measured on a real Excel).
+    // The selected tab (white, dark text), the colored tabs and the green
     // underline look the same in every theme; the bar, the separators, the inactive text and the
     // "+" differ.
     public class TabTheme

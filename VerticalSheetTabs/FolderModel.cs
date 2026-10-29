@@ -24,7 +24,7 @@ namespace VerticalSheetTabs
         public bool IsFolder { get { return FolderId != null; } }
     }
 
-    // The folder structure of one workbook (Agents.md chapter 12). The nodes are in display order,
+    // The folder structure of one workbook. The nodes are in display order,
     // and that order is also the order of the sheets in Excel: the folders are ranges of sheets.
     // The model knows nothing about Excel; sheets are identified by a key (see FolderStore.SheetKeys; it does not
     // change when a sheet is renamed). It is kept in a custom XML part of the workbook.

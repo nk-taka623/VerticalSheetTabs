@@ -1,5 +1,5 @@
 ﻿# 配布用zipを作る: 公開済みのインストーラ (VerticalSheetTabs\bin\Release\app.publish) から、
-# 配布用zip\VerticalSheetTabs_vX.Y.Z.zip を作り、古いzipを削除する (Agents.md 13章)。
+# 配布用zip\VerticalSheetTabs_vX.Y.Z.zip を作り、古いzipを削除する (Agents.md 8.2)。
 # 使い方: powershell -File tools\make-dist-zip.ps1 -Version 1.1.20
 # README.pdf は、README.md から、`tools\make-readme-pdf.ps1` で作る。
 # 証明書、証明書を信頼するスクリプト、手順書は、いまの配布用zipから引き継ぐ (手順書の版数は書き換える)。

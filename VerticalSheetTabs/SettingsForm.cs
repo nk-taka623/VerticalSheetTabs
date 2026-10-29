@@ -4,7 +4,7 @@ using System.Windows.Forms;
 
 namespace VerticalSheetTabs
 {
-    // "Tab display settings" dialog (Agents.md 2.1): display mode and vertical tab side.
+    // "Tab display settings" dialog: display mode and vertical tab side.
     // Opened from the ribbon button and, in Step5, from the tab context menu.
     public class SettingsForm : Form
     {
@@ -139,7 +139,7 @@ namespace VerticalSheetTabs
             AcceptButton = ok;
             CancelButton = cancel;
 
-            // The groups are sorted into four tabs (Agents.md 12.230); the form always opens on the first one, "基本". Every group is as wide
+            // The groups are sorted into four tabs; the form always opens on the first one, "基本". Every group is as wide
             // as the widest one (the looks of selected rows).
             int width = _styleGroup.Width;
             // 基本: the display mode and the side of the vertical tabs side by side (the side takes about a third of the width), and the sheet-name rule
@@ -309,7 +309,7 @@ namespace VerticalSheetTabs
             base.OnFormClosed(e);
         }
 
-        // The wobble of the selected sheet (Agents.md 12.141): the motion (none, 1 to 6, random), its size and length, and one live sample that
+        // The wobble of the selected sheet: the motion (none, 1 to 6, random), its size and length, and one live sample that
         // plays the chosen motion again and again (a new random one each time for "7 ランダム"). The sample follows the chosen look and marker.
         private GroupBox CreateWobbleGroup(WobbleType wobble, int amp, int dur, bool sound, int volume, bool sampleStyle)
         {

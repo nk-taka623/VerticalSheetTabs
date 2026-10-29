@@ -1,6 +1,6 @@
 # 開発者向けの手引き (VerticalSheetTabs)
 
-利用者向けの説明は [README.md](README.md) (配布用zipにも入ります)、開発の経緯、仕様、検証結果は [Agents.md](Agents.md) を参照してください。
+利用者向けの説明は [README.md](README.md) (配布用zipにも入ります)、現在の仕様、実装、守ること、リリースの決まりは [Agents.md](Agents.md) を参照してください。
 
 ## 構成
 
@@ -11,13 +11,18 @@
 | `TabPaneControl.cs` | ペインの中身 (`TabStrip`、「+」ボタン、右クリックメニュー) |
 | `TabStrip.cs` | 縦タブの自前描画 (GDI+)。選択、ドラッグ、名前の変更、スクロール、フォルダの描画 |
 | `TabTheme.cs`、`DpiHelper.cs` | Officeテーマの配色、画面の拡大率 |
+| `SheetHistory.cs` | 見たシートの履歴とそのXML |
+| `Wobble.cs`、`WobbleSounds.cs`、`Sounds\*.wav` | 揺れの動き、効果音 (アドインに埋め込む) |
+| `DialogPlacer.cs` | Excelの「色の設定」画面を、クリックした位置に出す |
 | `TabColorPalette.cs` | シート見出しの色のパレット (Excelと同じ構成) |
 | `FolderModel.cs`、`FolderStore.cs` | フォルダの構造、XMLの読み書き、Excelのシート順との突き合わせ (`Reconcile`)、シートの識別 |
 | `NameRule.cs` | シート名のルール (`フォルダ名 \| シート名`) の解析、並びの整理、名前からのフォルダ構成 |
 | `WorkbookSettings.cs` | カスタムドキュメントプロパティ (`VTab.*`) の読み書き |
 | `SettingsForm.cs`、`RibbonController.cs`、`RibbonIcon.cs` | 設定画面、リボンのボタンと横タブのメニュー項目、アイコン |
 | `AddInVersion.cs` | 表示用のバージョン、著作権、ライセンス |
-| `tools\make-dist-zip.ps1` | 配布用zipの作成 |
+| `tools\make-dist-zip.ps1`、`tools\make-readme-pdf.ps1` | 配布用zipの作成、README.pdf の作成 |
+| `.github\workflows
+elease.yml` | タグの push で、配布用zipを添付した GitHub リリースを作る |
 
 ```mermaid
 flowchart LR
@@ -33,7 +38,7 @@ flowchart LR
 ## ビルド
 
 - Visual Studio 2026 (「Office/SharePoint 開発」ワークロード) で、`VerticalSheetTabs.sln` を開く
-- ブランチ運用は、Agents.md の7章と13章を参照 (feature / fix ブランチ > `develop` > `master`、タグ `vX.Y.Z`)
+- ブランチ運用とリリースの決まりは、Agents.md の8章を参照 (feature / fix ブランチ > `develop` > `master`、タグ `vX.Y.Z`)
 
 ```powershell
 # コマンドラインでのビルド (Debug)
@@ -50,11 +55,11 @@ flowchart TD
     A["featureブランチで開発・実機確認"] --> B["developへ --no-ff でマージ"]
     B --> C["バージョンを上げる<br/>.csproj ApplicationVersion<br/>AssemblyInfo.cs 2か所"]
     C --> D["MSBuild -t:Publish<br/>-p:Configuration=Release"]
-    D --> E["Agents.md に記録して、コミット"]
+    D --> E["必要なら Agents.md を更新して、コミット"]
     E --> F["masterへ --no-ff でマージ"]
     F --> G["tools/make-dist-zip.ps1 -Version X.Y.Z"]
     G --> H["配布用zip をコミット"]
-    H --> I["Agents.md の記録を更新<br/>developをmasterに早送り<br/>マージ済みブランチを削除"]
+    H --> I["developをmasterに早送り<br/>マージ済みブランチを削除"]
     I --> J["最後のコミットにタグ vX.Y.Z"]
 ```
 
@@ -73,7 +78,7 @@ flowchart TD
 | `VerticalSheetTabs.vsto` | アドインの配置用マニフェスト |
 | `Application Files\VerticalSheetTabs_X_Y_Z_0\` | アドイン本体 (DLL とマニフェスト) |
 
-バージョンを上げるときは、次の3か所を更新する。
+バージョンを上げるときは、次の3か所 (2ファイル) を更新する。
 
 - `VerticalSheetTabs\VerticalSheetTabs.csproj` の `ApplicationVersion`
 - `VerticalSheetTabs\Properties\AssemblyInfo.cs` の `AssemblyVersion` と `AssemblyFileVersion`
@@ -85,7 +90,7 @@ Release ビルドには、`PathMap` を設定してあり、DLL に、開発PC�
 ### 配布用zipを作る
 
 ```powershell
-powershell -File tools\make-dist-zip.ps1 -Version 1.1.24
+powershell -File tools\make-dist-zip.ps1 -Version 1.2.3
 ```
 
 - 公開済みのインストーラの DLL の版数が、指定した版数と同じことを確かめてから、`配布用zip\VerticalSheetTabs_vX.Y.Z.zip` を作り、古いzipを削除する

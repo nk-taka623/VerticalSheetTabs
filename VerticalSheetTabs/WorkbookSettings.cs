@@ -10,30 +10,30 @@ namespace VerticalSheetTabs
         Both            // C
     }
 
-    // How a selected folder or sheet looks (Agents.md 12.99).
+    // How a selected folder or sheet looks.
     public enum SelectStyle
     {
         Standard,   // Excel's own look: white, with a thin border and (the active sheet) an underline
         DoubleFrame, // a shadow, a double frame and, on the active sheet, a triangle at each end
-        FrostedGlass, // a pane of frosted glass whose edges glow from inside (Agents.md 12.105)
+        FrostedGlass, // a pane of frosted glass whose edges glow from inside
         GlossyGlass,  // a pane of glass with a reflection on its upper half
-        FrostedGlass2, // frosted glass tinted with the row's color (Agents.md 12.107)
-        Inset,         // pressed in: a darker body with a shadow inside its upper and left edges (Agents.md 12.115)
-        Stripes,       // diagonal stripes with an outline (Agents.md 12.131)
-        Crystal        // diagonal cut faces: a light one and a dark one, the light color fading out into the dark one (Agents.md 12.139)
+        FrostedGlass2, // frosted glass tinted with the row's color
+        Inset,         // pressed in: a darker body with a shadow inside its upper and left edges
+        Stripes,       // diagonal stripes with an outline
+        Crystal        // diagonal cut faces: a light one and a dark one, the light color fading out into the dark one
     }
 
-    // The mark of the active sheet (Agents.md 12.110), drawn with every look of SelectStyle.
+    // The mark of the active sheet, drawn with every look of SelectStyle.
     public enum ActiveMarker
     {
         None,
         Underline, // a line under the name
         Triangle,  // a small triangle at each end
-        EdgeBars,  // a thick bar at each end (Agents.md 12.116)
-        CheckBadge // a round check mark at the left of the name (Agents.md 12.131)
+        EdgeBars,  // a thick bar at each end
+        CheckBadge // a round check mark at the left of the name
     }
 
-    // The small marks drawn at the right end of a row (Agents.md 12.190); each one is shown only when it is chosen.
+    // The small marks drawn at the right end of a row; each one is shown only when it is chosen.
     [Flags]
     public enum BadgeKinds
     {
@@ -41,7 +41,7 @@ namespace VerticalSheetTabs
         Error = 1, // the sheet has formulas that show an error (#REF!, #DIV/0!, ...)
         Memo = 2,  // the sheet has notes or comments
         Protect = 4, // the sheet is protected
-        Progress = 8 // the progress of the sheet (not started, in progress, done), set by the user (Agents.md 12.199)
+        Progress = 8 // the progress of the sheet (not started, in progress, done), set by the user
     }
 
     public enum TabSide
@@ -50,7 +50,7 @@ namespace VerticalSheetTabs
         Right
     }
 
-    // Per-workbook settings, stored as custom document properties (see Agents.md 2.2):
+    // Per-workbook settings, stored as custom document properties:
     //   VTab.Mode  (string)  "A" / "B" / "C"
     //   VTab.Side  (string)  "Left" / "Right"
     //   VTab.Width (number)  pane content width in device-independent pixels (96 dpi)
@@ -62,16 +62,16 @@ namespace VerticalSheetTabs
         public const string OutlineName = "VTab.Outline";           // string "On" / "Off"
         public const string OutlineLevelName = "VTab.OutlineLevel"; // number 1..9
         public const string NameRuleName = "VTab.NameRule";         // string "On" / "Off"
-        public const string WobbleName = "VTab.Wobble";       // string "None" / "Shake" / "Wobble" / "Jelly" / "Bounce" / "Pulse" / "Swing" / "Random" (default "None"; Agents.md 12.141)
+        public const string WobbleName = "VTab.Wobble";       // string "None" / "Shake" / "Wobble" / "Jelly" / "Bounce" / "Pulse" / "Swing" / "Random" (default "None")
         public const string WobbleAmpName = "VTab.WobbleAmp"; // number, percent (40 to 200, default 100)
         public const string WobbleDurName = "VTab.WobbleDur"; // number, milliseconds (300 to 1200, default 600)
-        public const string WobbleSoundName = "VTab.WobbleSound";   // string "On" / "Off" (default "Off"; Agents.md 12.172)
+        public const string WobbleSoundName = "VTab.WobbleSound";   // string "On" / "Off" (default "Off")
         public const string WobbleVolumeName = "VTab.WobbleVolume"; // number 0 to 100 (default 60)
-        public const string DoneAnimName = "VTab.DoneAnim";       // string "On" / "Off" (default "On"; the burst when a sheet is marked done, Agents.md 12.199)
-        public const string RowAnimName = "VTab.RowAnim";         // string "On" / "Off" (default "On"; the add and delete animation of the rows, Agents.md 12.194, 12.197)
-        public const string WobbleSampleStyleName = "VTab.WobbleSampleStyle"; // string "On" / "Off" (default "Off"; Agents.md 12.178)
+        public const string DoneAnimName = "VTab.DoneAnim";       // string "On" / "Off" (default "On"; the burst when a sheet is marked done)
+        public const string RowAnimName = "VTab.RowAnim";         // string "On" / "Off" (default "On"; the add and delete animation of the rows)
+        public const string WobbleSampleStyleName = "VTab.WobbleSampleStyle"; // string "On" / "Off" (default "Off")
         public const string ActiveMarkerName = "VTab.ActiveMarker"; // string "None" / "Underline" / "Triangle" / "EdgeBars" / "CheckBadge" (default "Underline")
-        public const string BadgesName = "VTab.Badges";           // string "None", or "Error", "Memo", "Protect" joined by commas (default "None"; Agents.md 12.190)
+        public const string BadgesName = "VTab.Badges";           // string "None", or "Error", "Memo", "Protect" joined by commas (default "None")
         public const string SelectStyleName = "VTab.SelectStyle";   // string "Standard" / "DoubleFrame" / "FrostedGlass" / "GlossyGlass" / "FrostedGlass2" / "Inset" / "Stripes" / "Crystal"
 
         // Office.MsoDocProperties values.
@@ -81,7 +81,7 @@ namespace VerticalSheetTabs
         // No add-in property in the workbook: it is the first time it is opened with the add-in.
         public bool IsFirstOpen { get; private set; }
 
-        // A workbook opened for the first time shows Excel's own tabs only (Agents.md 12.119); the vertical tabs are
+        // A workbook opened for the first time shows Excel's own tabs only; the vertical tabs are
         // turned on in the settings dialog.
         public TabMode Mode { get; set; }
         public TabSide Side { get; set; }

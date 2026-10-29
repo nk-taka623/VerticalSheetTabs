@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace VerticalSheetTabs
 {
-    // The sound effects of the wobble animations (Agents.md 12.172, 12.174): one short sound for each motion, embedded in the
+    // The sound effects of the wobble animations: one short sound for each motion, embedded in the
     // add-in as 16 bit mono wave files (Sounds\*.wav). Every sound plays on a voice of its own (the Windows waveOut API), so
     // a sound that starts while another one is still playing is mixed over it by Windows. The samples get the volume, a
     // short fade in and a long fade out before they are played.
