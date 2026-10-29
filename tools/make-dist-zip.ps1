@@ -2,7 +2,7 @@
 # 配布用zip\VerticalSheetTabs_vX.Y.Z.zip を作り、古いzipを削除する (Agents.md 8.2)。
 # 使い方: powershell -File tools\make-dist-zip.ps1 -Version 1.1.20
 # README.pdf は、README.md から、`tools\make-readme-pdf.ps1` で作る。
-# 証明書、証明書を信頼するスクリプト、手順書は、いまの配布用zipから引き継ぐ (手順書の版数は書き換える)。
+# 証明書 (.cer) は、いまの配布用zipから引き継ぐ。証明書を信頼する / 取り消すスクリプトと、手順書の雛形は、tools\dist にある。
 param([Parameter(Mandatory = $true)][string]$Version)
 $ErrorActionPreference = "Stop"
 $repo = Split-Path -Parent $PSScriptRoot
@@ -34,7 +34,8 @@ New-Item -ItemType Directory -Force $dir | Out-Null
 Copy-Item (Join-Path $pub "setup.exe"), (Join-Path $pub "VerticalSheetTabs.vsto") $dir
 Copy-Item (Join-Path $pub "Application Files") $dir -Recurse
 Copy-Item (Join-Path $oldDir.FullName "VerticalSheetTabs.cer") $dir
-Copy-Item (Join-Path $oldDir.FullName "証明書を信頼する.ps1") $dir
+Copy-Item (Join-Path $PSScriptRoot "dist\証明書を信頼する.ps1") $dir
+Copy-Item (Join-Path $PSScriptRoot "dist\証明書の信頼を取り消す.ps1") $dir
 Copy-Item (Join-Path $repo "README.md") $dir
 # the same README as a PDF (Edge headless print; the GIFs appear as still images)
 & (Join-Path $PSScriptRoot "make-readme-pdf.ps1") -Output (Join-Path $dir "README.pdf") | Out-Null
@@ -43,12 +44,7 @@ if (-not (Test-Path (Join-Path $dir "README.pdf"))) { throw "README.pdf を作�
 Copy-Item (Join-Path $repo "docs") $dir -Recurse
 # the license (BSD 3-Clause): the original English text and the Japanese translation
 Copy-Item (Join-Path $repo "license") $dir -Recurse
-$guide = [IO.File]::ReadAllText((Join-Path $oldDir.FullName "はじめにお読みください.txt"), [Text.Encoding]::UTF8)
-$oldVersion = $oldDir.Name -replace "^VerticalSheetTabs_v", ""
-$guide = $guide.Replace("v$oldVersion", "v$Version")
-if ($guide -notmatch "license") {
-    $guide = $guide.TrimEnd() + "`r`n`r`nライセンス: このソフトウェアは、BSD 3条項ライセンスに準拠します (Copyright (c) 2026 nk_taka)。`r`n条文は、license フォルダの、LICENSE.txt (英文。正本) と、LICENSE.ja.txt (日本語訳。参考) です。`r`n"
-}
+$guide = [IO.File]::ReadAllText((Join-Path $PSScriptRoot "dist\guide.template.txt"), [Text.Encoding]::UTF8).Replace("{VERSION}", $Version)
 [IO.File]::WriteAllText((Join-Path $dir "はじめにお読みください.txt"), $guide, (New-Object Text.UTF8Encoding($true)))
 
 $zip = Join-Path $distDir "VerticalSheetTabs_v$Version.zip"
