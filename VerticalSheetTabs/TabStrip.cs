@@ -1034,6 +1034,8 @@ namespace VerticalSheetTabs
             base.OnMouseWheel(e);
             if (IsSample) return;
             SetScroll(_scrollY - Math.Sign(e.Delta) * RowPx);
+            Point at = PointToClient(Cursor.Position);
+            if (ClientRectangle.Contains(at)) UpdateCopyHover(at);
         }
 
         // ---- drawing ----
@@ -1136,6 +1138,8 @@ namespace VerticalSheetTabs
                 try { if (_rows[index].IsFolder) DrawFolder(g, _rows[index], row); else DrawTab(g, _rows[index], row); }
                 finally { _transforming = false; g.Restore(state); }
             }
+
+            DrawCopyIcon(g, wobbling);
 
             if (_dropIndex >= 0 && _rows.Count > 0)
             {
@@ -1819,17 +1823,8 @@ namespace VerticalSheetTabs
             if (_shownBadges == BadgeKinds.None || r == null) return list;
             int radius = Px(RowBadgeRadius);
             int gap = Px(3);
-            bool selected = r.IsFolder ? _selFolders.Contains(r.FolderId) : _selected.Contains(r.Sheet);
-            // the middle of the body of the row: a selected row is a little higher than the others
-            int top = row.Top + Px(selected ? PlainTop : ColoredTop), bottom = row.Bottom - Px(BottomInset);
-            int cy = (top + bottom) / 2;
-            int right = row.Right - RightInset(r) - Px(RowBadgeEdge) - CheckReserve(r);
-            if (!r.IsFolder)
-            {
-                // the triangles and the bars of the active sheet stand at the right end
-                if (IsActiveRow(r) && _activeMarker == ActiveMarker.Triangle) right -= Px(MarkerRoom + 3);
-                else if (IsActiveRow(r) && _activeMarker == ActiveMarker.EdgeBars) right -= Px(BarRoom + 3);
-            }
+            int cy = BodyCenterY(r, row);
+            int right = BadgeRightEdge(r, row);
             var found = new List<RowBadgeSpec>();
             if (r.IsFolder)
             {
@@ -1910,13 +1905,211 @@ namespace VerticalSheetTabs
             return list;
         }
 
-        // The width the badges of a row take (the name stays clear of them).
+        // The middle of the body of a row (a selected row is a little higher than the others).
+        private int BodyCenterY(StripRow r, Rectangle row)
+        {
+            bool selected = r.IsFolder ? _selFolders.Contains(r.FolderId) : _selected.Contains(r.Sheet);
+            int top = row.Top + Px(selected ? PlainTop : ColoredTop), bottom = row.Bottom - Px(BottomInset);
+            return (top + bottom) / 2;
+        }
+
+        // Where the badges of a row start, from the right.
+        private int BadgeRightEdge(StripRow r, Rectangle row)
+        {
+            int right = row.Right - RightInset(r) - Px(RowBadgeEdge) - CheckReserve(r);
+            if (!r.IsFolder)
+            {
+                // the triangles and the bars of the active sheet stand at the right end
+                if (IsActiveRow(r) && _activeMarker == ActiveMarker.Triangle) right -= Px(MarkerRoom + 3);
+                else if (IsActiveRow(r) && _activeMarker == ActiveMarker.EdgeBars) right -= Px(BarRoom + 3);
+            }
+            return right;
+        }
+
+        // The width the badges of a row take (the name stays clear of them), and the copy icon, on the row the pointer is on.
         private int RowBadgeReserve(StripRow r)
         {
-            if (_shownBadges == BadgeKinds.None) return 0;
+            int copy = CopyReserve(r);
+            if (_shownBadges == BadgeKinds.None) return copy == 0 ? 0 : copy + Px(RowBadgeEdge - 2);
             List<RowBadgeSpec> specs = RowBadges(r, new Rectangle(0, 0, ContentWidth, RowPx));
-            if (specs.Count == 0) return 0;
-            return specs.Sum(s => s.Bounds.Width + Px(3) + (s.Kind == RowBadgeKind.ProgressPill && specs.Count > 1 ? Px(RowBadgePillGap) : 0)) + Px(RowBadgeEdge - 2);
+            if (specs.Count == 0) return copy == 0 ? 0 : copy + Px(RowBadgeEdge - 2);
+            return specs.Sum(s => s.Bounds.Width + Px(3) + (s.Kind == RowBadgeKind.ProgressPill && specs.Count > 1 ? Px(RowBadgePillGap) : 0)) + Px(RowBadgeEdge - 2) + copy;
+        }
+
+        // ---- the copy icon (Agents.md 12.245) ----
+        // A press of the middle button on a row shows an icon left of its badges. A click on it copies the name of the sheet (the name
+        // Excel's own tab shows, with the sheet-name rule "folder | sheet" too) or of the folder to the clipboard, and does nothing else:
+        // the sheet does not become the active one, the selection and the keyboard focus stay as they are. The icon goes away when the
+        // pointer leaves the row, when another button is pressed (not on the icon), and a second after the name has been copied.
+        // (The middle button itself changes nothing and takes no focus.)
+
+        private const double CopyScale = 0.8; // (the icon is 0.8 times as large as when it was first made)
+        private const double CopyChipWidth = 24 * CopyScale, CopyChipHeight = 22 * CopyScale, CopyIconSize = 16 * CopyScale, CopyGap = 3;
+        private string _copyKey;       // the row that shows the icon ("S:name" / "F:id")
+        private bool _copyHot;         // the pointer is on the icon
+        private string _copiedKey;     // the row whose name has just been copied (a check mark, for a second)
+        private System.Windows.Forms.Timer _copiedTimer;
+
+        private bool CopyIconApplies(StripRow r)
+        {
+            return r != null && !IsSample && _editor == null && !_dragging && !_ghostOn && _raClock == null && (r.IsFolder ? r.FolderName != null : r.Sheet != null);
+        }
+
+        private static string NameToCopy(StripRow r) { return r.IsFolder ? r.FolderName : r.Sheet; }
+
+        private bool IsCopyRow(StripRow r) { return _copyKey != null && r != null && RowKey(r) == _copyKey; }
+
+        private int CopyReserve(StripRow r)
+        {
+            return IsCopyRow(r) && CopyIconApplies(r) ? Px(CopyChipWidth + CopyGap) : 0;
+        }
+
+        // The square of the icon: left of the badges of the row (at the place of the first badge, when there is none).
+        private Rectangle CopyChipRect(int index)
+        {
+            StripRow r = _rows[index];
+            Rectangle row = RowRect(index);
+            int w = Px(CopyChipWidth), h = Px(CopyChipHeight);
+            int right = BadgeRightEdge(r, row);
+            List<RowBadgeSpec> specs = RowBadges(r, row);
+            if (specs.Count > 0)
+            {
+                RowBadgeSpec last = specs[specs.Count - 1];
+                right = last.Bounds.Left - Px(CopyGap) - (last.Kind == RowBadgeKind.ProgressPill ? Px(RowBadgePillGap) : 0);
+            }
+            return new Rectangle(right - w, BodyCenterY(r, row) - h / 2, w, h);
+        }
+
+        private bool CopyChipHit(int index, Point p)
+        {
+            if (index < 0 || index >= _rows.Count || !CopyIconApplies(_rows[index]) || !IsCopyRow(_rows[index])) return false;
+            return Rectangle.Inflate(CopyChipRect(index), Px(2), Px(3)).Contains(p);
+        }
+
+        private bool CopyIconAt(Point p)
+        {
+            return CopyChipHit(IndexFromPoint(p), p);
+        }
+
+        // A press of the middle button: the row under the pointer shows the icon (a press anywhere else takes it away).
+        private void ShowCopyIcon(Point p)
+        {
+            int index = IndexFromPoint(p);
+            string key = index >= 0 && CopyIconApplies(_rows[index]) ? RowKey(_rows[index]) : null;
+            _copyKey = key;
+            _copyHot = key != null && CopyChipHit(index, p);
+            _badgeTip = null;
+            _tip.Hide(this);
+            Invalidate();
+        }
+
+        private void HideCopyIcon()
+        {
+            if (_copyKey == null && !_copyHot) return;
+            _copyKey = null;
+            _copyHot = false;
+            Invalidate();
+        }
+
+        // Called when the pointer moves (and when the list scrolls): whether it is on the icon; off the row of the icon, the icon goes.
+        private void UpdateCopyHover(Point p)
+        {
+            if (_copyKey == null) return;
+            int index = IndexFromPoint(p);
+            if (index < 0 || !CopyIconApplies(_rows[index]) || !IsCopyRow(_rows[index])) { HideCopyIcon(); return; }
+            bool hot = CopyChipHit(index, p);
+            if (hot != _copyHot) { _copyHot = hot; Invalidate(); }
+        }
+
+        private void CopyRowName(int index)
+        {
+            StripRow r = _rows[index];
+            string name = NameToCopy(r);
+            Rectangle chip = CopyChipRect(index);
+            int tipY = RowRect(index).Bottom;
+            _tip.Hide(this);
+            try
+            {
+                Clipboard.SetDataObject(name, true, 10, 50);
+            }
+            catch (Exception)
+            {
+                _badgeTip = "コピーできませんでした";
+                _tip.Show(_badgeTip, this, chip.Left, tipY, 2500);
+                return;
+            }
+            _copiedKey = RowKey(r);
+            if (_copiedTimer == null)
+            {
+                _copiedTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+                _copiedTimer.Tick += (s, e) =>
+                {
+                    _copiedTimer.Stop();
+                    _copiedKey = null;
+                    _copyKey = null; // (the icon has done its work)
+                    _copyHot = false;
+                    _badgeTip = null;
+                    _tip.Hide(this);
+                    Invalidate();
+                };
+            }
+            _copiedTimer.Stop();
+            _copiedTimer.Start();
+            _badgeTip = "コピーしました: " + name;
+            _tip.Show(_badgeTip, this, chip.Left, tipY, 2500);
+            Invalidate();
+        }
+
+        private string CopyTip(int index)
+        {
+            StripRow r = _rows[index];
+            if (_copiedKey != null && _copiedKey == RowKey(r)) return "コピーしました: " + NameToCopy(r);
+            return (r.IsFolder ? "フォルダ名をコピー: " : "シート名をコピー: ") + NameToCopy(r);
+        }
+
+        private void DrawCopyIcon(Graphics g, List<int> wobbling)
+        {
+            if (_copyKey == null) return;
+            int index = _rows.FindIndex(r => RowKey(r) == _copyKey);
+            if (index < 0 || !CopyIconApplies(_rows[index]) || wobbling.Contains(index)) return;
+            Rectangle chip = CopyChipRect(index);
+            if (chip.Bottom < HeaderPx || chip.Top > ViewHeight) return;
+            bool done = _copiedKey == _copyKey;
+            bool hot = _copyHot;
+            GraphicsState state = g.Save();
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            // the chip behind the icon: it shows on any color of a row (a little see-through, until the pointer is on it)
+            using (GraphicsPath path = RoundedRectF(new RectangleF(chip.Left + 0.5f, chip.Top + 0.5f, chip.Width - 1f, chip.Height - 1f), Px(4 * CopyScale)))
+            {
+                using (var fill = new SolidBrush(Color.FromArgb(hot || done ? 255 : 205, Theme.PlusHoverBack))) g.FillPath(fill, path);
+                using (var pen = new Pen(Color.FromArgb(hot || done ? 255 : 150, hot ? Theme.PlusColor : Theme.Separator))) g.DrawPath(pen, path);
+            }
+            float s = Px(CopyIconSize);
+            float ix = chip.Left + (chip.Width - s) / 2f, iy = chip.Top + (chip.Height - s) / 2f;
+            if (done)
+            {
+                using (var brush = new SolidBrush(BadgeProgressGreen)) g.FillEllipse(brush, ix - 0.5f, iy - 0.5f, s + 1f, s + 1f);
+                using (var pen = new Pen(Color.White, Math.Max(1.6f, s * 0.12f)) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    g.DrawLines(pen, new[] { new PointF(ix + s * 0.26f, iy + s * 0.52f), new PointF(ix + s * 0.43f, iy + s * 0.69f), new PointF(ix + s * 0.75f, iy + s * 0.32f) });
+            }
+            else
+            {
+                Color ink = Color.FromArgb(hot ? 255 : 190, Theme.PlusColor);
+                float w = Math.Max(1.2f, s * 0.085f);
+                using (var pen = new Pen(ink, w) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
+                {
+                    // the sheet behind (an outline), the sheet in front (with lines of text)
+                    using (GraphicsPath back = RoundedRectF(new RectangleF(ix + s * 0.30f, iy + s * 0.08f, s * 0.52f, s * 0.58f), s * 0.09f)) g.DrawPath(pen, back);
+                    using (GraphicsPath front = RoundedRectF(new RectangleF(ix + s * 0.16f, iy + s * 0.30f, s * 0.52f, s * 0.60f), s * 0.09f))
+                    {
+                        using (var fill = new SolidBrush(Theme.PlusHoverBack)) g.FillPath(fill, front);
+                        g.DrawPath(pen, front);
+                    }
+                    pen.Width = Math.Max(1f, s * 0.05f);
+                    foreach (float ly in new[] { 0.46f, 0.60f, 0.74f }) g.DrawLine(pen, ix + s * 0.26f, iy + s * ly, ix + s * 0.58f, iy + s * ly);
+                }
+            }
+            g.Restore(state);
         }
 
         private bool IsProgressDone(string sheet)
@@ -2408,6 +2601,7 @@ namespace VerticalSheetTabs
         // The text of the tip of the badge under the pointer (null = none).
         private string BadgeTipAt(int index, Point p)
         {
+            if (CopyChipHit(index, p)) return CopyTip(index);
             if (PaintCanHit(index, p)) return "フォルダと中のシートを同一色に設定 (クリック: フォルダの色、ダブルクリック: その他の色)";
             if (index < 0 || index >= _rows.Count || _shownBadges == BadgeKinds.None) return null;
             foreach (RowBadgeSpec s in RowBadges(_rows[index], RowRect(index)))
@@ -3601,15 +3795,18 @@ namespace VerticalSheetTabs
 
         private const int WM_LBUTTONDOWN = 0x0201;
         private const int WM_LBUTTONDBLCLK = 0x0203;
+        private const int WM_MBUTTONDOWN = 0x0207;
+        private const int WM_MBUTTONDBLCLK = 0x0209;
 
         protected override void WndProc(ref Message m)
         {
             if (IsSample) { base.WndProc(ref m); return; }
-            if ((m.Msg == WM_LBUTTONDOWN || m.Msg == WM_LBUTTONDBLCLK) && _editor == null)
+            if ((m.Msg == WM_LBUTTONDOWN || m.Msg == WM_LBUTTONDBLCLK || m.Msg == WM_MBUTTONDOWN || m.Msg == WM_MBUTTONDBLCLK) && _editor == null)
             {
                 long l = m.LParam.ToInt64();
                 var point = new Point((short)(l & 0xFFFF), (short)((l >> 16) & 0xFFFF));
-                if (ClickChangesSheet(point) || (IsExcelEditing != null && IsExcelEditing()))
+                bool middle = m.Msg == WM_MBUTTONDOWN || m.Msg == WM_MBUTTONDBLCLK; // (shows the copy icon, and leaves the focus where it is)
+                if (middle || ClickChangesSheet(point) || CopyIconAt(point) || (IsExcelEditing != null && IsExcelEditing()))
                 {
                     _hadFocusAtClick = ContainsFocus;
                     _noFocusClick = true;
@@ -3642,6 +3839,12 @@ namespace VerticalSheetTabs
         {
             base.OnMouseDown(e);
             if (IsSample) { if (SampleClicked != null) SampleClicked(); return; }
+            if (e.Button == MouseButtons.Middle)
+            {
+                ShowCopyIcon(e.Location);
+                return;
+            }
+            if (_copyKey != null && !(e.Button == MouseButtons.Left && CopyChipHit(IndexFromPoint(e.Location), e.Location))) HideCopyIcon();
             if (!_noFocusClick) Focus();
             _toggleOffFolder = null; // a drag swallows the button release, so nothing may be left over
             int tool = ToolAt(e.Location);
@@ -3678,6 +3881,13 @@ namespace VerticalSheetTabs
             StripRow row = _rows[index];
             bool ctrl = (ModifierKeys & Keys.Control) != 0;
             bool shift = (ModifierKeys & Keys.Shift) != 0;
+
+            // the copy icon: a click copies the name, and nothing else happens (the sheet is not chosen, the focus is not taken)
+            if (e.Button == MouseButtons.Left && CopyChipHit(index, e.Location))
+            {
+                CopyRowName(index);
+                return;
+            }
 
             // the progress mark of a sheet: a click changes it (and does not select the sheet)
             if (e.Button == MouseButtons.Left && ProgressBadgeHit(index, e.Location))
@@ -3955,6 +4165,7 @@ namespace VerticalSheetTabs
         {
             base.OnMouseLeave(e);
             SetPlusHot(false);
+            if (_copyKey != null) { _copyKey = null; _copyHot = false; Invalidate(); }
             if (_headerHot != 0) { _headerHot = 0; Invalidate(); }
             if (_toolHot != 0) { _toolHot = 0; Invalidate(); }
             _hoverIndex = -1;
@@ -4030,6 +4241,7 @@ namespace VerticalSheetTabs
             if (hotTool == 5) hotTool = 0;
             if (hotTool != _toolHot) { _toolHot = hotTool; Invalidate(); }
             if (Filtering) { if (e.Button == MouseButtons.Left) _dragIndex = -1; } // the rows can be dragged only in the whole list
+            UpdateCopyHover(e.Location);
             UpdateTip(e.Location);
             if (e.Button != MouseButtons.Left || _dragIndex < 0 || _editor != null || StructureProtected || Filtering) return;
             Size drag = SystemInformation.DragSize;
@@ -4247,6 +4459,7 @@ namespace VerticalSheetTabs
             if (e.Button != MouseButtons.Left) return;
             int index = IndexFromPoint(e.Location);
             if (index < 0) return;
+            if (CopyChipHit(index, e.Location)) return; // (two clicks on the copy icon: no renaming)
             if (_rows[index].IsFolder)
             {
                 if (PaintCanHit(index, e.Location)) return; // (the double click of the paint can: the color dialog)
