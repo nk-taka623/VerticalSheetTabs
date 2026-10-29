@@ -1,6 +1,6 @@
 ﻿﻿# Agents.md - 縦並びシートタブ Excelアドイン 開発の手引き (現状版)
 
-最終更新: 2026-10-29 (v1.3.0 の実装の時点)
+最終更新: 2026-10-29 (v1.3.0 の時点)
 
 この文書は、**いまの仕様と実装**だけを書く。過去の経緯 (どの版で何を変えたか) は、`git log` を見る。利用者向けの説明は `README.md`、ビルドとリリースの手順は `DEVELOPMENT.md` にある。
 
@@ -12,7 +12,7 @@
 | 対象 | Windows版 Excel (Microsoft 365、64bit) のみ |
 | 方式 | VSTO アドイン (.NET Framework 4.8、C# 7.3)。縦タブは、カスタムタスクペイン (`CustomTaskPane` + `UserControl`) の中に、自前描画 (GDI+) |
 | 開発環境 | Visual Studio 2026 (Office/SharePoint 開発ワークロード) |
-| 最新版 | v1.3.0 (実装中。リリースの前は、`feature/settings-per-pc`。リリースしたあとは、`develop`、`master`、タグ `v1.3.0` が同じコミット) |
+| 最新版 | v1.3.0 (`develop`、`master`、タグ `v1.3.0` は同じコミット) |
 | 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.3.0.zip`)。自己署名の証明書 |
 | ライセンス | BSD 3条項 (`license\`)。著作権表記: Copyright (c) 2026 nk_taka |
 | 確認済みの環境 | Windows 11、拡大率125%、Excel 365 (カラフルのテーマ) |
