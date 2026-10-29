@@ -2007,10 +2007,10 @@ namespace VerticalSheetTabs
             else Invalidate();
         }
 
-        // The pointer moves during the copy: off the row, the icon goes (and letting go copies nothing).
+        // The pointer moves during the copy: off the row, the icon goes for good (and letting go copies nothing, even if the pointer comes back).
         private void UpdateChordPointer(Point p)
         {
-            if (!_chord) return;
+            if (!_chord || !_chordOnRow) return; // (once off the row, the copy stays cancelled until the buttons are let go)
             int index = IndexFromPoint(p);
             bool on = index >= 0 && RowKey(_rows[index]) == _chordKey;
             if (on == _chordOnRow) return;
