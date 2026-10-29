@@ -36,21 +36,55 @@ namespace VerticalSheetTabs
 
                 this.Application.WindowActivate += Application_WindowActivate;
                 this.Application.SheetActivate += sh => Guard(() => _panes.SyncSheetOf(sh));
-                // the badges of the rows (errors, notes): the sheet is looked at again when it has been changed or calculated, or left
-                this.Application.SheetChange += (sh, rng) => Guard(() => _panes.MarkBadgesDirty(sh));
-                this.Application.SheetCalculate += sh => Guard(() => _panes.MarkBadgesDirty(sh));
-                this.Application.SheetDeactivate += sh => Guard(() => _panes.MarkBadgesDirty(sh, true));
+                // the badges of the rows (errors, notes): the sheet is looked at again when it has been changed or calculated, or left;
+                // the events are listened to only while some window shows a badge
+                _panes.BadgeEventsWanted = SetBadgeEvents;
                 this.Application.WorkbookBeforeSave += Application_WorkbookBeforeSave;
 
                 _panes.EnsureAllPanes();
             });
         }
 
+        private bool _badgeEvents;
+
+        private void SetBadgeEvents(bool on)
+        {
+            if (on == _badgeEvents) return;
+            _badgeEvents = on;
+            if (on)
+            {
+                this.Application.SheetChange += Application_SheetChange;
+                this.Application.SheetCalculate += Application_SheetCalculate;
+                this.Application.SheetDeactivate += Application_SheetDeactivate;
+            }
+            else
+            {
+                this.Application.SheetChange -= Application_SheetChange;
+                this.Application.SheetCalculate -= Application_SheetCalculate;
+                this.Application.SheetDeactivate -= Application_SheetDeactivate;
+            }
+        }
+
+        private void Application_SheetChange(object sh, Excel.Range target)
+        {
+            Guard(() => _panes.MarkBadgesDirty(sh));
+        }
+
+        private void Application_SheetCalculate(object sh)
+        {
+            Guard(() => _panes.MarkBadgesDirty(sh));
+        }
+
+        private void Application_SheetDeactivate(object sh)
+        {
+            Guard(() => _panes.MarkBadgesDirty(sh, true));
+        }
+
         // Also runs when the user disables the add-in while Excel is running: the tab bar of
         // Excel is given back, so that no workbook is left without tabs.
         private void ThisAddIn_Shutdown(object sender, System.EventArgs e)
         {
-            Guard(() => { if (_panes != null) _panes.Shutdown(); });
+            Guard(() => { if (_panes != null) { _panes.BadgeEventsWanted = null; SetBadgeEvents(false); _panes.Shutdown(); } });
         }
 
         protected override Office.IRibbonExtensibility CreateRibbonExtensibilityObject()
