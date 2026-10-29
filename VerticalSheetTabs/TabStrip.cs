@@ -238,11 +238,17 @@ namespace VerticalSheetTabs
                     {
                         family = SystemFonts.MessageBoxFont.FontFamily;
                     }
-                    _font = new Font(family, (float)(FontPixelsAt96 * dpi / 96.0), FontStyle.Regular, GraphicsUnit.Pixel);
+                    using (family) _font = new Font(family, (float)(FontPixelsAt96 * dpi / 96.0), FontStyle.Regular, GraphicsUnit.Pixel);
                     _fontDpi = dpi;
                 }
                 return _font;
             }
+        }
+
+        // A font of the tab font's family. (Font.FontFamily makes a new FontFamily, a GDI+ object, on every call; it is released here.)
+        private Font NewTabFont(float size, FontStyle style, GraphicsUnit unit)
+        {
+            using (FontFamily family = TabFont.FontFamily) return new Font(family, size, style, unit);
         }
 
         // First-open width: 12 half-width characters plus the tab's own paddings.
@@ -751,7 +757,7 @@ namespace VerticalSheetTabs
             if (_search == null || !_search.Visible)
             {
                 // the hint
-                using (var font = new Font(TabFont.FontFamily, TabFont.Size * 0.8f, FontStyle.Regular, TabFont.Unit))
+                using (var font = NewTabFont(TabFont.Size * 0.8f, FontStyle.Regular, TabFont.Unit))
                 using (var brush = new SolidBrush(Theme.InactiveText))
                 using (var format = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
                 {
@@ -773,7 +779,7 @@ namespace VerticalSheetTabs
                 }
                 int n = ResultCount;
                 string label = n + "件";
-                using (var font = new Font(TabFont.FontFamily, TabFont.Size * 0.72f, FontStyle.Bold, TabFont.Unit))
+                using (var font = NewTabFont(TabFont.Size * 0.72f, FontStyle.Bold, TabFont.Unit))
                 {
                     SizeF size = g.MeasureString(label, font);
                     Rectangle t = ToolTextRect();
@@ -1715,7 +1721,7 @@ namespace VerticalSheetTabs
             var box = new Rectangle(center.X - d / 2, center.Y - d / 2, d, d);
             using (var brush = new SolidBrush(Color.FromArgb(235, 16, 124, 65))) g.FillEllipse(brush, box);
             using (var pen = new Pen(Color.White, Math.Max(1f, Px(1.2)))) g.DrawEllipse(pen, box);
-            using (var font = new Font(TabFont.FontFamily, TabFont.Size * 0.8f, FontStyle.Bold, TabFont.Unit))
+            using (var font = NewTabFont(TabFont.Size * 0.8f, FontStyle.Bold, TabFont.Unit))
             using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
             {
                 g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
@@ -2464,7 +2470,7 @@ namespace VerticalSheetTabs
                 {
                     using (var fill = new SolidBrush(Color.White)) g.FillPath(fill, path);
                     using (var pen = new Pen(Color.FromArgb(185, 185, 190), 1f)) g.DrawPath(pen, path);
-                    using (var font = new Font(TabFont.FontFamily, Math.Max(7f, b.Height * 0.62f), FontStyle.Bold, GraphicsUnit.Pixel))
+                    using (var font = NewTabFont(Math.Max(7f, b.Height * 0.62f), FontStyle.Bold, GraphicsUnit.Pixel))
                     using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                     using (var brush = new SolidBrush(Color.FromArgb(70, 70, 75)))
                     {
@@ -2584,7 +2590,7 @@ namespace VerticalSheetTabs
                 using (var white = new SolidBrush(Color.White)) g.FillEllipse(white, b);
             }
             using (var fill = new SolidBrush(color)) g.FillEllipse(fill, outline ? Rectangle.Inflate(b, -Math.Max(1, Px(1)), -Math.Max(1, Px(1))) : b);
-            using (var font = new Font(TabFont.FontFamily, Math.Max(7f, b.Height * 0.52f), FontStyle.Bold, GraphicsUnit.Pixel))
+            using (var font = NewTabFont(Math.Max(7f, b.Height * 0.52f), FontStyle.Bold, GraphicsUnit.Pixel))
             using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
             using (var brush = new SolidBrush(Color.White))
             {
@@ -2914,7 +2920,7 @@ namespace VerticalSheetTabs
 
         private void DrawAllButtons(Graphics g)
         {
-            using (var font = new Font(TabFont.FontFamily, TabFont.Size * 0.8f, FontStyle.Regular, TabFont.Unit))
+            using (var font = NewTabFont(TabFont.Size * 0.8f, FontStyle.Regular, TabFont.Unit))
             using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap })
             {
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;

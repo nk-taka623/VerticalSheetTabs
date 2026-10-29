@@ -61,6 +61,9 @@ namespace VerticalSheetTabs
             public Dictionary<string, HashSet<string>> SyncSeen = new Dictionary<string, HashSet<string>>();
             public string RuleSignature;
             public bool RuleChanged;
+            // the sync gave a tab color (a change of its own that is not the user's), and how many syncs have ended since the pane was made
+            public bool SyncWrote;
+            public int SyncsDone;
             // Just opened with the sheet-name rule: the sheets are put in order without making the workbook
             // "changed" (opening it and closing it again must not ask "save changes?"), until the order holds.
             public bool QuietRegroup;
@@ -695,10 +698,19 @@ namespace VerticalSheetTabs
             {
                 entry.Syncing = false;
                 // (a move of sheets by the name rule is a real change, see EnforceNameGrouping)
-                try { if (wasSaved && !entry.RuleChanged && !entry.Workbook.Saved) entry.Workbook.Saved = true; } catch (Exception) { }
+                // Only when the sync itself changed something, or while the workbook is being opened (Excel reacts to the
+                // first reads). Later, a change of the flag may be the work of a macro or another add-in that ran during
+                // the sync: that one must stay (resetting it would let Excel close the workbook without asking to save).
+                bool mayReset = entry.SyncWrote || entry.SyncsDone < OpeningSyncs;
+                try { if (wasSaved && mayReset && !entry.RuleChanged && !entry.Workbook.Saved) entry.Workbook.Saved = true; } catch (Exception) { }
                 entry.RuleChanged = false;
+                entry.SyncWrote = false;
+                if (entry.SyncsDone < OpeningSyncs) entry.SyncsDone++;
             }
         }
+
+        // the first syncs of a pane, in which Excel may still mark the workbook as changed by itself
+        private const int OpeningSyncs = 5;
 
         private static bool SyncSheetsCore(Entry entry)
         {
@@ -2529,6 +2541,7 @@ namespace VerticalSheetTabs
                     }
                     if (names.Count == 0) continue;
                     SetTabColor(entry, names, node.Color);
+                    entry.SyncWrote = true;
                     changed = true;
                 }
                 foreach (string id in entry.SyncSeen.Keys.ToList())

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of the parts that do not need Excel (the source files are linked, not copied). A console program:
+       it needs no test framework package. Run with tools\run-tests.ps1. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <RootNamespace>VerticalSheetTabs.Tests</RootNamespace>
+    <AssemblyName>VerticalSheetTabs.Tests</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="..\VerticalSheetTabs\NameRule.cs" Link="Linked\NameRule.cs" />
+    <Compile Include="..\VerticalSheetTabs\FolderModel.cs" Link="Linked\FolderModel.cs" />
+    <Compile Include="..\VerticalSheetTabs\SafeXml.cs" Link="Linked\SafeXml.cs" />
+    <Compile Include="..\VerticalSheetTabs\TabColorPalette.cs" Link="Linked\TabColorPalette.cs" />
+    <Compile Include="..\VerticalSheetTabs\DpiHelper.cs" Link="Linked\DpiHelper.cs" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+</Project>
