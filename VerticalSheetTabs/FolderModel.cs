@@ -91,7 +91,11 @@ namespace VerticalSheetTabs
             return new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), root).ToString(SaveOptions.DisableFormatting);
         }
 
-        // Reads the XML of the custom part. Anything unreadable gives an empty model (no folders).
+        // The XML the model was read from was not empty but could not be read (malformed, or not of this schema): the model is empty then,
+        // and the part must not be taken for "no folders" (saving must not delete it).
+        public bool Unreadable { get; private set; }
+
+        // Reads the XML of the custom part. Anything unreadable gives an empty model (no folders), marked Unreadable.
         public static FolderModel Parse(string xml)
         {
             var model = new FolderModel();
@@ -100,7 +104,7 @@ namespace VerticalSheetTabs
             {
                 XNamespace ns = Namespace;
                 XElement root = XDocument.Parse(xml).Root;
-                if (root == null || root.Name != ns + "folders") return model;
+                if (root == null || root.Name != ns + "folders") return new FolderModel { Unreadable = true };
 
                 var seenSheets = new HashSet<string>();
                 var seenIds = new HashSet<string>();
@@ -135,7 +139,7 @@ namespace VerticalSheetTabs
             }
             catch (Exception)
             {
-                return new FolderModel();
+                return new FolderModel { Unreadable = true };
             }
             return model;
         }

@@ -41,6 +41,10 @@ namespace VerticalSheetTabs
             public int Failures;
             // The folder structure; written to the workbook when it is saved.
             public FolderModel Folders = new FolderModel();
+            // The folder part of the workbook could not be read: it is not deleted when the workbook is saved.
+            public bool FoldersUnreadable;
+            // The handle of the window (the key of the entry).
+            public int Hwnd;
             // The sheet names (hidden ones too) the keys below were read for.
             public string KeySignature;
             public List<string> Keys = new List<string>();
@@ -133,7 +137,9 @@ namespace VerticalSheetTabs
 
             var entry = new Entry { Pane = pane, Control = control, Window = window, Workbook = workbook, Settings = settings };
             entry.QuietRegroup = settings.NameRule;
+            entry.Hwnd = hwnd;
             entry.Folders = FolderStore.Load(workbook);
+            entry.FoldersUnreadable = entry.Folders.Unreadable;
             entry.History = HistoryStore.Load(workbook);
             _entries[hwnd] = entry;
 
@@ -219,6 +225,21 @@ namespace VerticalSheetTabs
             }
             ApplyMode(entry);
             SyncSheets(entry);
+            NotifyBadgeEvents();
+        }
+
+        // The events of the workbook (a cell changed, a sheet calculated or left) are only listened to while a badge is shown in some
+        // window: every event costs Excel a call into the add-in, and a macro that writes cells makes thousands of them.
+        public Action<bool> BadgeEventsWanted;
+        private bool _badgeEventsOn;
+
+        private void NotifyBadgeEvents()
+        {
+            bool wanted = _entries.Values.Any(e => e.Settings.Badges != BadgeKinds.None);
+            if (wanted == _badgeEventsOn) return;
+            _badgeEventsOn = wanted;
+            try { if (BadgeEventsWanted != null) BadgeEventsWanted(wanted); }
+            catch (Exception) { }
         }
 
         // The vertical pane is shown while this window's display mode is "both" and the horizontal tabs are shown (a workbook whose
@@ -363,6 +384,7 @@ namespace VerticalSheetTabs
                 // Window/pane closing.
             }
             ApplyMode(entry);
+            NotifyBadgeEvents();
             if (nameRuleTurnedOn) EnableNameRule(entry);
         }
 
@@ -442,7 +464,7 @@ namespace VerticalSheetTabs
                     // sheets added without the sync having seen them get their id now, so that the file
                     // has the ids and opening it does not have to give them (and change the workbook)
                     if (entry.Folders.HasFolders) RefreshKeys(entry);
-                    FolderStore.Save(entry.Workbook, entry.Folders);
+                    FolderStore.Save(entry.Workbook, entry.Folders, entry.FoldersUnreadable && !entry.Folders.HasFolders);
                 }
                 catch (Exception)
                 {
@@ -549,7 +571,7 @@ namespace VerticalSheetTabs
                 AllowPaneInput(entry);
                 CheckHorizontalTabs(entry);
                 if (SyncSheets(entry, true)) entry.Failures = 0; // (the dialog check above holds for this tick)
-                else if (++entry.Failures > 20) PurgeEntry(entry); // about 6 seconds without an answer
+                else if (++entry.Failures > 20) DropIfWindowGone(entry); // about 6 seconds without an answer
             }
         }
 
@@ -584,7 +606,7 @@ namespace VerticalSheetTabs
                 AllowPaneInput(entry);
                 CheckHorizontalTabs(entry);
                 if (SyncSheets(entry, true)) entry.Failures = 0;
-                else if (++entry.Failures > 20) PurgeEntry(entry);
+                else if (++entry.Failures > 20) DropIfWindowGone(entry);
             }
         }
 
@@ -603,6 +625,21 @@ namespace VerticalSheetTabs
             }
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
+
+        // Excel did not answer for a while. That is also so while it calculates or runs a macro for long, and the entry must survive that:
+        // it holds what is not in the workbook yet (folders that were made, the window's display mode). The entry goes only when the
+        // window itself is gone (closed without our noticing).
+        private void DropIfWindowGone(Entry entry)
+        {
+            bool alive;
+            try { alive = entry.Hwnd != 0 && IsWindow(new IntPtr(entry.Hwnd)); }
+            catch (Exception) { alive = false; }
+            if (alive) entry.Failures = 0; // (asked again after another round of failures)
+            else PurgeEntry(entry);
+        }
+
         // A window that stays unreachable (closed without our noticing) loses its pane entry.
         private void PurgeEntry(Entry entry)
         {
@@ -618,6 +655,7 @@ namespace VerticalSheetTabs
             {
                 // Already gone.
             }
+            NotifyBadgeEvents();
         }
 
         // Returns false when Excel could not be asked (busy, or the window/workbook is gone).
@@ -1010,6 +1048,9 @@ namespace VerticalSheetTabs
             }
         }
 
+        // A sheet whose used range has more cells than this has its errors not counted (no badge for them).
+        private const double BadgeErrorMaxCells = 2000000;
+
         // Counts the cells with an error (of formulas) and the notes and comments of one sheet. False when Excel could not answer now.
         private static bool ScanBadges(Excel.Workbook workbook, string sheetName, BadgeKinds kinds, out BadgeInfo info)
         {
@@ -1020,24 +1061,31 @@ namespace VerticalSheetTabs
             {
                 try { info.Protected = ws.ProtectContents; } catch (Exception) { }
                 if ((kinds & BadgeKinds.Progress) != 0) info.Progress = ReadProgress(ws);
-                Excel.Range errors = null;
-                try
+                if ((kinds & BadgeKinds.Error) != 0)
                 {
-                    if ((kinds & BadgeKinds.Error) == 0) throw new InvalidOperationException(); // (not asked for)
-                    errors = ws.UsedRange.SpecialCells(Excel.XlCellType.xlCellTypeFormulas, Excel.XlSpecialCellsValue.xlErrors);
-                    info.Errors = (int)Math.Min(int.MaxValue, errors.CountLarge);
-                }
-                catch (InvalidOperationException)
-                {
-                }
-                catch (System.Runtime.InteropServices.COMException ex)
-                {
-                    // "no cells were found" is the answer 0; anything else (Excel is busy or editing) is tried again
-                    if (ex.ErrorCode != unchecked((int)0x800A03EC)) return false;
-                }
-                finally
-                {
-                    if (errors != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(errors);
+                    // The formulas that show an error, counted by one formula over the used range: the time follows the number of cells
+                    // (about 60 ms for a million). SpecialCells would be quicker for a few errors, but it takes seconds, up to minutes, when
+                    // the errors are scattered (50,000 of them in 100,000 cells took 6 s), and cannot be stopped.
+                    Excel.Range used = null;
+                    try
+                    {
+                        used = ws.UsedRange;
+                        // (a used range that spans the whole sheet is not counted: its cells would have to be held in memory)
+                        if (Convert.ToDouble(used.CountLarge) <= BadgeErrorMaxCells)
+                        {
+                            string address = used.get_Address(false, false, Excel.XlReferenceStyle.xlA1, Type.Missing, Type.Missing);
+                            object count = ws.Evaluate("SUMPRODUCT(--ISERROR(" + address + "),--ISFORMULA(" + address + "))");
+                            if (count is double && (double)count >= 0) info.Errors = (int)Math.Min(int.MaxValue, (double)count);
+                        }
+                    }
+                    catch (System.Runtime.InteropServices.COMException)
+                    {
+                        return false; // Excel is busy or editing: tried again
+                    }
+                    finally
+                    {
+                        if (used != null) System.Runtime.InteropServices.Marshal.ReleaseComObject(used);
+                    }
                 }
                 if ((kinds & BadgeKinds.Memo) != 0)
                 {
@@ -1055,6 +1103,7 @@ namespace VerticalSheetTabs
         // Called by the Excel events (a cell changed, a sheet calculated or left): the sheet is looked at again when it has been quiet.
         public void MarkBadgesDirty(object sheet, bool atOnce = false)
         {
+            if (!_badgeEventsOn) return; // (before any call into Excel)
             try
             {
                 var ws = sheet as Excel.Worksheet;
