@@ -1,6 +1,6 @@
 ﻿﻿# Agents.md - 縦並びシートタブ Excelアドイン 開発の手引き (現状版)
 
-最終更新: 2026-10-30 (v1.3.2 の時点)
+最終更新: 2026-10-30 (v1.3.3 の時点)
 
 この文書は、**いまの仕様と実装**だけを書く。過去の経緯 (どの版で何を変えたか) は、`git log` を見る。利用者向けの説明は `README.md`、ビルドとリリースの手順は `DEVELOPMENT.md` にある。
 
@@ -12,8 +12,8 @@
 | 対象 | Windows版 Excel (Microsoft 365、64bit) のみ |
 | 方式 | VSTO アドイン (.NET Framework 4.8、C# 7.3)。縦タブは、カスタムタスクペイン (`CustomTaskPane` + `UserControl`) の中に、自前描画 (GDI+) |
 | 開発環境 | Visual Studio 2026 (Office/SharePoint 開発ワークロード) |
-| 最新版 | v1.3.2 (`develop`、`master`、タグ `v1.3.2` は同じコミット) |
-| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.3.2.zip`)。自己署名の証明書 |
+| 最新版 | v1.3.3 (`develop`、`master`、タグ `v1.3.3` は同じコミット) |
+| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.3.3.zip`)。自己署名の証明書 |
 | ライセンス | BSD 3条項 (`license\`)。著作権表記: Copyright (c) 2026 nk_taka |
 | 確認済みの環境 | Windows 11、拡大率125%、Excel 365 (カラフルのテーマ) |
 
@@ -171,6 +171,7 @@
 | `WorkbookSettings.cs` | 1つのウィンドウの設定。ブックの `VTab.Width`、`VTab.NameRule` の読み書きと、古い `VTab.*` の削除 |
 | `PcSettings.cs` | PCの設定ファイル `settings.ini` の読み書き |
 | `SettingsForm.cs` | 設定画面 (5タブ) |
+| `SafeXml.cs` | ブックから読むXMLの読み込み (DTD禁止、大きさの上限) |
 | `RibbonController.cs`、`RibbonIcon.cs` | リボンのボタン、横タブのメニュー項目、アイコンの描画 |
 | `Wobble.cs`、`WobbleSounds.cs`、`Sounds\*.wav` | 揺れの動き、効果音 (waveOut でミックス。アドインに埋め込む) |
 | `DialogPlacer.cs` | Excelの「色の設定」画面を、クリックした位置に出す |
@@ -192,7 +193,7 @@ Excelには、シート名の変更、並べ替え、非表示 / 再表示のイ
 
 開いただけ、同期しただけでは、ブックを「変更あり」にしない。フォルダの開閉、色、名前などのユーザー操作は、「変更あり」にする。
 
-- 旧「縦のみ」のブックの横タブの復元 (移行)、同期中の色やシートの識別の付与などは、変更前に `Saved` だった場合、元に戻す
+- 旧「縦のみ」のブックの横タブの復元 (移行)、同期中の色やシートの識別の付与などは、変更前に `Saved` だった場合、元に戻す。同期の最後の `Saved` の復元は、同期が自分で書き込んだとき (`Entry.SyncWrote`)、またはペインを作って最初の5回の同期 (`OpeningSyncs`。Excelが読み取りに反応して「変更あり」にすることがある) だけ行う。それ以降は、マクロやほかのアドインが同期のあいだに付けた「変更あり」を消さない
 - シート名のルールによる、開いた直後の並べ直しは、変更扱いにしない (`QuietRegroup`)。開いたあとの並び直しは、変更として扱う
 - 識別の読み取りに失敗したときは、フォルダの構成を変えず、次の同期で読み直す (仮のキーで所属を決め直さない)。3回続けて失敗したときだけ仮のキーを使い、そのときとその次の読み直しでは、色の自動付与をしない
 - 保存時 (`WorkbookBeforeSave`) に、設定とフォルダの構成を書き込み、フォルダのあるブックでは識別のないシートに識別を付ける
@@ -355,8 +356,10 @@ Excel 365、拡大率125%、1000枚のブック (7枚に1枚はタブ色付き)�
 3. `配布用zip` を含めて `master` にコミットする。`develop` は `master` に早送りで合わせる
 4. バージョンタグ `vX.Y.Z` は、**配布用zipをコミットしたあと**に、そのコミットに付ける。`master` へのマージ直後には付けない。記録の更新コミットが後に必要なときは、それを終えてから、最後のコミットに付ける
 
-- zip の中身: `setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\<版>\`、`VerticalSheetTabs.cer`、`証明書を信頼する.ps1`、`はじめにお読みください.txt`、`README.md`、`README.pdf`、`docs\` (画像)、`license\`。`DEVELOPMENT.md` と `Agents.md` は入れない。署名の秘密鍵 (`.pfx`) は、zip にもリポジトリにも含めない
+- zip の中身: `setup.exe`、`VerticalSheetTabs.vsto`、`Application Files\<版>\`、`VerticalSheetTabs.cer`、`証明書を信頼する.ps1`、`証明書の信頼を取り消す.ps1`、`はじめにお読みください.txt`、`README.md`、`README.pdf`、`docs\` (画像)、`license\`。`DEVELOPMENT.md` と `Agents.md` は入れない。署名の秘密鍵 (`.pfx`) は、zip にもリポジトリにも含めない
 - インストーラを作る前に、バージョンを上げる (3か所。`DEVELOPMENT.md`)
+- リリースの前に、`tools\run-tests.ps1` でテストを実行する (Excel を使わない部分。`VerticalSheetTabs.Tests`)
+- 証明書を信頼する / 取り消すスクリプトと、手順書の雛形は、`tools\dist\` にある (zipの作成時に取り込む)。信頼するスクリプトは、証明書の内容を表示して、確認してから登録する。「信頼されたルート証明機関」への登録は、署名したものすべてをこのユーザーが信頼することになるため、取り消すスクリプトを同梱する
 - タグは、1回の push で3つまで (4つ以上だと、GitHub がワークフローを起動しない。起動しなかったときは、手動で実行する)。手順の詳細は `DEVELOPMENT.md`
 
 ### 8.3 実機の確認

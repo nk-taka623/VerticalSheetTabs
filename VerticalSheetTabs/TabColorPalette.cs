@@ -82,7 +82,7 @@ namespace VerticalSheetTabs
             BackColor = Color.White;
             Font font = SystemFonts.MenuFont;
             // the pane's WinForms scaling is 96 dpi, Excel's menus use the real one
-            Font = new Font(font.FontFamily, font.SizeInPoints * 0.92f * Dpi / 96f, FontStyle.Regular, GraphicsUnit.Point);
+            using (FontFamily family = font.FontFamily) Font = new Font(family, font.SizeInPoints * 0.92f * Dpi / 96f, FontStyle.Regular, GraphicsUnit.Point);
             _bold = new Font(Font, FontStyle.Bold);
             Rebuild();
         }
