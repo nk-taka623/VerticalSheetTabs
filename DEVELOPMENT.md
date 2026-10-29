@@ -17,7 +17,8 @@
 | `TabColorPalette.cs` | シート見出しの色のパレット (Excelと同じ構成) |
 | `FolderModel.cs`、`FolderStore.cs` | フォルダの構造、XMLの読み書き、Excelのシート順との突き合わせ (`Reconcile`)、シートの識別 |
 | `NameRule.cs` | シート名のルール (`フォルダ名 \| シート名`) の解析、並びの整理、名前からのフォルダ構成 |
-| `WorkbookSettings.cs` | カスタムドキュメントプロパティ (`VTab.*`) の読み書き |
+| `WorkbookSettings.cs` | 1つのウィンドウの設定。ブックのカスタムドキュメントプロパティ (`VTab.Width`、`VTab.NameRule`) の読み書きと、古い `VTab.*` の削除 |
+| `PcSettings.cs` | PCの設定ファイル (`%LocalAppData%\VerticalSheetTabs\settings.ini`。表示モード、位置、見た目、アニメーション、バッジ) の読み書き |
 | `SettingsForm.cs`、`RibbonController.cs`、`RibbonIcon.cs` | 設定画面、リボンのボタンと横タブのメニュー項目、アイコン |
 | `AddInVersion.cs` | 表示用のバージョン、著作権、ライセンス |
 | `tools\make-dist-zip.ps1`、`tools\make-readme-pdf.ps1` | 配布用zipの作成、README.pdf の作成 |
@@ -30,7 +31,8 @@ flowchart LR
     T --> P[PaneManager]
     P -- ウィンドウごとに1つ --> C[TabPaneControl]
     C --> S[TabStrip<br/>自前描画]
-    P <-- 読み書き --> W[(ブック<br/>VTab.* / カスタムXML / VTab.Id)]
+    P <-- 読み書き --> W[(ブック<br/>VTab.Width・NameRule / カスタムXML / VTab.Id)]
+    P <-- 読み書き --> F[(PCの設定ファイル<br/>settings.ini)]
     P -- 0.3〜3秒おきに同期 --> Excel
     S -- 操作 --> P
 ```
@@ -90,7 +92,7 @@ Release ビルドには、`PathMap` を設定してあり、DLL に、開発PC�
 ### 配布用zipを作る
 
 ```powershell
-powershell -File tools\make-dist-zip.ps1 -Version 1.2.3
+powershell -File tools\make-dist-zip.ps1 -Version 1.3.0
 ```
 
 - 公開済みのインストーラの DLL の版数が、指定した版数と同じことを確かめてから、`配布用zip\VerticalSheetTabs_vX.Y.Z.zip` を作り、古いzipを削除する

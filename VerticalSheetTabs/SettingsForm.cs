@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -9,7 +10,6 @@ namespace VerticalSheetTabs
     public class SettingsForm : Form
     {
         private readonly RadioButton _modeHorizontal = new RadioButton();
-        private readonly RadioButton _modeVertical = new RadioButton();
         private readonly RadioButton _modeBoth = new RadioButton();
         private readonly RadioButton _sideLeft = new RadioButton();
         private readonly RadioButton _sideRight = new RadioButton();
@@ -64,7 +64,7 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim)
+        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -79,12 +79,11 @@ namespace VerticalSheetTabs
             Padding = new Padding(12);
 
             _modeHorizontal.Text = "横タブのみ表示 (縦タブは表示しない)";
-            _modeVertical.Text = "縦タブのみ表示 (横タブは表示しない)";
             _modeBoth.Text = "横タブと縦タブの両方を表示";
             _sideLeft.Text = "左";
             _sideRight.Text = "右";
 
-            var modeGroup = CreateRowGroup("表示モード", _modeHorizontal, _modeVertical, _modeBoth);
+            var modeGroup = CreateRowGroup("表示モード", _modeHorizontal, _modeBoth);
             _sideGroup = CreateRowGroup("縦タブの位置", _sideLeft, _sideRight);
 
             _outlineGroup = CreateOutlineGroup();
@@ -155,11 +154,16 @@ namespace VerticalSheetTabs
             top.Controls.Add(modeGroup);
             top.Controls.Add(_sideGroup);
             _tabs.Padding = new Point(16, 5); // (room around the titles of the tabs)
-            _tabs.TabPages.Add(CreatePage("基本", width, top, _ruleGroup));
-            _tabs.TabPages.Add(CreatePage("デザイン", width, _markerGroup, _styleGroup, _outlineGroup));
-            _animPage = CreatePage("アニメーション", width, _wobbleGroup, _animGroup);
+            // (the tabs other than "このブック" are kept for the whole PC)
+            string pcNote = "このタブの設定は、このPCのすべてのブックに共通です。";
+            var basic = new List<Control> { Banner(pcNote, width), top };
+            if (tabsHidden) basic.Add(Banner("このブックは、横タブが非表示のため、縦タブは表示されません。", width));
+            _tabs.TabPages.Add(CreatePage("基本", width, basic.ToArray()));
+            _tabs.TabPages.Add(CreatePage("デザイン", width, Banner(pcNote, width), _markerGroup, _styleGroup, _outlineGroup));
+            _animPage = CreatePage("アニメーション", width, Banner(pcNote, width), _wobbleGroup, _animGroup);
             _tabs.TabPages.Add(_animPage);
-            _tabs.TabPages.Add(CreatePage("バッジ", width, _badgeGroup));
+            _tabs.TabPages.Add(CreatePage("バッジ", width, Banner(pcNote, width), _badgeGroup));
+            _tabs.TabPages.Add(CreatePage("このブック", width, Banner("このタブの設定は、開いているブックだけに保存されます。", width), _ruleGroup));
             // the tabs are as large as the largest page
             var inner = Size.Empty;
             foreach (TabPage page in _tabs.TabPages)
@@ -202,7 +206,6 @@ namespace VerticalSheetTabs
             Controls.Add(layout);
 
             _modeHorizontal.Checked = mode == TabMode.HorizontalOnly;
-            _modeVertical.Checked = mode == TabMode.VerticalOnly;
             _modeBoth.Checked = mode == TabMode.Both;
             _sideLeft.Checked = side == TabSide.Left;
             _sideRight.Checked = side == TabSide.Right;
@@ -242,8 +245,7 @@ namespace VerticalSheetTabs
         {
             get
             {
-                return _modeHorizontal.Checked ? TabMode.HorizontalOnly
-                    : _modeVertical.Checked ? TabMode.VerticalOnly : TabMode.Both;
+                return _modeHorizontal.Checked ? TabMode.HorizontalOnly : TabMode.Both;
             }
         }
 
@@ -446,6 +448,12 @@ namespace VerticalSheetTabs
             if ((DateTime.Now - _wobblePlayed).TotalMilliseconds < 300) return;
             _wobblePlayed = DateTime.Now;
             _wobbleSample.PlayWobble(true);
+        }
+
+        // A line of text at the top of a tab, as wide as the groups.
+        private static Label Banner(string text, int width)
+        {
+            return new Label { Text = text, AutoSize = true, MaximumSize = new Size(width, 0), Margin = new Padding(3, 3, 3, 6) };
         }
 
         // A tab with the groups one below the other, each as wide as the widest group of the form.

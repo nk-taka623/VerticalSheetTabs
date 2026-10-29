@@ -35,6 +35,8 @@ namespace VerticalSheetTabs
             public bool InitPending;
             // Visibility changes we cause ourselves must not be mistaken for the user closing the pane.
             public DateTime IgnoreVisibleUntil;
+            // Whether the add-in wants the pane shown (what it last set): a hidden pane while this is true was closed by the user.
+            public bool WantVisible;
             // Consecutive failed syncs: the window is probably gone.
             public int Failures;
             // The folder structure; written to the workbook when it is saved.
@@ -121,7 +123,7 @@ namespace VerticalSheetTabs
                 PurgeEntry(existing);
             }
 
-            // First open (no add-in property in the workbook): defaults, i.e. left side.
+            // The looks come from the PC's settings file, the width and the sheet-name rule from the workbook.
             var settings = WorkbookSettings.Load(workbook);
 
             var control = new TabPaneControl();
@@ -209,20 +211,36 @@ namespace VerticalSheetTabs
                 else DeleteFoldersOnly(entry, folders);
             };
 
+            // A workbook that an older version saved in the "vertical only" mode has its horizontal tabs hidden: they come back.
+            if (settings.LegacyVerticalOnly)
+            {
+                try { SetHorizontalTabs(entry, true); }
+                catch (Exception) { }
+            }
             ApplyMode(entry);
             SyncSheets(entry);
         }
 
-        // Shows/hides the horizontal tabs (Excel's own) and the vertical pane per the display mode.
+        // The vertical pane is shown while this window's display mode is "both" and the horizontal tabs are shown (a workbook whose
+        // horizontal tabs are hidden is meant to have no tabs: the add-in never changes that).
+        private static bool WantsVertical(Entry entry)
+        {
+            return entry.Settings.Mode == TabMode.Both && entry.Window.DisplayWorkbookTabs;
+        }
+
+        // Shows or hides the vertical pane.
         private void ApplyMode(Entry entry)
         {
-            bool vertical = entry.Settings.Mode != TabMode.HorizontalOnly;
-            bool horizontal = entry.Settings.Mode != TabMode.VerticalOnly;
+            bool vertical = false;
             try
             {
-                entry.IgnoreVisibleUntil = DateTime.Now.AddMilliseconds(1000);
-                SetHorizontalTabs(entry, horizontal);
-                entry.Pane.Visible = vertical;
+                vertical = WantsVertical(entry);
+                if (entry.Pane.Visible != vertical || entry.WantVisible != vertical)
+                {
+                    entry.IgnoreVisibleUntil = DateTime.Now.AddMilliseconds(1000);
+                    entry.WantVisible = vertical;
+                    entry.Pane.Visible = vertical;
+                }
             }
             catch (Exception)
             {
@@ -244,6 +262,7 @@ namespace VerticalSheetTabs
             }
         }
 
+        // Shows or hides the horizontal tabs (only used to give them back to a workbook an older version had hidden them in).
         // Changing the tab bar marks the workbook as modified, which would make Excel ask "save
         // changes?" for a workbook the user never touched. So it is only set when it really changes,
         // and a workbook that was unmodified stays unmodified.
@@ -255,15 +274,16 @@ namespace VerticalSheetTabs
             if (wasSaved) entry.Workbook.Saved = true;
         }
 
-        // The user closed the pane with its close button: go back to the horizontal tabs only,
-        // otherwise a "vertical only" workbook would be left without any tab bar.
+        // The user closed the pane with its close button: this window goes to "horizontal only". It is not written to the
+        // PC's settings; a window opened later shows the vertical tabs again.
         private void OnPaneVisibleChanged(Entry entry)
         {
             try
             {
                 if (!_entries.ContainsValue(entry)) return;
                 if (DateTime.Now < entry.IgnoreVisibleUntil) return;
-                if (entry.Pane.Visible) return;
+                // (a pane hidden by the add-in itself is not wanted visible)
+                if (entry.Pane.Visible || !entry.WantVisible) return;
                 if (_app.ActiveWindow == null || _app.ActiveWindow.Hwnd != entry.Window.Hwnd) return;
                 entry.Settings.Mode = TabMode.HorizontalOnly;
                 ApplyMode(entry);
@@ -288,7 +308,13 @@ namespace VerticalSheetTabs
         {
             bool nameRuleTurnedOn = false;
             BadgeKinds oldBadges = entry.Settings.Badges;
-            using (var form = new SettingsForm(entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim))
+            bool oldNameRule = entry.Settings.NameRule;
+            // what the dialog starts with: only the values it changes are written to the PC's settings
+            Dictionary<string, string> before = PcSettings.ToValues(entry.Settings);
+            bool tabsHidden = false;
+            try { tabsHidden = !entry.Window.DisplayWorkbookTabs; }
+            catch (Exception) { }
+            using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim))
             {
                 if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
                 entry.Settings.Mode = form.Mode;
@@ -310,6 +336,8 @@ namespace VerticalSheetTabs
                 entry.Settings.WobbleVolume = form.WobbleVolume;
                 entry.Settings.WobbleSampleStyle = form.WobbleSampleStyle;
             }
+            PcSettings.Update(before, PcSettings.ToValues(entry.Settings));
+            if (entry.Settings.NameRule != oldNameRule) MarkChanged(entry);
             try
             {
                 entry.Control.OutlineVisible = entry.Settings.OutlineVisible;
@@ -422,8 +450,6 @@ namespace VerticalSheetTabs
                 HistoryStore.Save(entry.Workbook, entry.History);
                 try
                 {
-                    entry.Settings.Side = entry.Pane.DockPosition == Office.MsoCTPDockPosition.msoCTPDockPositionRight
-                        ? TabSide.Right : TabSide.Left;
                     // While the pane has never been shown (horizontal-only mode) the stored width stays as is.
                     if (entry.Initialized && entry.Control.Width >= 40)
                     {
@@ -466,20 +492,12 @@ namespace VerticalSheetTabs
             }
         }
 
-        // The add-in is going away: give Excel's own tab bar back and remove the panes.
+        // The add-in is going away: remove the panes (Excel's own tab bar is never touched).
         public void Shutdown()
         {
             _timer.Stop();
             foreach (Entry entry in new List<Entry>(_entries.Values))
             {
-                try
-                {
-                    if (entry.Settings.Mode == TabMode.VerticalOnly) SetHorizontalTabs(entry, true);
-                }
-                catch (Exception)
-                {
-                    // Window closing.
-                }
                 try
                 {
                     _collection.Remove(entry.Pane);
@@ -529,6 +547,7 @@ namespace VerticalSheetTabs
             foreach (Entry entry in new List<Entry>(_entries.Values))
             {
                 AllowPaneInput(entry);
+                CheckHorizontalTabs(entry);
                 if (SyncSheets(entry, true)) entry.Failures = 0; // (the dialog check above holds for this tick)
                 else if (++entry.Failures > 20) PurgeEntry(entry); // about 6 seconds without an answer
             }
@@ -563,8 +582,24 @@ namespace VerticalSheetTabs
                 catch (Exception) { continue; } // (the timer looks after a window that is gone)
                 if (name != book) continue;
                 AllowPaneInput(entry);
+                CheckHorizontalTabs(entry);
                 if (SyncSheets(entry, true)) entry.Failures = 0;
                 else if (++entry.Failures > 20) PurgeEntry(entry);
+            }
+        }
+
+        // Excel raises no event when the user shows or hides the horizontal tabs (the option "show sheet tabs"), so the vertical pane
+        // follows it from here: shown while they are shown, hidden while they are not.
+        private void CheckHorizontalTabs(Entry entry)
+        {
+            if (entry.Busy || entry.ProtectAsking || entry.Syncing) return;
+            try
+            {
+                if (WantsVertical(entry) != entry.WantVisible) ApplyMode(entry);
+            }
+            catch (Exception)
+            {
+                // The window is closing; the sync notices.
             }
         }
 
