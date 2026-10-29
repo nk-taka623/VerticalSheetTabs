@@ -92,7 +92,7 @@ Release ビルドには、`PathMap` を設定してあり、DLL に、開発PC�
 ### 配布用zipを作る
 
 ```powershell
-powershell -File tools\make-dist-zip.ps1 -Version 1.3.0
+powershell -File tools\make-dist-zip.ps1 -Version 1.3.1
 ```
 
 - 公開済みのインストーラの DLL の版数が、指定した版数と同じことを確かめてから、`配布用zip\VerticalSheetTabs_vX.Y.Z.zip` を作り、古いzipを削除する
