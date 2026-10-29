@@ -103,7 +103,7 @@ namespace VerticalSheetTabs
             try
             {
                 XNamespace ns = Namespace;
-                XElement root = XDocument.Parse(xml).Root;
+                XElement root = SafeXml.Parse(xml, SafeXml.PartMaxChars).Root;
                 if (root == null || root.Name != ns + "folders") return new FolderModel { Unreadable = true };
 
                 var seenSheets = new HashSet<string>();
