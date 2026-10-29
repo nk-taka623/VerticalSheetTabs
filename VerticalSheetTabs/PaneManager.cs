@@ -39,6 +39,8 @@ namespace VerticalSheetTabs
             public bool WantVisible;
             // Consecutive failed syncs: the window is probably gone.
             public int Failures;
+            // how many times in a row the window was still there after the failures (see DropIfWindowGone)
+            public int AliveRounds;
             // The folder structure; written to the workbook when it is saved.
             public FolderModel Folders = new FolderModel();
             // The folder part of the workbook could not be read: it is not deleted when the workbook is saved.
@@ -331,6 +333,7 @@ namespace VerticalSheetTabs
         private void ShowSettings(Entry entry)
         {
             bool nameRuleTurnedOn = false;
+            bool accepted = false;
             BadgeKinds oldBadges = entry.Settings.Badges;
             bool oldNameRule = entry.Settings.NameRule;
             // The file may have been changed by another window or Excel since this window read it: the dialog starts with the
@@ -345,28 +348,36 @@ namespace VerticalSheetTabs
             catch (Exception) { }
             using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim))
             {
-                if (form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) != System.Windows.Forms.DialogResult.OK) return;
-                entry.Settings.Mode = form.Mode;
-                entry.Settings.Side = form.Side;
-                entry.Settings.OutlineVisible = form.OutlineVisible;
-                entry.Settings.OutlineLevel = form.OutlineLevel;
-                nameRuleTurnedOn = !entry.Settings.NameRule && form.NameRule;
-                entry.Settings.NameRule = form.NameRule;
-                entry.Settings.SelectStyle = form.SelectStyle;
-                entry.Settings.ActiveMarker = form.ActiveMarker;
-                entry.Settings.Badges = form.Badges;
-                entry.Settings.RowAnim = form.RowAnim;
-                entry.Settings.DoneAnim = form.DoneAnim;
-                if (oldBadges != form.Badges) { entry.Badges.Clear(); entry.BadgeDirty.Clear(); entry.BadgeScanned.Clear(); entry.BadgeCost.Clear(); } // (the sheets are looked at again for the new choice)
-                entry.Settings.Wobble = form.Wobble;
-                entry.Settings.WobbleAmp = form.WobbleAmp;
-                entry.Settings.WobbleDur = form.WobbleDur;
-                entry.Settings.WobbleSound = form.WobbleSound;
-                entry.Settings.WobbleVolume = form.WobbleVolume;
-                entry.Settings.WobbleSampleStyle = form.WobbleSampleStyle;
+                // (when the dialog is cancelled the pane still takes what was read from the file: the settings and the pane agree)
+                accepted = form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) == System.Windows.Forms.DialogResult.OK;
+                if (accepted)
+                {
+                    entry.Settings.Mode = form.Mode;
+                    entry.Settings.Side = form.Side;
+                    entry.Settings.OutlineVisible = form.OutlineVisible;
+                    entry.Settings.OutlineLevel = form.OutlineLevel;
+                    nameRuleTurnedOn = !entry.Settings.NameRule && form.NameRule;
+                    entry.Settings.NameRule = form.NameRule;
+                    entry.Settings.SelectStyle = form.SelectStyle;
+                    entry.Settings.ActiveMarker = form.ActiveMarker;
+                    entry.Settings.Badges = form.Badges;
+                    entry.Settings.RowAnim = form.RowAnim;
+                    entry.Settings.DoneAnim = form.DoneAnim;
+                    entry.Settings.Wobble = form.Wobble;
+                    entry.Settings.WobbleAmp = form.WobbleAmp;
+                    entry.Settings.WobbleDur = form.WobbleDur;
+                    entry.Settings.WobbleSound = form.WobbleSound;
+                    entry.Settings.WobbleVolume = form.WobbleVolume;
+                    entry.Settings.WobbleSampleStyle = form.WobbleSampleStyle;
+                }
             }
-            PcSettings.Update(before, PcSettings.ToValues(entry.Settings));
-            if (entry.Settings.NameRule != oldNameRule) MarkChanged(entry);
+            // (the sheets are looked at again for another choice of badges, whether it came from the dialog or from the file)
+            if (oldBadges != entry.Settings.Badges) { entry.Badges.Clear(); entry.BadgeDirty.Clear(); entry.BadgeScanned.Clear(); entry.BadgeCost.Clear(); }
+            if (accepted)
+            {
+                PcSettings.Update(before, PcSettings.ToValues(entry.Settings));
+                if (entry.Settings.NameRule != oldNameRule) MarkChanged(entry);
+            }
             try
             {
                 entry.Control.OutlineVisible = entry.Settings.OutlineVisible;
@@ -472,7 +483,9 @@ namespace VerticalSheetTabs
                     // sheets added without the sync having seen them get their id now, so that the file
                     // has the ids and opening it does not have to give them (and change the workbook)
                     if (entry.Folders.HasFolders) RefreshKeys(entry);
-                    FolderStore.Save(entry.Workbook, entry.Folders, entry.FoldersUnreadable && !entry.Folders.HasFolders);
+                    // (once folders have been written over the part that could not be read, it is no longer there to keep)
+                    if (FolderStore.Save(entry.Workbook, entry.Folders, entry.FoldersUnreadable && !entry.Folders.HasFolders) && entry.Folders.HasFolders)
+                        entry.FoldersUnreadable = false;
                 }
                 catch (Exception)
                 {
@@ -579,7 +592,7 @@ namespace VerticalSheetTabs
             {
                 AllowPaneInput(entry);
                 CheckHorizontalTabs(entry);
-                if (SyncSheets(entry, true)) entry.Failures = 0; // (the dialog check above holds for this tick)
+                if (SyncSheets(entry, true)) { entry.Failures = 0; entry.AliveRounds = 0; } // (the dialog check above holds for this tick)
                 else if (++entry.Failures > 20) DropIfWindowGone(entry); // about 6 seconds without an answer
             }
         }
@@ -614,7 +627,7 @@ namespace VerticalSheetTabs
                 if (name != book) continue;
                 AllowPaneInput(entry);
                 CheckHorizontalTabs(entry);
-                if (SyncSheets(entry, true)) entry.Failures = 0;
+                if (SyncSheets(entry, true)) { entry.Failures = 0; entry.AliveRounds = 0; }
                 else if (++entry.Failures > 20) DropIfWindowGone(entry);
             }
         }
@@ -640,12 +653,15 @@ namespace VerticalSheetTabs
         // Excel did not answer for a while. That is also so while it calculates or runs a macro for long, and the entry must survive that:
         // it holds what is not in the workbook yet (folders that were made, the window's display mode). The entry goes only when the
         // window itself is gone (closed without our noticing).
+        private const int MaxAliveRounds = 10;
+
         private void DropIfWindowGone(Entry entry)
         {
             bool alive;
             try { alive = entry.Hwnd != 0 && IsWindow(new IntPtr(entry.Hwnd)); }
             catch (Exception) { alive = false; }
-            if (alive) entry.Failures = 0; // (asked again after another round of failures)
+            // (Excel's window stays when its last workbook is closed: after many rounds the entry is not waited for any more)
+            if (alive && ++entry.AliveRounds < MaxAliveRounds) entry.Failures = 0; // (asked again after another round of failures)
             else PurgeEntry(entry);
         }
 
@@ -690,9 +706,11 @@ namespace VerticalSheetTabs
             // thread, so a change of the flag within it is never the user's.
             bool wasSaved = false;
             try { wasSaved = entry.Workbook.Saved; } catch (Exception) { }
+            bool got = false;
             try
             {
-                return SyncSheetsCore(entry);
+                got = SyncSheetsCore(entry);
+                return got;
             }
             finally
             {
@@ -705,7 +723,7 @@ namespace VerticalSheetTabs
                 try { if (wasSaved && mayReset && !entry.RuleChanged && !entry.Workbook.Saved) entry.Workbook.Saved = true; } catch (Exception) { }
                 entry.RuleChanged = false;
                 entry.SyncWrote = false;
-                if (entry.SyncsDone < OpeningSyncs) entry.SyncsDone++;
+                if (got && entry.SyncsDone < OpeningSyncs) entry.SyncsDone++; // (a sync that could not ask Excel is not one of the opening ones)
             }
         }
 
@@ -1414,7 +1432,11 @@ namespace VerticalSheetTabs
             entry.RuleSignature = null;
             entry.KeySignature = null;
             // Putting a just opened workbook in order is not the user's change: the sync keeps it unchanged.
-            if (gated && entry.QuietRegroup) return true;
+            if (gated && entry.QuietRegroup)
+            {
+                entry.SyncWrote = true; // (the sync takes this change back, see SyncSheets)
+                return true;
+            }
             entry.RuleChanged = true;
             MarkChanged(entry);
             return true;
