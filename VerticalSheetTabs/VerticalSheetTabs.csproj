@@ -241,6 +241,7 @@
     <Compile Include="RibbonController.cs" />
     <Compile Include="RibbonIcon.cs" />
     <Compile Include="NameRule.cs" />
+    <Compile Include="PcSettings.cs" />
     <Compile Include="SheetHistory.cs" />
     <Compile Include="AddInVersion.cs" />
     <Compile Include="SettingsForm.cs" />

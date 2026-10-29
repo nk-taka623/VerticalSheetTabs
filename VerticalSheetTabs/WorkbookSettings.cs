@@ -6,7 +6,6 @@ namespace VerticalSheetTabs
     public enum TabMode
     {
         HorizontalOnly, // A
-        VerticalOnly,   // B
         Both            // C
     }
 
@@ -50,10 +49,11 @@ namespace VerticalSheetTabs
         Right
     }
 
-    // Per-workbook settings, stored as custom document properties:
-    //   VTab.Mode  (string)  "A" / "B" / "C"
-    //   VTab.Side  (string)  "Left" / "Right"
-    //   VTab.Width (number)  pane content width in device-independent pixels (96 dpi)
+    // The settings of one window. Two of them belong to the workbook, stored as custom document properties:
+    //   VTab.Width    (number)  pane content width in device-independent pixels (96 dpi)
+    //   VTab.NameRule (string)  "On" / "Off"
+    // The others (the display mode, the side, the looks, the animations, the badges) belong to the PC: see PcSettings. The
+    // properties with those names that older versions wrote into the workbook are ignored, and deleted when it is saved.
     public class WorkbookSettings
     {
         public const string ModeName = "VTab.Mode";
@@ -78,11 +78,10 @@ namespace VerticalSheetTabs
         private const int PropTypeNumber = 1;
         private const int PropTypeString = 4;
 
-        // No add-in property in the workbook: it is the first time it is opened with the add-in.
-        public bool IsFirstOpen { get; private set; }
+        // The workbook was saved by an older version in the "vertical only" mode (VTab.Mode = "B"): its horizontal tabs are hidden.
+        public bool LegacyVerticalOnly { get; private set; }
 
-        // A workbook opened for the first time shows Excel's own tabs only; the vertical tabs are
-        // turned on in the settings dialog.
+        // The display mode of this window: the PC's mode, or "horizontal only" for a window whose pane the user closed.
         public TabMode Mode { get; set; }
         public TabSide Side { get; set; }
         // 0 means "not stored": the caller uses the default (12 half-width characters).
@@ -120,8 +119,7 @@ namespace VerticalSheetTabs
 
         public WorkbookSettings()
         {
-            IsFirstOpen = true;
-            Mode = TabMode.HorizontalOnly;
+            Mode = TabMode.Both;
             Side = TabSide.Left;
             WidthDip = 0;
             OutlineVisible = true;
@@ -143,68 +141,15 @@ namespace VerticalSheetTabs
         public static WorkbookSettings Load(Excel.Workbook wb)
         {
             var s = new WorkbookSettings();
+            PcSettings.ApplyTo(s);
             try
             {
                 dynamic props = wb.CustomDocumentProperties;
                 dynamic mode = Find(props, ModeName);
-                dynamic side = Find(props, SideName);
-                dynamic width = Find(props, WidthName);
-
-                s.IsFirstOpen = mode == null && side == null && width == null;
-
-                if (mode != null)
-                {
-                    switch ((string)mode.Value)
-                    {
-                        case "A": s.Mode = TabMode.HorizontalOnly; break;
-                        case "B": s.Mode = TabMode.VerticalOnly; break;
-                        case "C": s.Mode = TabMode.Both; break;
-                    }
-                }
-                if (side != null)
-                {
-                    s.Side = (string)side.Value == "Right" ? TabSide.Right : TabSide.Left;
-                }
-                dynamic outline = Find(props, OutlineName);
-                dynamic level = Find(props, OutlineLevelName);
+                s.LegacyVerticalOnly = mode != null && (string)mode.Value == "B";
                 dynamic nameRule = Find(props, NameRuleName);
                 if (nameRule != null) s.NameRule = (string)nameRule.Value == "On";
-                dynamic selectStyle = Find(props, SelectStyleName);
-                if (selectStyle != null) s.SelectStyle = ParseSelectStyle((string)selectStyle.Value);
-                dynamic marker = Find(props, ActiveMarkerName);
-                if (marker != null)
-                {
-                    string v = (string)marker.Value;
-                    s.ActiveMarker = v == "None" ? ActiveMarker.None : v == "Triangle" ? ActiveMarker.Triangle : v == "EdgeBars" ? ActiveMarker.EdgeBars : v == "CheckBadge" ? ActiveMarker.CheckBadge : ActiveMarker.Underline;
-                }
-                dynamic badges = Find(props, BadgesName);
-                if (badges != null) s.Badges = ParseBadges((string)badges.Value);
-                dynamic wobble = Find(props, WobbleName);
-                if (wobble != null)
-                {
-                    WobbleType t;
-                    if (Enum.TryParse((string)wobble.Value, out t) && Enum.IsDefined(typeof(WobbleType), t)) s.Wobble = t;
-                }
-                dynamic wobbleAmp = Find(props, WobbleAmpName);
-                if (wobbleAmp != null) s.WobbleAmp = Math.Max(WobbleMotion.AmpMin, Math.Min(WobbleMotion.AmpMax, Convert.ToInt32((object)wobbleAmp.Value)));
-                dynamic wobbleDur = Find(props, WobbleDurName);
-                if (wobbleDur != null) s.WobbleDur = Math.Max(WobbleMotion.DurMin, Math.Min(WobbleMotion.DurMax, Convert.ToInt32((object)wobbleDur.Value)));
-                dynamic wobbleSound = Find(props, WobbleSoundName);
-                if (wobbleSound != null) s.WobbleSound = (string)wobbleSound.Value == "On";
-                dynamic wobbleVolume = Find(props, WobbleVolumeName);
-                if (wobbleVolume != null) s.WobbleVolume = Math.Max(0, Math.Min(100, Convert.ToInt32((object)wobbleVolume.Value)));
-                dynamic doneAnim = Find(props, DoneAnimName);
-                if (doneAnim != null) s.DoneAnim = (string)doneAnim.Value == "On";
-                dynamic rowAnim = Find(props, RowAnimName);
-                if (rowAnim != null) s.RowAnim = (string)rowAnim.Value == "On";
-                dynamic sampleStyle = Find(props, WobbleSampleStyleName);
-                if (sampleStyle != null) s.WobbleSampleStyle = (string)sampleStyle.Value == "On";
-                if (outline != null) s.OutlineVisible = (string)outline.Value != "Off";
-                if (level != null)
-                {
-                    int v = Convert.ToInt32((object)level.Value);
-                    if (v >= 1 && v <= 9) s.OutlineLevel = v;
-                }
+                dynamic width = Find(props, WidthName);
                 if (width != null)
                 {
                     int w = Convert.ToInt32((object)width.Value);
@@ -218,28 +163,25 @@ namespace VerticalSheetTabs
             return s;
         }
 
+        // The properties older versions kept in the workbook; the PC holds them now.
+        private static readonly string[] ObsoleteNames =
+        {
+            ModeName, SideName, OutlineName, OutlineLevelName, SelectStyleName, ActiveMarkerName, BadgesName,
+            WobbleName, WobbleAmpName, WobbleDurName, WobbleSoundName, WobbleVolumeName, WobbleSampleStyleName, RowAnimName, DoneAnimName
+        };
+
         public void Save(Excel.Workbook wb)
         {
             try
             {
                 dynamic props = wb.CustomDocumentProperties;
-                Write(props, ModeName, PropTypeString, ModeToString(Mode));
-                Write(props, SideName, PropTypeString, Side == TabSide.Right ? "Right" : "Left");
                 if (WidthDip > 0) Write(props, WidthName, PropTypeNumber, WidthDip);
-                Write(props, OutlineName, PropTypeString, OutlineVisible ? "On" : "Off");
-                Write(props, OutlineLevelName, PropTypeNumber, OutlineLevel);
                 Write(props, NameRuleName, PropTypeString, NameRule ? "On" : "Off");
-                Write(props, SelectStyleName, PropTypeString, SelectStyleToString(SelectStyle));
-                Write(props, ActiveMarkerName, PropTypeString, ActiveMarker == ActiveMarker.None ? "None" : ActiveMarker == ActiveMarker.Underline ? "Underline" : ActiveMarker == ActiveMarker.EdgeBars ? "EdgeBars" : ActiveMarker == ActiveMarker.CheckBadge ? "CheckBadge" : "Triangle");
-                Write(props, BadgesName, PropTypeString, BadgesToString(Badges));
-                Write(props, WobbleName, PropTypeString, Wobble.ToString());
-                Write(props, WobbleAmpName, PropTypeNumber, WobbleAmp);
-                Write(props, WobbleDurName, PropTypeNumber, WobbleDur);
-                Write(props, WobbleSoundName, PropTypeString, WobbleSound ? "On" : "Off");
-                Write(props, WobbleVolumeName, PropTypeNumber, WobbleVolume);
-                Write(props, WobbleSampleStyleName, PropTypeString, WobbleSampleStyle ? "On" : "Off");
-                Write(props, RowAnimName, PropTypeString, RowAnim ? "On" : "Off");
-                Write(props, DoneAnimName, PropTypeString, DoneAnim ? "On" : "Off");
+                foreach (string name in ObsoleteNames)
+                {
+                    dynamic old = Find(props, name);
+                    if (old != null) old.Delete();
+                }
             }
             catch (Exception)
             {
@@ -247,7 +189,7 @@ namespace VerticalSheetTabs
             }
         }
 
-        private static BadgeKinds ParseBadges(string value)
+        internal static BadgeKinds ParseBadges(string value)
         {
             var kinds = BadgeKinds.None;
             if (string.IsNullOrEmpty(value)) return kinds;
@@ -262,7 +204,7 @@ namespace VerticalSheetTabs
             return kinds;
         }
 
-        private static string BadgesToString(BadgeKinds kinds)
+        internal static string BadgesToString(BadgeKinds kinds)
         {
             if (kinds == BadgeKinds.None) return "None";
             var parts = new System.Collections.Generic.List<string>();
@@ -273,7 +215,7 @@ namespace VerticalSheetTabs
             return string.Join(",", parts);
         }
 
-        private static SelectStyle ParseSelectStyle(string value)
+        internal static SelectStyle ParseSelectStyle(string value)
         {
             switch (value)
             {
@@ -289,7 +231,7 @@ namespace VerticalSheetTabs
             }
         }
 
-        private static string SelectStyleToString(SelectStyle style)
+        internal static string SelectStyleToString(SelectStyle style)
         {
             switch (style)
             {
@@ -302,11 +244,6 @@ namespace VerticalSheetTabs
                 case SelectStyle.Crystal: return "Crystal";
                 default: return "Standard";
             }
-        }
-
-        private static string ModeToString(TabMode m)
-        {
-            return m == TabMode.HorizontalOnly ? "A" : m == TabMode.VerticalOnly ? "B" : "C";
         }
 
         private static dynamic Find(dynamic props, string name)
