@@ -1,6 +1,6 @@
 ﻿﻿# Agents.md - 縦並びシートタブ Excelアドイン 開発の手引き (現状版)
 
-最終更新: 2026-10-30 (v1.3.3 の時点)
+最終更新: 2026-10-30 (v1.3.4 の時点)
 
 この文書は、**いまの仕様と実装**だけを書く。過去の経緯 (どの版で何を変えたか) は、`git log` を見る。利用者向けの説明は `README.md`、ビルドとリリースの手順は `DEVELOPMENT.md` にある。
 
@@ -12,8 +12,8 @@
 | 対象 | Windows版 Excel (Microsoft 365、64bit) のみ |
 | 方式 | VSTO アドイン (.NET Framework 4.8、C# 7.3)。縦タブは、カスタムタスクペイン (`CustomTaskPane` + `UserControl`) の中に、自前描画 (GDI+) |
 | 開発環境 | Visual Studio 2026 (Office/SharePoint 開発ワークロード) |
-| 最新版 | v1.3.3 (`develop`、`master`、タグ `v1.3.3` は同じコミット) |
-| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.3.3.zip`)。自己署名の証明書 |
+| 最新版 | v1.3.4 (`develop`、`master`、タグ `v1.3.4` は同じコミット) |
+| 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.3.4.zip`)。自己署名の証明書 |
 | ライセンス | BSD 3条項 (`license\`)。著作権表記: Copyright (c) 2026 nk_taka |
 | 確認済みの環境 | Windows 11、拡大率125%、Excel 365 (カラフルのテーマ) |
 
@@ -263,6 +263,7 @@ Excelの組み込みダイアログ `xlDialogEditColor` を使う。このダイ
 | 保存を横取りしない | `WorkbookBeforeSave` で `Cancel = true` にして、中で `wb.Save()` を呼んでも、保存されない (データが残らない)。閉じる流れでは、Excelのプロセスが残る。保存時にできるのは、プロパティの書き込みまで (設定は、保存イベントの中で `DisplayWorkbookTabs` を変えても無視されるため、横タブには触れない設計にした) |
 | 保存時の書き込み | COM自動化で作ったブックを `SaveAs` すると、アドインが保存時に自分の状態で書き直す (フォルダのXMLが消えることがある)。確認用のブックを作るときは `Application.EnableEvents = $false` にする |
 | 小さな図形の対称 | 角丸の長方形 `RoundedRect` は、右と下を1画素短く作る (行の枠用)。小さなバッジは、正確な小数の長方形 (`RoundedRectF`) と、閉じた1つの形 (`ShacklePath`) で作る (南京錠が左右対称になる) |
+| フォントの解放 | `Font.FontFamily` は、コピーではなく、フォント自身が持つ `FontFamily` を返す。取り出して `Dispose` すると、そのフォントで描けなくなり、ペインに赤い×が出て、シートが表示されなくなる (v1.3.3 の不具合)。解放するのは、自分で作った `Font` だけ |
 | C# 7.3 | VSTOプロジェクトの既定。`ref` 付きラムダなどは使えない |
 | 日本語の文字化け防止 | `Agents.md` は UTF-8 BOM付き。PowerShell 5.1 のスクリプトに日本語を含めるときは UTF-8 BOM付きで保存する。コミットメッセージは日本語 |
 
