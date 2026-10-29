@@ -330,6 +330,11 @@ namespace VerticalSheetTabs
             bool nameRuleTurnedOn = false;
             BadgeKinds oldBadges = entry.Settings.Badges;
             bool oldNameRule = entry.Settings.NameRule;
+            // The file may have been changed by another window or Excel since this window read it: the dialog starts with the
+            // file's values (except the mode, which is this window's own state: the user may have closed the pane with x).
+            TabMode windowMode = entry.Settings.Mode;
+            PcSettings.ApplyTo(entry.Settings);
+            entry.Settings.Mode = windowMode;
             // what the dialog starts with: only the values it changes are written to the PC's settings
             Dictionary<string, string> before = PcSettings.ToValues(entry.Settings);
             bool tabsHidden = false;
@@ -499,6 +504,7 @@ namespace VerticalSheetTabs
                     {
                         try
                         {
+                            if (!w.Visible) continue; // (a hidden window gets its pane when it is shown)
                             EnsurePane(w, wb);
                         }
                         catch (Exception)
@@ -2394,9 +2400,10 @@ namespace VerticalSheetTabs
                 {
                     var item = zip.GetEntry("xl/theme/theme1.xml");
                     if (item == null) return null;
+                    if (item.Length > 2L * SafeXml.ThemeMaxChars) return null; // (a theme is a few KB)
                     using (var reader = item.Open())
                     {
-                        var doc = System.Xml.Linq.XDocument.Load(reader);
+                        var doc = SafeXml.Load(reader, SafeXml.ThemeMaxChars);
                         System.Xml.Linq.XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
                         var scheme = doc.Descendants(a + "clrScheme").FirstOrDefault();
                         if (scheme == null) return null;
@@ -3119,8 +3126,70 @@ namespace VerticalSheetTabs
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool EnableWindow(IntPtr hWnd, bool enable);
 
+        // SendInput puts all the events of a key press into the input queue at once, so that the user's own keys cannot
+        // come between them.
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct KeyInput
+        {
+            public uint Type;
+            public KeyInputUnion U;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
+        private struct KeyInputUnion
+        {
+            [System.Runtime.InteropServices.FieldOffset(0)] public MouseInputData Mouse; // (the largest member: it gives the union its size)
+            [System.Runtime.InteropServices.FieldOffset(0)] public KeyboardInputData Keyboard;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct MouseInputData
+        {
+            public int dx;
+            public int dy;
+            public uint mouseData;
+            public uint dwFlags;
+            public uint time;
+            public UIntPtr dwExtraInfo;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct KeyboardInputData
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public UIntPtr dwExtraInfo;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint count, KeyInput[] inputs, int size);
+
+        // Presses and releases the keys: each pair is (key, true = released).
+        private static void SendKeys(params KeyValuePair<byte, bool>[] events)
+        {
+            var inputs = new KeyInput[events.Length];
+            for (int i = 0; i < events.Length; i++)
+            {
+                inputs[i].Type = 1; // INPUT_KEYBOARD
+                inputs[i].U.Keyboard.wVk = events[i].Key;
+                inputs[i].U.Keyboard.dwFlags = events[i].Value ? (uint)KeyUp : 0u;
+            }
+            SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf(typeof(KeyInput)));
+        }
+
+        // Waits for a message to arrive (or the time to pass) instead of sleeping, then lets the messages be handled.
         [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern void keybd_event(byte vk, byte scan, int flags, UIntPtr extra);
+        private static extern uint MsgWaitForMultipleObjects(uint count, IntPtr[] handles, bool waitAll, uint milliseconds, uint wakeMask);
+
+        private const uint QsAllInput = 0x04FF;
+
+        private static void PumpMessages(int milliseconds)
+        {
+            MsgWaitForMultipleObjects(0, null, false, (uint)milliseconds, QsAllInput);
+            System.Windows.Forms.Application.DoEvents();
+        }
 
         private const int KeyUp = 0x0002;
         private const byte VkControl = 0x11;
@@ -3213,16 +3282,15 @@ namespace VerticalSheetTabs
         private static void CommitCellEdit(Entry entry)
         {
             if (!IsExcelEditing()) return;
-            keybd_event(VkControl, 0, 0, UIntPtr.Zero);
-            keybd_event(VkReturn, 0, 0, UIntPtr.Zero);
-            keybd_event(VkReturn, 0, KeyUp, UIntPtr.Zero);
-            keybd_event(VkControl, 0, KeyUp, UIntPtr.Zero);
+            SendKeys(
+                new KeyValuePair<byte, bool>(VkControl, false), new KeyValuePair<byte, bool>(VkReturn, false),
+                new KeyValuePair<byte, bool>(VkReturn, true), new KeyValuePair<byte, bool>(VkControl, true));
             // the keys are handled by Excel's message loop, which is this thread: let it run
             for (int i = 0; i < 60; i++)
             {
                 System.Windows.Forms.Application.DoEvents();
                 if (!IsExcelEditing()) return;
-                System.Threading.Thread.Sleep(25);
+                PumpMessages(25);
             }
         }
 
@@ -3256,13 +3324,8 @@ namespace VerticalSheetTabs
                     // F6, the key with which Excel itself moves the focus on to the next part of its window, ends the
                     // pane's hold. Hiding and showing the pane again (as before) also ended it, but Excel then laid the
                     // window out twice and it flickered.
-                    keybd_event(VkF6, 0, 0, UIntPtr.Zero);
-                    keybd_event(VkF6, 0, KeyUp, UIntPtr.Zero);
-                    for (int i = 0; i < 10; i++)
-                    {
-                        System.Windows.Forms.Application.DoEvents();
-                        System.Threading.Thread.Sleep(10);
-                    }
+                    SendKeys(new KeyValuePair<byte, bool>(VkF6, false), new KeyValuePair<byte, bool>(VkF6, true));
+                    for (int i = 0; i < 10; i++) PumpMessages(10);
                 }
                 IntPtr grid = IntPtr.Zero;
                 var name = new System.Text.StringBuilder(64);

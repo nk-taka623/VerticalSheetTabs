@@ -15,6 +15,7 @@
 | `Wobble.cs`、`WobbleSounds.cs`、`Sounds\*.wav` | 揺れの動き、効果音 (アドインに埋め込む) |
 | `DialogPlacer.cs` | Excelの「色の設定」画面を、クリックした位置に出す |
 | `TabColorPalette.cs` | シート見出しの色のパレット (Excelと同じ構成) |
+| `SafeXml.cs` | ブックから読むXML (カスタムXMLパート、ファイルのテーマ) の読み込み。DTD禁止、大きさの上限 |
 | `FolderModel.cs`、`FolderStore.cs` | フォルダの構造、XMLの読み書き、Excelのシート順との突き合わせ (`Reconcile`)、シートの識別 |
 | `NameRule.cs` | シート名のルール (`フォルダ名 \| シート名`) の解析、並びの整理、名前からのフォルダ構成 |
 | `WorkbookSettings.cs` | 1つのウィンドウの設定。ブックのカスタムドキュメントプロパティ (`VTab.Width`、`VTab.NameRule`) の読み書きと、古い `VTab.*` の削除 |
@@ -92,7 +93,7 @@ Release ビルドには、`PathMap` を設定してあり、DLL に、開発PC�
 ### 配布用zipを作る
 
 ```powershell
-powershell -File tools\make-dist-zip.ps1 -Version 1.3.1
+powershell -File tools\make-dist-zip.ps1 -Version 1.3.2
 ```
 
 - 公開済みのインストーラの DLL の版数が、指定した版数と同じことを確かめてから、`配布用zip\VerticalSheetTabs_vX.Y.Z.zip` を作り、古いzipを削除する
