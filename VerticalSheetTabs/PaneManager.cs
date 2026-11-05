@@ -1042,8 +1042,13 @@ namespace VerticalSheetTabs
             }
         }
 
+        // The add-in's windows see the screen at 96 dpi (Cursor.Position is scaled down), Excel's own calls (RangeFromPoint) take real pixels:
+        // the pointer is read in real pixels here.
         [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern IntPtr WindowFromPoint(System.Drawing.Point point);
+        private static extern bool GetPhysicalCursorPos(out System.Drawing.Point point);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr WindowFromPhysicalPoint(System.Drawing.Point point);
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern IntPtr GetAncestor(IntPtr hWnd, uint flags);
@@ -1057,7 +1062,10 @@ namespace VerticalSheetTabs
             entry.Busy = true;
             try
             {
-                IntPtr under = WindowFromPoint(screen);
+                System.Drawing.Point real;
+                if (!GetPhysicalCursorPos(out real)) return;
+                screen = real;
+                IntPtr under = WindowFromPhysicalPoint(screen);
                 if (under == IntPtr.Zero || GetAncestor(under, 2) != new IntPtr(entry.Window.Hwnd)) return; // (not over this window)
                 CommitCellEdit(entry);
                 var start = entry.Window.RangeFromPoint(screen.X, screen.Y) as Excel.Range;

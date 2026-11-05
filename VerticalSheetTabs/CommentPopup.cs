@@ -46,12 +46,12 @@ namespace VerticalSheetTabs
             // the content is shown when the menu has closed (a form opened while the menu is closing would be closed with it)
             menu.Closed += (s, e) =>
             {
-                CommentEntry c = picked;
-                var timer = new Timer { Interval = 30 };
+                var timer = new Timer { Interval = 60 };
                 timer.Tick += (s2, e2) =>
                 {
                     timer.Stop();
                     timer.Dispose();
+                    CommentEntry c = picked; // (read now: the item's Click can come after Closed)
                     menu.Dispose();
                     if (c != null) ShowContent(screen, owner, c, goTo);
                 };
