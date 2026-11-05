@@ -157,6 +157,8 @@ namespace VerticalSheetTabs
             control.DoneAnimation = settings.DoneAnim;
             control.ProgressRequested += (sheets, state) => SetProgress(entry, sheets, state);
             control.ProgressProtectRequested += sheet => ToggleSheetProtect(entry, sheet);
+            control.LinkDropRequested += (names, screen) => CreateSheetLinks(entry, names, screen);
+            control.MemoBadgeClicked += (sheet, screen) => ShowSheetComments(entry, sheet, screen);
             control.SetWobble(settings.Wobble, settings.WobbleAmp, settings.WobbleDur);
             control.SetWobbleSound(settings.WobbleSound, settings.WobbleVolume);
 
@@ -1037,6 +1039,146 @@ namespace VerticalSheetTabs
             finally
             {
                 entry.ProtectAsking = false;
+            }
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr WindowFromPoint(System.Drawing.Point point);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetAncestor(IntPtr hWnd, uint flags);
+
+        // Sheets of the vertical tabs were let go over this window's grid: a link to each is made in the cells from the one under the
+        // pointer downward (the text of a cell that was there is replaced).
+        private void CreateSheetLinks(Entry entry, List<string> names, System.Drawing.Point screen)
+        {
+            if (entry.Busy || entry.Syncing || names == null || names.Count == 0) return;
+            bool busyBefore = entry.Busy;
+            entry.Busy = true;
+            try
+            {
+                IntPtr under = WindowFromPoint(screen);
+                if (under == IntPtr.Zero || GetAncestor(under, 2) != new IntPtr(entry.Window.Hwnd)) return; // (not over this window)
+                CommitCellEdit(entry);
+                var start = entry.Window.RangeFromPoint(screen.X, screen.Y) as Excel.Range;
+                if (start == null) return; // (over something that is not a cell)
+                var ws = start.Worksheet;
+                int made = 0;
+                bool protectedCell = false;
+                for (int i = 0; i < names.Count; i++)
+                {
+                    try
+                    {
+                        if (start.Row + i > ws.Rows.Count) break;
+                        var cell = (Excel.Range)start.Cells[i + 1, 1];
+                        if (ws.ProtectContents && Convert.ToBoolean(cell.Locked)) { protectedCell = true; continue; }
+                        string name = names[i];
+                        string target = "'" + name.Replace("'", "''") + "'" + (entry.Workbook.Sheets[name] is Excel.Worksheet ? "!A1" : "");
+                        ws.Hyperlinks.Add(cell, "", target, "シート「" + name + "」へ移動", name);
+                        made++;
+                    }
+                    catch (Exception)
+                    {
+                        // a cell that cannot take it (merged, part of a table that refuses): the next one
+                    }
+                }
+                if (made == 0) ShowMessage(protectedCell ? "保護されたセルには、リンクを作れません。" : "リンクを作れませんでした。");
+            }
+            catch (Exception)
+            {
+                // Excel is busy.
+            }
+            finally
+            {
+                entry.Busy = busyBefore;
+            }
+        }
+
+        // The notes and comments of a sheet, in the order of the cells (rows first). Empty when Excel could not answer.
+        private List<CommentEntry> ReadComments(Entry entry, string sheet)
+        {
+            var list = new List<CommentEntry>();
+            var ws = entry.Workbook.Sheets[sheet] as Excel.Worksheet;
+            if (ws == null) return list;
+            var order = new Dictionary<CommentEntry, long>();
+            foreach (Excel.Comment c in ws.Comments)
+            {
+                try
+                {
+                    var cell = (Excel.Range)c.Parent;
+                    var e = new CommentEntry { Sheet = sheet, Address = cell.Address[false, false], Author = c.Author, Text = c.Text(Type.Missing, Type.Missing, Type.Missing) };
+                    order[e] = (long)cell.Row * 100000 + cell.Column;
+                    list.Add(e);
+                }
+                catch (Exception) { }
+            }
+            try
+            {
+                foreach (Excel.CommentThreaded t in ws.CommentsThreaded)
+                {
+                    try
+                    {
+                        var cell = (Excel.Range)t.Parent;
+                        var e = new CommentEntry { Sheet = sheet, Address = cell.Address[false, false], Author = t.Author.Name, Text = t.Text(), Threaded = true };
+                        try { e.Done = Convert.ToBoolean(t.GetType().InvokeMember("Done", System.Reflection.BindingFlags.GetProperty, null, t, null)); } catch (Exception) { } // (not in the interop of older Office)
+                        foreach (Excel.CommentThreaded r in t.Replies)
+                        {
+                            try { e.Replies.Add(r.Author.Name + ": " + r.Text()); } catch (Exception) { }
+                        }
+                        order[e] = (long)cell.Row * 100000 + cell.Column;
+                        list.Add(e);
+                    }
+                    catch (Exception) { }
+                }
+            }
+            catch (Exception)
+            {
+                // older Excel: no threaded comments
+            }
+            list.Sort((a, b) => order[a].CompareTo(order[b]));
+            return list;
+        }
+
+        // A click on the note / comment badge: one comment is shown at the pointer; several are listed there first.
+        private void ShowSheetComments(Entry entry, string sheet, System.Drawing.Point screen)
+        {
+            if (entry.Busy || entry.Syncing) return;
+            List<CommentEntry> items;
+            try
+            {
+                items = ReadComments(entry, sheet);
+            }
+            catch (Exception)
+            {
+                return; // Excel is busy
+            }
+            var owner = new ExcelWindowOwner(_app.Hwnd);
+            if (items.Count == 0) { ShowMessage("このシートのメモ・コメントは、読み取れませんでした。"); return; }
+            if (items.Count == 1) CommentPopup.ShowContent(screen, owner, items[0], c => GoToComment(entry, c));
+            else CommentPopup.ShowList(screen, owner, items, c => GoToComment(entry, c));
+        }
+
+        // The button "go to the cell": the sheet becomes the active one and the cell is selected and brought into view.
+        private void GoToComment(Entry entry, CommentEntry c)
+        {
+            if (entry.Busy || entry.Syncing) return;
+            bool busyBefore = entry.Busy;
+            entry.Busy = true;
+            try
+            {
+                CommitCellEdit(entry);
+                var ws = entry.Workbook.Sheets[c.Sheet] as Excel.Worksheet;
+                if (ws == null) return;
+                ws.Activate();
+                _app.Goto(ws.Range[c.Address], true);
+            }
+            catch (Exception)
+            {
+                // Excel is busy, or the cell is gone.
+            }
+            finally
+            {
+                entry.Busy = busyBefore;
             }
         }
 

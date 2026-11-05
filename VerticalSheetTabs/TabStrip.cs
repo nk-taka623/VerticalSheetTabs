@@ -1886,7 +1886,7 @@ namespace VerticalSheetTabs
                 if ((_shownBadges & BadgeKinds.Error) != 0 && b.Errors > 0)
                     found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Error, Color = BadgeErrorColor, Tip = "数式エラーが " + b.Errors + " か所" });
                 if ((_shownBadges & BadgeKinds.Memo) != 0 && b.Memos > 0)
-                    found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Memo, Color = BadgeMemoColor, Tip = "メモ・コメントが " + b.Memos + " 件" });
+                    found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Memo, Color = BadgeMemoColor, Tip = "メモ・コメントが " + b.Memos + " 件 (クリックで内容を表示)" });
                 if ((_shownBadges & BadgeKinds.Protect) != 0 && b.Protected && !doneLocked)
                     found.Add(new RowBadgeSpec { Kind = RowBadgeKind.Protect, Color = BadgeProtectColor, Tip = "シートは保護されています" });
             }
@@ -2127,6 +2127,27 @@ namespace VerticalSheetTabs
 
         // A click on the mark of a sheet that is done asks to protect it, or to take the protection off (Excel's own dialog), see PaneManager.
         public event Action<string> ProgressProtectRequested;
+
+        // Sheets (the dragged ones, in the order of the workbook; those of a dragged folder too) were let go outside the strip, over Excel:
+        // links to them are asked for at that point (screen coordinates), see PaneManager.CreateSheetLinks.
+        public event Action<List<string>, Point> LinkDropRequested;
+
+        // A click on the note / comment badge of a sheet: the comments of the sheet are shown. The point is where the click was (screen).
+        public event Action<string, Point> MemoBadgeClicked;
+
+        private bool _linkPending;
+        private Point _linkPoint;
+
+        // A click on the note / comment badge of a sheet row (a folder row has none of its own).
+        private bool MemoBadgeHit(int index, Point p)
+        {
+            if (index < 0 || index >= _rows.Count || _rows[index].IsFolder || (_shownBadges & BadgeKinds.Memo) == 0) return false;
+            foreach (RowBadgeSpec s in RowBadges(_rows[index], RowRect(index)))
+            {
+                if (s.Kind == RowBadgeKind.Memo && Rectangle.Inflate(s.Bounds, Px(3), Px(5)).Contains(p)) return true;
+            }
+            return false;
+        }
 
         // A click on the progress mark of a sheet: the next progress (none, not started, in progress, done); a click on "done" protects the sheet.
         private bool ProgressBadgeHit(int index, Point p)
@@ -3878,6 +3899,16 @@ namespace VerticalSheetTabs
                 return;
             }
 
+            // the note / comment badge of a sheet: a click shows the comments (and does not select the sheet)
+            if (e.Button == MouseButtons.Left && !IsSample && MemoBadgeHit(index, e.Location))
+            {
+                string sheet = row.Sheet;
+                Point screen = PointToScreen(e.Location);
+                _tip.Hide(this);
+                if (MemoBadgeClicked != null && sheet != null) MemoBadgeClicked(sheet, screen);
+                return;
+            }
+
             // the paint can of a folder: the folder's color (and the folder is not selected)
             if (e.Button == MouseButtons.Left && PaintCanHit(index, e.Location))
             {
@@ -4268,6 +4299,43 @@ namespace VerticalSheetTabs
                 SetDropIndex(-1);
                 if (_ghostOn && !_ghostSettling) EndGhost();
             }
+            // let go outside the strip (QueryContinueDrag cancelled the drop): links are made, now that the drag has ended
+            if (_linkPending)
+            {
+                _linkPending = false;
+                List<string> names = LinkNames();
+                if (names.Count > 0 && LinkDropRequested != null) LinkDropRequested(names, _linkPoint);
+            }
+        }
+
+        // The sheets of the drag, in the order of the workbook: the dragged sheets and the sheets of the dragged folders.
+        private List<string> LinkNames()
+        {
+            var wanted = new HashSet<string>(_dragSheets);
+            foreach (StripRow r in _rows)
+                if (r.IsFolder && _dragFolders.Contains(r.FolderId)) foreach (string m in r.Members) wanted.Add(m);
+            return _names.Where(wanted.Contains).ToList();
+        }
+
+        // Let go outside the strip: Excel's grid would take the name as text, so the drop is cancelled and a link is made instead.
+        protected override void OnQueryContinueDrag(QueryContinueDragEventArgs e)
+        {
+            base.OnQueryContinueDrag(e);
+            if (!_dragging || e.Action != DragAction.Drop) return;
+            Point screen = Cursor.Position;
+            if (RectangleToScreen(ClientRectangle).Contains(screen)) return;
+            _linkPoint = screen;
+            _linkPending = true;
+            e.Action = DragAction.Cancel;
+        }
+
+        // Over Excel (outside the strip) the pointer is the hand: a link is made where it is let go.
+        protected override void OnGiveFeedback(GiveFeedbackEventArgs e)
+        {
+            base.OnGiveFeedback(e);
+            if (!_dragging || RectangleToScreen(ClientRectangle).Contains(Cursor.Position)) return;
+            e.UseDefaultCursors = false;
+            Cursor.Current = Cursors.Hand;
         }
 
         // Ctrl held: copy, otherwise move (the same keys as Excel's own tabs).

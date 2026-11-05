@@ -244,6 +244,7 @@
     <Compile Include="PcSettings.cs" />
     <Compile Include="SheetHistory.cs" />
     <Compile Include="AddInVersion.cs" />
+    <Compile Include="CommentPopup.cs" />
     <Compile Include="SettingsForm.cs" />
     <Compile Include="TabColorPalette.cs" />
     <Compile Include="FolderModel.cs" />
