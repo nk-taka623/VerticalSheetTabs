@@ -1,0 +1,94 @@
+@startuml
+title アニメーション (揺れ・ゴースト・追加削除・完了)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "PaneManager" as P
+participant "TabStrip" as S
+participant "Timer\n(15ms)" as T
+participant "WobbleMotion\nWobbleSounds" as W
+
+== シートを選んだ・フォルダを開閉した・選択した ==
+P -> S : SetRows / SetActive (同期の結果)
+S -> S : OnPaint: アクティブなシートが変わった、\nまたはフォルダの開閉・選択が変わった
+alt ゴーストが出ている (_ghostOn)
+  S --> S : 揺れは始めない (落としたあとに始める)
+else
+  S -> S : StartWobble(シート, フォルダ, 開いたフォルダの中のシート)
+  alt 種類が None、またはハンドルがない
+    S --> S : 何もしない
+  else
+    S -> W : Random なら PickRandom で種類を決める
+    opt 効果音が On (設定画面のサンプルの繰り返しは、鳴らす / 鳴らさないを指定)
+      S -> W : Play(種類, 音量) (同時に複数が揺れても1回)
+    end
+    S -> T : _animClock を開始、Start()
+  end
+end
+
+loop 揺れの長さ (WobbleDur 300から1200ms) の間
+  T -> S : Tick
+  S -> S : Invalidate
+  S -> W : At(種類, 経過 t, 大きさ) → 移動・回転・拡大縮小
+  S -> S : 揺れている行を最後に描く (ほかの行の上。文字はグレースケール)
+end
+T -> S : Tick (経過 >= WobbleDur)
+S -> T : StopWobble (Stop)
+
+== ドラッグ (ゴースト) ==
+U -> S : 行を押して動かす (ドラッグの開始)
+S -> S : BeginGhost: 行の絵を取る、元の行を薄くする (コピー中は薄くしない)
+loop ドラッグ中
+  U -> S : ポインターを動かす
+  S -> S : MoveGhost (目標位置。横は最大 8 DIP)
+  S -> S : DrawGhost: 滑らかに追従 (tau 55ms)、影つき、半透明 62%
+end
+U -> S : 落とす
+S -> S : SettleGhost (挿入位置へ滑り込む。tau 38ms、140msで不透明に)
+S -> P : 移動の要求 (MoveRequested など)
+P -> S : 新しい並びで SetRows
+loop 行が新しい順序に変わる、または 0.7秒たつまで
+  S -> S : DrawGhost (その位置にとどまる)
+end
+S -> S : EndGhost
+S -> S : StartWobble(ドラッグしたシート・フォルダ、\nドロップ前に無かった名前のシート)
+
+== 追加・削除 ==
+P -> S : SetRows(新しい行)
+S -> S : PrepareRowAnim (古い状態のまま): 増えた行・減った行を調べる
+alt 増減が同時 (名前の変更など)、検索中、サンプル、行が無かった
+  S --> S : null (動かない)
+else
+  S -> S : 減る行の絵を作る (見えている行だけ)
+end
+S -> S : 新しい行に入れ替える
+S -> S : FinishRowAnim: 動かす行、インデントが変わるシートを決める
+S -> T : _raClock を開始、Start() (400ms。音は鳴らさない)
+loop 400ms
+  T -> S : Tick → Invalidate
+  S -> S : 下の行がずれる (二分探索)、追加行はばねで現れる、\n削除行は膨らんで縮み、消える
+end
+T -> S : Tick (経過 >= 400ms)
+S -> T : EndRowAnim (Stop、絵を解放)
+
+== 完了のはじける動き ==
+U -> S : 進捗の印をクリック (「作業中」→「完了」)
+S -> P : ProgressClicked
+P -> P : SetProgress (シートのプロパティ VTab.Progress)
+P -> S : SetBadges(新しい進捗)
+S -> S : 進捗が 3 (完了) になった行を探す\n(最初に見たときは、はじけない。DoneAnimation が Off ならはじけない)
+S -> T : StartDoneAnim (500ms)
+loop 500ms
+  T -> S : Tick → Invalidate
+  S -> S : 緑の光、印が膨らんで戻る、8本の線と点が広がる
+end
+T -> S : Tick (経過 >= 500ms)
+S -> T : EndDoneAnim
+
+== 設定画面のサンプル ==
+note over S, W
+  サンプル (IsSample) は、行の追加削除・完了・ゴースト・コピーアイコンを動かさない。
+  揺れだけは、「アニメーション」のタブを開いている間、2.2秒おきに PlayWobble(true) で動く。
+end note
+@enduml

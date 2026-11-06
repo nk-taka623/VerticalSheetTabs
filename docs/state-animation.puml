@@ -1,0 +1,48 @@
+@startuml
+title アニメーションの状態遷移 (TabStrip)
+skinparam shadowing false
+
+state "揺れ" as WobbleG {
+  [*] --> 揺れなし
+  揺れなし --> 揺れ中 : StartWobble\n(種類が None でない)
+  揺れ中 --> 揺れ中 : StartWobble\n(いまの揺れを置き換える)
+  揺れ中 --> 揺れなし : 経過 >= WobbleDur\nまたは SetWobble(None)
+}
+
+state "ドラッグのゴースト" as GhostG {
+  [*] --> ゴーストなし
+  ゴーストなし --> 追従中 : BeginGhost\n(ドラッグ開始)
+  追従中 --> 追従中 : MoveGhost
+  追従中 --> 滑り込み中 : SettleGhost\n(落とした)
+  追従中 --> ゴーストなし : EndGhost\n(取り消し、縦タブの外)
+  滑り込み中 --> 滑り込み中 : 位置に着いても、\n行が新しい順序になるまで待つ
+  滑り込み中 --> ゴーストなし : 行が新しい順序に変わる\nまたは 0.7秒
+}
+
+state "追加・削除" as RowG {
+  [*] --> 静止
+  静止 --> 追加中 : FinishRowAnim\n(行が増えただけ)
+  静止 --> 削除中 : FinishRowAnim\n(行が減っただけ)
+  追加中 --> 追加中 : 新しい増減 (EndRowAnim →\n作り直し)
+  削除中 --> 削除中 : 新しい増減
+  追加中 --> 静止 : 400ms\nまたは RowAnimation = Off
+  削除中 --> 静止 : 400ms\nまたは RowAnimation = Off
+}
+
+state "完了" as DoneG {
+  [*] --> 待機
+  待機 --> はじける : StartDoneAnim\n(進捗が完了になった)
+  はじける --> はじける : 別のシートも完了になった
+  はじける --> 待機 : 500ms\nまたは DoneAnimation = Off
+}
+
+滑り込み中 --> 揺れ中 : EndGhost のあと\nStartWobble (ドラッグしたシート)
+note right of 揺れ中
+  揺れが始まる場面:
+  ・アクティブなシートが変わった
+  ・フォルダの開閉・選択・解除
+  ・ドロップのあと
+  ・設定画面のサンプル (2.2秒おき)
+  ゴーストが出ている間は、始めない
+end note
+@enduml
