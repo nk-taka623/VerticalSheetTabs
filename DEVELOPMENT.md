@@ -49,6 +49,28 @@ flowchart LR
 
 図のソースは [docs/component.puml](docs/component.puml)。構成を変えたら、`tools\make-diagrams.ps1` で、SVG を作り直す (Java、Graphviz、`tools\PlantUML\plantuml-bsd-*.jar` が要る)。
 
+### コンポーネント図: インターフェースのつながり (PlantUML)
+
+中のモジュールは描かず、役割のコンポーネントの間の、インターフェースのつながりだけを示す。丸が「提供」、受け口が「利用」。ソースは [docs/component-interface.puml](docs/component-interface.puml)。
+
+![インターフェースのつながり](docs/component-interface.svg)
+
+| 番号 | インターフェース | 提供 | 利用 | 中身 |
+|---|---|---|---|---|
+| I1 | Excelイベント | Excel | 入口 | ウィンドウ、ブックの保存・閉じる、シートの変更などのイベント (`ThisAddIn` が購読) |
+| I2 | リボン拡張 | 入口 | Excel | `IRibbonExtensibility`。リボンのボタンと、横タブのメニュー項目の定義、押されたときの通知 |
+| I3 | オブジェクトモデル | Excel | 制御 | ウィンドウ、ブック、シートの読み書き (COM)。Excelに触れるのは制御だけ |
+| I4 | ペイン登録 | Excel | 制御 | `CustomTaskPanes`。ウィンドウごとに縦タブのペインを作る |
+| I5 | ペイン管理 | 制御 | 入口 | `EnsurePane`、`EnsureAllPanes`、`ShowSettings`、`SaveSettings`、`SyncSheetOf`、`MarkBadgesDirty`、`Shutdown` |
+| I6 | バッジ購読 | 入口 | 制御 | `BadgeEventsWanted` (`Action<bool>`)。バッジを使うウィンドウがあるときだけ、シートの変更・再計算のイベントを購読する |
+| I7 | 表示の更新 | 画面 | 制御、設定画面 | 行、バッジ、選択、設定 (見た目、揺れ、アニメーション) を渡す。設定画面のサンプルも、同じ描画を使う |
+| I8 | 操作の要求 | 制御 | 画面 | 画面が起こすイベント (`*Requested`: 選択、移動、名前の変更、色、フォルダ、進捗、リンク、メモのバッジなど) を、制御が受ける |
+| I9 | 値の問い合わせ | 制御 | 画面 | `Func` で画面が聞く。テーマの色 (`ThemeColorProvider`)、「その他の色」 (`MoreColorsProvider`)、履歴 (`HistoryProvider`)、セルの入力中か (`IsExcelEditing`) |
+| I10 | 設定画面 | 設定画面 | 制御 | 現在の値を渡して表示し、OK で値を返す |
+| I11 | 動きと音 | 動き・音 | 画面、設定画面、設定の保持 | `WobbleMotion.At` (揺れの動き)、`WobbleSounds.Play` (効果音)、`WobbleType` (種類の値) |
+| I12 | モデルの操作 | モデル | 制御、設定画面 | フォルダの構造、XMLの読み書き、シート名のルール、履歴 |
+| I13 | 設定の読み書き | 設定の保持 | 制御 | `PcSettings` (`settings.ini`)、`WorkbookSettings` (ブックの `VTab.*`) の読み書き |
+
 ### シーケンス図 (PlantUML)
 
 主な流れを、シーケンス図で示す。ソースは `docs/sequence-*.puml`、SVG は同じ名前で `docs/` にある。`tools\make-diagrams.ps1` は、`docs/*.puml` のすべてを SVG にする。
