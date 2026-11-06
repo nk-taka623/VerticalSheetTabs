@@ -159,6 +159,12 @@ flowchart LR
 
 ![アニメーションを起動するかどうかの判断](docs/activity-animation.svg)
 
+### ユースケース図 (PlantUML)
+
+利用者ができることを、仕様 (`Agents.md` の2章) にもとづいて、まとまりごとに示す。ソースは [docs/usecase.puml](docs/usecase.puml)。「シートを操作する」のすべては、Excelのオブジェクトモデルを通して行うため、Excelへの線は省いている。
+
+![ユースケース図](docs/usecase.svg)
+
 ### クラス図 (PlantUML)
 
 主なクラスと、その関係を示す。メンバーは、関係の理解に要るものだけを載せている (すべてではない)。
