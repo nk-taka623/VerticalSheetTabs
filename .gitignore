@@ -95,3 +95,6 @@ $RECYCLE.BIN/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# PlantUML (docs/component.puml から SVG を作る道具。各自で置く)
+tools/PlantUML/*.jar
