@@ -81,6 +81,14 @@ flowchart LR
 
 ![履歴](docs/sequence-history.svg)
 
+**フォルダの操作 (開閉・作成・名前の変更・色・削除)** ([sequence-folder.puml](docs/sequence-folder.puml))
+
+![フォルダの操作](docs/sequence-folder.svg)
+
+**フォルダの出し入れ・移動・コピー (ドラッグ)** ([sequence-folder-drop.puml](docs/sequence-folder-drop.puml))
+
+![フォルダの出し入れ・移動・コピー](docs/sequence-folder-drop.svg)
+
 ## ビルド
 
 - Visual Studio 2026 (「Office/SharePoint 開発」ワークロード) で、`VerticalSheetTabs.sln` を開く

@@ -1,0 +1,88 @@
+@startuml
+title フォルダの操作 (開閉・作成・名前の変更・色・削除)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip" as S
+participant "TabPaneControl" as C
+participant "PaneManager" as P
+participant "FolderModel\n(entry.Folders)" as F
+participant "Excel" as XL
+
+== 開く・閉じる ==
+U -> S : 行の先頭の記号 (> / ∨) をクリック、または「全開」「全閉」
+S -> C : FolderToggleRequested(id) / AllFoldersRequested(open)
+C -> P : ToggleFolder / FolderCommand("openall" | "closeall")
+P -> F : Expanded を切り替える
+P -> P : MarkChanged (ブックを「変更あり」にする)
+P -> XL : SyncSheets (シートを読み直す)
+P -> C : SetSheets
+C -> S : 描き直し、揺れ
+
+== 作る ==
+U -> S : シートの右クリック > 「新しいフォルダ」
+S -> C : NewFolderRequested(names)
+C -> P : CreateFolder(names)
+alt ブックの構造が保護されている
+  P -> U : メッセージ (作らない)
+else
+  P -> P : ChangeFolders(変更の内容)
+  note right of P : 選択とアクティブなシートは、名前ではなく\nkey (VTab.Id) で覚えておく
+  P -> XL : RefreshKeys (シートの key を読む)
+  P -> F : CreateFolder("フォルダN", keys)
+  opt シート名のルールを使うブック
+    P -> XL : ApplyNamesFromModel (シート名を「フォルダ名 | シート名」にする)
+    note right of XL : 付けられないとき (長さ・重複) は、\nモデルを元に戻してメッセージを出す
+  end
+  P -> XL : ApplyExcelOrder (フォルダ内のシートを連続して並べる)
+  P -> XL : 選択を key から名前に直して選び直す
+  P -> P : MarkChanged、SyncSheets
+  P -> C : BeginRenameFolder(createdId)
+  C -> S : フォルダ名の入力欄を出す
+end
+
+== 名前の変更 ==
+U -> S : 入力欄で名前を入れて Enter
+S -> C : FolderRenameRequested(id, name)
+C -> P : RenameFolder(id, name)
+alt 無効な名前 (空・31文字を超える・使えない文字)、または重複
+  P -> U : メッセージ
+else シート名のルールを使い、名前に「 | 」を含む
+  P -> U : メッセージ (中断)
+else シート名のルールを使う
+  P -> P : ChangeFolders (中のシート名も、フォルダ名に合わせて変える)
+else
+  P -> F : Name を変える
+  P -> P : MarkChanged、SyncSheets
+end
+
+== 色 ==
+U -> S : 右クリック > 「フォルダの色」
+S -> C : FolderColorRequested(folders, choice)
+C -> P : (色の変更)
+P -> F : Color = choice
+opt 「フォルダと中のシートを同一色に設定」がON
+  P -> XL : ApplyTabColor (中のシートのタブ色も変える)
+end
+P -> P : MarkChanged、SyncSheets
+
+== 削除 ==
+U -> S : Del キー、または右クリック > 「フォルダの削除」
+alt フォルダだけ (中のシートは残す)
+  S -> C : DeleteFoldersRequested(folders, false)
+  C -> P : DeleteFoldersOnly
+  P -> F : RemoveFolder (シート名のルールを使うときは、シート名から「フォルダ名 | 」を外す)
+else フォルダと中のシート
+  S -> C : DeleteFoldersRequested(folders, true) / DeleteKeyRequested
+  C -> P : DeleteItems
+  P -> U : 確認 (アドイン自身の確認)
+  U -> P : OK
+  P -> XL : 選択中のシートと、フォルダの中のシートを削除 (Excelの確認は出さない)
+  P -> F : フォルダを取り除く
+end
+P -> P : MarkChanged、SyncSheets
+
+== 保存 ==
+note over P, F : ブックの保存時に、フォルダの構成をカスタムXMLパートに書く\n(「ブックの保存」の図)
+@enduml
