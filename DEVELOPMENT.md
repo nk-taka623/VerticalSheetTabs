@@ -159,6 +159,18 @@ flowchart LR
 
 ![アニメーションを起動するかどうかの判断](docs/activity-animation.svg)
 
+### クラス図 (PlantUML)
+
+主なクラスと、その関係を示す。メンバーは、関係の理解に要るものだけを載せている (すべてではない)。
+
+**主なクラスと関係** ([class-structure.puml](docs/class-structure.puml))。`PaneManager` が、ウィンドウごとの管理情報 (`Entry`) を持ち、その中にペインの中身 (`TabPaneControl`、`TabStrip`) がある。画面は、イベントで操作を `PaneManager` に伝える。
+
+![主なクラスと関係](docs/class-structure.svg)
+
+**データ・モデル・設定** ([class-data.puml](docs/class-data.puml))。フォルダの構造 (`FolderModel`)、履歴、設定 (`WorkbookSettings`。実行中は、PCの設定もここに入る)、画面に渡すデータ (`StripRow`、`BadgeInfo` など)。
+
+![データ・モデル・設定](docs/class-data.svg)
+
 ## ビルド
 
 - Visual Studio 2026 (「Office/SharePoint 開発」ワークロード) で、`VerticalSheetTabs.sln` を開く
