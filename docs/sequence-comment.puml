@@ -1,0 +1,35 @@
+@startuml
+title メモ・コメントのバッジのクリック
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip" as S
+participant "TabPaneControl" as C
+participant "PaneManager" as P
+participant "CommentPopup" as W
+participant "Excel" as XL
+
+U -> S : 行の右端の黄色いバッジをクリック
+S -> S : MemoBadgeHit (シートは選ばない)
+S -> C : MemoBadgeClicked(sheet, screen)
+C -> P : MemoBadgeClicked(sheet, screen)
+P -> XL : ReadComments (Comments と CommentsThreaded)
+XL --> P : メモ・コメントの内容 (セルの順)
+alt 1件
+  P -> W : ShowContent(screen, comment)
+else 複数
+  P -> W : ShowList(screen, comments)
+  U -> W : 一覧から1つ選ぶ
+  note right of W : メニューが閉じてから\n内容の窓を出す
+  W -> W : ShowContent
+end
+W -> U : 内容 (読み取り専用。スレッドコメントは返信つき)
+opt 「そのセルへ移動」
+  U -> W : ボタンを押す
+  W -> P : goTo(comment)
+  P -> P : CommitCellEdit
+  P -> XL : シートを Activate、Application.Goto(セル)
+end
+note over W : Esc、またはほかをクリックで閉じる
+@enduml

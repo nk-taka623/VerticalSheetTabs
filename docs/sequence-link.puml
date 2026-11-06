@@ -1,0 +1,41 @@
+@startuml
+title シートの行をセルへドラッグしてリンクを作る
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip" as S
+participant "TabPaneControl" as C
+participant "PaneManager" as P
+participant "Excel" as XL
+
+U -> S : シートの行 (またはフォルダの行) を押して動かす
+S -> S : DoDragDrop (ゴーストを出す)
+U -> S : 縦タブの外 (Excelのセル) でボタンを離す
+S -> S : OnQueryContinueDrag\n縦タブの外なら Cancel にして、_linkPending をたてる
+note right of S : ドロップを取り消すので、\nExcelのセルに名前が文字として入らない
+S -> S : DoDragDrop が終わる
+S -> S : LinkNames (ブックの並びで、選択中のシートと\nフォルダの中のシート)
+S -> C : LinkDropRequested(names, screen)
+C -> P : LinkDropRequested(names, screen)
+P -> P : GetPhysicalCursorPos (実際のピクセル)
+P -> XL : WindowFromPhysicalPoint → GetAncestor
+alt このウィンドウの上ではない
+  P --> P : 何もしない
+else このウィンドウの上
+  P -> P : CommitCellEdit
+  P -> XL : Window.RangeFromPoint(x, y)
+  XL --> P : 落とした位置のセル
+  loop シートごとに、1セルずつ下へ
+    alt 保護されたセル
+      P --> P : 飛ばす
+    else
+      P -> XL : Hyperlinks.Add(セル, "", "'シート名'!A1", ヒント, シート名)
+      note right of XL : セルにあった値は上書きされる
+    end
+  end
+  opt 1つも作れなかった
+    P -> U : メッセージ
+  end
+end
+@enduml
