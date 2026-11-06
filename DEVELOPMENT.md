@@ -121,6 +121,22 @@ flowchart LR
 
 ![ウィンドウとブックの終了処理、アドインの停止](docs/sequence-shutdown.svg)
 
+**アニメーション (揺れ・ゴースト・追加削除・完了)** ([sequence-animation.puml](docs/sequence-animation.puml))
+
+![アニメーション](docs/sequence-animation.svg)
+
+### 状態遷移図 (PlantUML)
+
+アニメーションは、種類ごとに独立した状態を持つ (`TabStrip`)。([state-animation.puml](docs/state-animation.puml))
+
+![アニメーションの状態遷移](docs/state-animation.svg)
+
+### アクティビティ図 (PlantUML)
+
+行の増減、揺れ、完了のはじける動きを、起動するかどうか判断する流れ。([activity-animation.puml](docs/activity-animation.puml))
+
+![アニメーションを起動するかどうかの判断](docs/activity-animation.svg)
+
 ## ビルド
 
 - Visual Studio 2026 (「Office/SharePoint 開発」ワークロード) で、`VerticalSheetTabs.sln` を開く
