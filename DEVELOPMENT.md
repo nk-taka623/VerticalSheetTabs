@@ -41,6 +41,147 @@ flowchart LR
     S -- 操作 --> P
 ```
 
+### コンポーネント図 (PlantUML)
+
+役割ごとのコンポーネントと、それを構成するモジュール (ソースファイル) を示す。矢印は「呼ぶ / 使う」。Excelのオブジェクトモデルを呼ぶのは、`PaneManager` だけ (`TabStrip` などの画面の部品は、Excelに触れない)。GitHub は PlantUML を表示しないため、PlantUML の拡張機能や、[PlantUML Web Server](https://www.plantuml.com/plantuml/) などで図にする。
+
+```plantuml
+@startuml
+title VerticalSheetTabs コンポーネント図 (v1.4.0)
+left to right direction
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+package "Excel (ホスト)" as HOST {
+  component "オブジェクトモデル (COM)\nウィンドウ・ブック・シート" as OM
+  component "タスクペイン / リボン / 横タブのメニュー" as UIHOST
+}
+
+package "縦並びシートタブ (VSTOアドイン)" as ADDIN {
+
+  component "入口" as ENTRY {
+    component "ThisAddIn" as ThisAddIn
+    component "RibbonController\nRibbonIcon" as Ribbon
+  }
+
+  component "制御 (Excelとのやりとり)" as CTRL {
+    component "PaneManager\n(ペインの管理・同期・シートとフォルダの操作\nバッジの検出・履歴・テーマの色)" as PaneManager
+    component "DialogPlacer\n(「色の設定」の位置)" as DialogPlacer
+  }
+
+  component "画面 (縦タブ)" as VIEW {
+    component "TabPaneControl\n(ペインの中身・右クリックメニュー)" as TabPaneControl
+    component "TabStrip\n(自前描画・入力・ドラッグ・検索)" as TabStrip
+    component "TabColorPalette\n(色のパレット)" as TabColorPalette
+    component "CommentPopup\n(メモ・コメントの表示)" as CommentPopup
+    component "TabTheme\n(Officeテーマの配色)" as TabTheme
+    component "DpiHelper\n(画面の拡大率)" as DpiHelper
+  }
+
+  component "設定画面" as SETTINGS {
+    component "SettingsForm" as SettingsForm
+    component "AddInVersion" as AddInVersion
+  }
+
+  component "動き・音" as FX {
+    component "Wobble\n(揺れの動き)" as Wobble
+    component "WobbleSounds\n(効果音 / Sounds/*.wav)" as WobbleSounds
+  }
+
+  component "モデル (Excelに依存しない)" as MODEL {
+    component "FolderModel\n(フォルダの構造)" as FolderModel
+    component "FolderStore\n(XMLの読み書き・突き合わせ)" as FolderStore
+    component "NameRule\n(シート名のルール)" as NameRule
+    component "SheetHistory\n(履歴)" as SheetHistory
+    component "SafeXml\n(安全なXMLの読み込み)" as SafeXml
+  }
+
+  component "設定の保持" as CONFIG {
+    component "PcSettings\n(settings.ini)" as PcSettings
+    component "WorkbookSettings\n(VTab.Width・NameRule)" as WorkbookSettings
+  }
+}
+
+database "PCの設定ファイル\nsettings.ini" as INI
+database "ブック\nカスタムXMLパート / カスタムプロパティ\nVTab.Id・VTab.Progress" as BOOK
+
+' --- Excel -> アドイン (イベント)
+HOST -down-> ThisAddIn : イベント
+(ウィンドウ・保存・シート)
+UIHOST ..> Ribbon : ボタン
+
+' --- 入口 -> 制御
+ThisAddIn --> PaneManager
+ThisAddIn --> Ribbon
+Ribbon ..> PaneManager : 設定画面を開く
+
+' --- 制御 -> Excel (Excelに触れるのはここだけ)
+PaneManager --> OM : 読み書き
+(0.3から3秒おきに同期)
+PaneManager ..> UIHOST : ペインを作る
+DialogPlacer ..> UIHOST : ダイアログの位置
+
+' --- 制御 -> 画面
+PaneManager --> TabPaneControl : ウィンドウごとに1つ
+PaneManager --> TabStrip : 行・バッジ・設定を渡す
+PaneManager --> CommentPopup
+PaneManager --> SettingsForm
+PaneManager --> DialogPlacer
+PaneManager --> TabColorPalette : 色
+TabPaneControl --> TabStrip
+TabPaneControl --> TabColorPalette
+TabStrip ..> TabPaneControl : 操作の通知
+(イベント)
+TabPaneControl ..> PaneManager : 操作の通知
+(イベント)
+
+' --- 画面の部品
+TabStrip --> TabTheme
+TabStrip --> DpiHelper
+TabStrip --> WobbleSounds
+TabColorPalette --> DpiHelper
+CommentPopup --> DpiHelper
+
+' --- 設定画面
+SettingsForm --> TabStrip : サンプルの描画
+SettingsForm --> TabTheme
+SettingsForm --> Wobble
+SettingsForm --> NameRule
+SettingsForm --> AddInVersion
+
+' --- 動き・音
+WobbleSounds --> Wobble
+
+' --- モデル
+PaneManager --> FolderStore
+PaneManager --> FolderModel
+PaneManager --> NameRule
+PaneManager --> SheetHistory
+PaneManager --> SafeXml
+FolderStore --> FolderModel
+FolderStore --> SafeXml
+FolderModel --> SafeXml
+NameRule --> FolderModel
+SheetHistory --> FolderStore
+SheetHistory --> SafeXml
+
+' --- 設定
+PaneManager --> PcSettings
+PaneManager --> WorkbookSettings
+WorkbookSettings --> PcSettings
+WorkbookSettings --> Wobble
+WorkbookSettings --> WobbleSounds
+WorkbookSettings --> NameRule
+PcSettings --> Wobble
+
+' --- 保存先
+PcSettings --> INI : 読み書き
+PaneManager --> BOOK : 保存時に書く
+(WorkbookBeforeSave)
+@enduml
+```
+
 ## ビルド
 
 - Visual Studio 2026 (「Office/SharePoint 開発」ワークロード) で、`VerticalSheetTabs.sln` を開く
