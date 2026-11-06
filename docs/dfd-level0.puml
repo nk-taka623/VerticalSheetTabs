@@ -1,0 +1,29 @@
+@startuml
+title データフロー図 レベル0 (全体)
+left to right direction
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+rectangle "ユーザー" as U
+rectangle "Excel" as XL
+rectangle "Officeテーマ\n(レジストリ)" as THEME
+
+usecase "0\n縦並びシートタブ" as P0
+
+database "ブック\n(フォルダ構成・履歴のXML、\nVTab.Width / NameRule / Progress、\nシートの識別 VTab.Id)" as BOOK
+database "PCの設定ファイル\nsettings.ini" as INI
+
+U --> P0 : 操作\n(クリック・ドラッグ・キー・検索語・設定)
+P0 --> U : 縦タブの表示\n(行・バッジ・アニメーション・効果音)
+
+XL --> P0 : シートの情報 (名前・表示状態・色・選択)、\nイベント (保存・ウィンドウ・シートの変更)
+P0 --> XL : 操作の指示 (選択・追加・移動・名前・色・保護)、\nセルへのリンク
+
+THEME --> P0 : 配色 (カラフル / 白 / ダークグレー / 黒)
+
+BOOK --> P0 : フォルダ構成、履歴、ブックの設定、進捗
+P0 --> BOOK : 保存時に書く (フォルダ構成、履歴、ブックの設定)
+
+INI --> P0 : PCの設定
+P0 --> INI : 変更のあった設定値
+@enduml
