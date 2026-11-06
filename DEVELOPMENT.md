@@ -73,6 +73,14 @@ flowchart LR
 
 ![ブックの保存](docs/sequence-save.svg)
 
+**検索** ([sequence-search.puml](docs/sequence-search.puml))
+
+![検索](docs/sequence-search.svg)
+
+**履歴 (記録、戻る・進む、一覧)** ([sequence-history.puml](docs/sequence-history.puml))
+
+![履歴](docs/sequence-history.svg)
+
 ## ビルド
 
 - Visual Studio 2026 (「Office/SharePoint 開発」ワークロード) で、`VerticalSheetTabs.sln` を開く
