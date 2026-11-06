@@ -2,7 +2,40 @@
 
 利用者向けの説明は [README.md](README.md) (配布用zipにも入ります)、現在の仕様、実装、守ること、リリースの決まりは [Agents.md](Agents.md) を参照してください。
 
-## 構成
+初めてソースコードを読む人は、次の順に読むと、全体から細部へ進めます。
+
+1. [全体像](#全体像): 何をするアドインで、どんな仕組みか。まず、ここだけ読めば足ります
+2. [ソースファイルの構成](#ソースファイルの構成): どのファイルが、何を受け持つか
+3. [設計図 (UML)](#設計図-uml): 図で、何ができるか > どんな部品か > どんなクラスか > どう動くか、の順に見る
+4. [ビルド](#ビルド) 以降: 動かす、テストする、リリースする
+
+## 全体像
+
+Windows版 Excel のシートタブを、縦一覧で表示する VSTO アドインです (.NET Framework 4.8、C# 7.3)。縦タブは、Excel のタスクペインの中に、自前で描いています (GDI+)。
+
+```mermaid
+flowchart LR
+    Excel[Excel] -- イベント --> T[ThisAddIn]
+    T --> P[PaneManager]
+    P -- ウィンドウごとに1つ --> C[TabPaneControl]
+    C --> S[TabStrip<br/>自前描画]
+    P <-- 読み書き --> W[(ブック<br/>VTab.Width・NameRule / カスタムXML / VTab.Id)]
+    P <-- 読み書き --> F[(PCの設定ファイル<br/>settings.ini)]
+    P -- 0.3〜3秒おきに同期 --> Excel
+    S -- 操作 --> P
+```
+
+最初に押さえる、設計の決まり:
+
+- **Excel に触れるのは `PaneManager` だけ**です。`TabStrip` などの画面の部品は Excel を知らず、操作を「イベント」で `PaneManager` に伝え、表示は `PaneManager` から渡されます
+- Excel には、シート名の変更、並べ替え、非表示のイベントが無いため、**0.3から3秒おきのタイマーで同期**します (`PaneManager`)
+- **開いただけ、同期しただけでは、ブックを「変更あり」にしません**。ユーザーの操作のときだけ変更扱いにします
+- 設定は、**PC** (`settings.ini`) と **ブック** (`VTab.Width`、`VTab.NameRule`、フォルダのXML) に分けて保存します
+- フォルダ、履歴、シート名のルールは、**Excel に依存しないモデル**です (`FolderModel`、`SheetHistory`、`NameRule`)。そのため、Excel なしでテストできます
+
+これらの理由と、細かい決まりは、[Agents.md](Agents.md) の3章と4章にあります。
+
+## ソースファイルの構成
 
 | ファイル | 役割 |
 |---|---|
@@ -26,30 +59,46 @@
 | `VerticalSheetTabs.Tests\` | Excel を使わない部分 (`NameRule`、`FolderModel`、`SafeXml`) のテスト。ソースを参照で取り込む、フレームワーク不要のコンソールプログラム。`tools\run-tests.ps1` で実行 |
 | `tools\dist\` | 配布用zipに入れる、証明書を信頼する / 取り消すスクリプトと、手順書の雛形 |
 | `tools\make-dist-zip.ps1`、`tools\make-readme-pdf.ps1` | 配布用zipの作成、README.pdf の作成 |
-| `.github\workflows
-elease.yml` | タグの push で、配布用zipを添付した GitHub リリースを作る |
+| `.github\workflows\release.yml` | タグの push で、配布用zipを添付した GitHub リリースを作る |
 
-```mermaid
-flowchart LR
-    Excel[Excel] -- イベント --> T[ThisAddIn]
-    T --> P[PaneManager]
-    P -- ウィンドウごとに1つ --> C[TabPaneControl]
-    C --> S[TabStrip<br/>自前描画]
-    P <-- 読み書き --> W[(ブック<br/>VTab.Width・NameRule / カスタムXML / VTab.Id)]
-    P <-- 読み書き --> F[(PCの設定ファイル<br/>settings.ini)]
-    P -- 0.3〜3秒おきに同期 --> Excel
-    S -- 操作 --> P
-```
+## 設計図 (UML)
 
-### コンポーネント図 (PlantUML)
+図は PlantUML で描き、SVG にして置きます (GitHub は PlantUML を表示しないため)。ソースは `docs/*.puml`、SVG は同じ名前で `docs/` にあります。
 
-役割ごとのコンポーネントと、それを構成するモジュール (ソースファイル) を示す。矢印は「呼ぶ / 使う」。Excelのオブジェクトモデルを呼ぶのは、`PaneManager` だけ (`TabStrip` などの画面の部品は、Excelに触れない)。図は PlantUML で描き、SVG にして置く (GitHub は PlantUML を表示しないため)。
+| 知りたいこと | 見る図 |
+|---|---|
+| 利用者が、何をできるか | [ユースケース図](#ユースケース図) |
+| どんな部品でできていて、どうつながるか | [コンポーネント図](#コンポーネント図)、[インターフェースのつながり](#コンポーネント図-インターフェースのつながり) |
+| どんなクラスがあるか | [クラス図](#クラス図) |
+| 動き出しから終わりまでの基本の流れ | [シーケンス図: 基本の流れ](#基本の流れ) |
+| シート、フォルダ、検索などの操作が、どう処理されるか | [シーケンス図: 縦タブの操作](#縦タブの操作) |
+| 見た目、設定、バッジ、色、シート名のルール | [シーケンス図: 見た目・設定・状態の表示](#見た目設定状態の表示) |
+| アニメーションの状態と、起動の判断 | [状態遷移図、アクティビティ図](#状態遷移図とアクティビティ図-アニメーション) |
+
+目的から探すときは、次も使えます。
+
+| 直したいこと | 先に見る図 |
+|---|---|
+| シートの選択、追加、移動、名前の変更 | シーケンス図「シートのクリックによる選択」「シートの操作」 |
+| フォルダの動き | シーケンス図「フォルダの操作」「フォルダの出し入れ・移動・コピー」 |
+| 縦タブが出ない、消える | シーケンス図「表示モードとペインの出し入れ」「ウィンドウとブックの終了処理」 |
+| 保存したときの内容 | シーケンス図「ブックの保存」 |
+| バッジ、進捗、メモ・コメント | シーケンス図「バッジの検出と進捗」「メモ・コメントのバッジのクリック」 |
+| 揺れ、追加・削除、完了の動き | シーケンス図「アニメーション」、状態遷移図、アクティビティ図 |
+
+### ユースケース図
+
+利用者ができることを、仕様 (`Agents.md` の2章) にもとづいて、まとまりごとに示す。ソースは [docs/usecase.puml](docs/usecase.puml)。「シートを操作する」のすべては、Excelのオブジェクトモデルを通して行うため、Excelへの線は省いている。
+
+![ユースケース図](docs/usecase.svg)
+
+### コンポーネント図
+
+役割ごとのコンポーネントと、それを構成するモジュール (ソースファイル) を示す。矢印は「呼ぶ / 使う」。Excelのオブジェクトモデルを呼ぶのは、`PaneManager` だけ (`TabStrip` などの画面の部品は、Excelに触れない)。
 
 ![コンポーネント図](docs/component.svg)
 
-図のソースは [docs/component.puml](docs/component.puml)。構成を変えたら、`tools\make-diagrams.ps1` で、SVG を作り直す (Java、Graphviz、`tools\PlantUML\plantuml-bsd-*.jar` が要る)。
-
-### コンポーネント図: インターフェースのつながり (PlantUML)
+### コンポーネント図: インターフェースのつながり
 
 中のモジュールは描かず、役割のコンポーネントの間の、インターフェースのつながりだけを示す。丸が「提供」、受け口が「利用」。ソースは [docs/component-interface.puml](docs/component-interface.puml)。
 
@@ -71,101 +120,7 @@ flowchart LR
 | I12 | モデルの操作 | モデル | 制御、設定画面 | フォルダの構造、XMLの読み書き、シート名のルール、履歴 |
 | I13 | 設定の読み書き | 設定の保持 | 制御 | `PcSettings` (`settings.ini`)、`WorkbookSettings` (ブックの `VTab.*`) の読み書き |
 
-### シーケンス図 (PlantUML)
-
-主な流れを、シーケンス図で示す。ソースは `docs/sequence-*.puml`、SVG は同じ名前で `docs/` にある。`tools\make-diagrams.ps1` は、`docs/*.puml` のすべてを SVG にする。
-
-**起動、ペインの作成、同期** ([sequence-startup.puml](docs/sequence-startup.puml))
-
-![起動、ペインの作成、同期](docs/sequence-startup.svg)
-
-**シートのクリックによる選択** ([sequence-select.puml](docs/sequence-select.puml))
-
-![シートのクリックによる選択](docs/sequence-select.svg)
-
-**シートの行をセルへドラッグしてリンクを作る** ([sequence-link.puml](docs/sequence-link.puml))
-
-![シートの行をセルへドラッグしてリンクを作る](docs/sequence-link.svg)
-
-**メモ・コメントのバッジのクリック** ([sequence-comment.puml](docs/sequence-comment.puml))
-
-![メモ・コメントのバッジのクリック](docs/sequence-comment.svg)
-
-**ブックの保存** ([sequence-save.puml](docs/sequence-save.puml))
-
-![ブックの保存](docs/sequence-save.svg)
-
-**検索** ([sequence-search.puml](docs/sequence-search.puml))
-
-![検索](docs/sequence-search.svg)
-
-**履歴 (記録、戻る・進む、一覧)** ([sequence-history.puml](docs/sequence-history.puml))
-
-![履歴](docs/sequence-history.svg)
-
-**フォルダの操作 (開閉・作成・名前の変更・色・削除)** ([sequence-folder.puml](docs/sequence-folder.puml))
-
-![フォルダの操作](docs/sequence-folder.svg)
-
-**フォルダの出し入れ・移動・コピー (ドラッグ)** ([sequence-folder-drop.puml](docs/sequence-folder-drop.puml))
-
-![フォルダの出し入れ・移動・コピー](docs/sequence-folder-drop.svg)
-
-**シート名のルール** ([sequence-namerule.puml](docs/sequence-namerule.puml))
-
-![シート名のルール](docs/sequence-namerule.svg)
-
-**シートの操作 (+・挿入・名前の変更・移動とコピー・非表示と再表示)** ([sequence-sheetops.puml](docs/sequence-sheetops.puml))
-
-![シートの操作 (+・挿入・名前の変更・移動とコピー・非表示と再表示)](docs/sequence-sheetops.svg)
-
-**バッジの検出と進捗** ([sequence-badge.puml](docs/sequence-badge.puml))
-
-![バッジの検出と進捗](docs/sequence-badge.svg)
-
-**シート見出しの色と「その他の色」** ([sequence-color.puml](docs/sequence-color.puml))
-
-![シート見出しの色と「その他の色」](docs/sequence-color.svg)
-
-**表示モードとペインの出し入れ** ([sequence-mode.puml](docs/sequence-mode.puml))
-
-![表示モードとペインの出し入れ](docs/sequence-mode.svg)
-
-**設定画面** ([sequence-settings.puml](docs/sequence-settings.puml))
-
-![設定画面](docs/sequence-settings.svg)
-
-**コピーアイコン** ([sequence-copyicon.puml](docs/sequence-copyicon.puml))
-
-![コピーアイコン](docs/sequence-copyicon.svg)
-
-**ウィンドウとブックの終了処理、アドインの停止** ([sequence-shutdown.puml](docs/sequence-shutdown.puml))
-
-![ウィンドウとブックの終了処理、アドインの停止](docs/sequence-shutdown.svg)
-
-**アニメーション (揺れ・ゴースト・追加削除・完了)** ([sequence-animation.puml](docs/sequence-animation.puml))
-
-![アニメーション](docs/sequence-animation.svg)
-
-### 状態遷移図 (PlantUML)
-
-アニメーションは、種類ごとに独立した状態を持つ (`TabStrip`)。([state-animation.puml](docs/state-animation.puml))
-
-![アニメーションの状態遷移](docs/state-animation.svg)
-
-### アクティビティ図 (PlantUML)
-
-行の増減、揺れ、完了のはじける動きを、起動するかどうか判断する流れ。([activity-animation.puml](docs/activity-animation.puml))
-
-![アニメーションを起動するかどうかの判断](docs/activity-animation.svg)
-
-### ユースケース図 (PlantUML)
-
-利用者ができることを、仕様 (`Agents.md` の2章) にもとづいて、まとまりごとに示す。ソースは [docs/usecase.puml](docs/usecase.puml)。「シートを操作する」のすべては、Excelのオブジェクトモデルを通して行うため、Excelへの線は省いている。
-
-![ユースケース図](docs/usecase.svg)
-
-### クラス図 (PlantUML)
+### クラス図
 
 主なクラスと、その関係を示す。メンバーは、関係の理解に要るものだけを載せている (すべてではない)。
 
@@ -176,6 +131,150 @@ flowchart LR
 **データ・モデル・設定** ([class-data.puml](docs/class-data.puml))。フォルダの構造 (`FolderModel`)、履歴、設定 (`WorkbookSettings`。実行中は、PCの設定もここに入る)、画面に渡すデータ (`StripRow`、`BadgeInfo` など)。
 
 ![データ・モデル・設定](docs/class-data.svg)
+
+### シーケンス図
+
+動きの流れを、時間の順に示す。ここまでの図 (部品、クラス) を見てから読むと、だれが、だれを呼ぶかが、つかみやすい。
+
+#### 基本の流れ
+
+アドインの一生 (起動、同期、選択、保存、終了) です。まず、この4つを読んでください。
+
+**起動、ペインの作成、同期** ([sequence-startup.puml](docs/sequence-startup.puml))
+
+Excel の起動から、ペインを作り、同期を始めるまで。
+
+![起動、ペインの作成、同期](docs/sequence-startup.svg)
+
+**シートのクリックによる選択** ([sequence-select.puml](docs/sequence-select.puml))
+
+縦タブのシートをクリックしてから、Excel のシートが切り替わるまで。
+
+![シートのクリックによる選択](docs/sequence-select.svg)
+
+**ブックの保存** ([sequence-save.puml](docs/sequence-save.puml))
+
+ブックを保存するときに、設定、フォルダ、履歴を書き込む流れ。
+
+![ブックの保存](docs/sequence-save.svg)
+
+**ウィンドウとブックの終了処理、アドインの停止** ([sequence-shutdown.puml](docs/sequence-shutdown.puml))
+
+ブックやウィンドウを閉じたとき、アドインを止めるときの後始末。
+
+![ウィンドウとブックの終了処理、アドインの停止](docs/sequence-shutdown.svg)
+
+#### 縦タブの操作
+
+利用者が縦タブで行う操作が、どう処理されるかです。
+
+**シートの操作 (+・挿入・名前の変更・移動とコピー・非表示と再表示)** ([sequence-sheetops.puml](docs/sequence-sheetops.puml))
+
+「+」、挿入、名前の変更、移動・コピー、非表示と再表示。
+
+![シートの操作 (+・挿入・名前の変更・移動とコピー・非表示と再表示)](docs/sequence-sheetops.svg)
+
+**フォルダの操作 (開閉・作成・名前の変更・色・削除)** ([sequence-folder.puml](docs/sequence-folder.puml))
+
+フォルダの作成、開閉、名前の変更、色、削除。
+
+![フォルダの操作 (開閉・作成・名前の変更・色・削除)](docs/sequence-folder.svg)
+
+**フォルダの出し入れ・移動・コピー (ドラッグ)** ([sequence-folder-drop.puml](docs/sequence-folder-drop.puml))
+
+ドラッグでの、フォルダへの出し入れ、フォルダの移動とコピー。
+
+![フォルダの出し入れ・移動・コピー (ドラッグ)](docs/sequence-folder-drop.svg)
+
+**シートの行をセルへドラッグしてリンクを作る** ([sequence-link.puml](docs/sequence-link.puml))
+
+シートの行を Excel のセルにドロップして、ハイパーリンクを作る。
+
+![シートの行をセルへドラッグしてリンクを作る](docs/sequence-link.svg)
+
+**検索** ([sequence-search.puml](docs/sequence-search.puml))
+
+検索ボックスでの絞り込みと、移動。
+
+![検索](docs/sequence-search.svg)
+
+**履歴 (記録、戻る・進む、一覧)** ([sequence-history.puml](docs/sequence-history.puml))
+
+見たシートの記録、戻る・進む、一覧のメニュー。
+
+![履歴 (記録、戻る・進む、一覧)](docs/sequence-history.svg)
+
+**コピーアイコン** ([sequence-copyicon.puml](docs/sequence-copyicon.puml))
+
+左ボタンを押したまま右ボタンも押して、名前をコピーする。
+
+![コピーアイコン](docs/sequence-copyicon.svg)
+
+#### 見た目・設定・状態の表示
+
+設定、色、バッジ、シート名のルールなど、見た目と状態に関わる流れです。
+
+**表示モードとペインの出し入れ** ([sequence-mode.puml](docs/sequence-mode.puml))
+
+表示モード (横のみ / 両方) と、ペインの出し入れ、「×」の扱い。
+
+![表示モードとペインの出し入れ](docs/sequence-mode.svg)
+
+**設定画面** ([sequence-settings.puml](docs/sequence-settings.puml))
+
+設定画面を開いてから、OK / キャンセルで反映するまで。
+
+![設定画面](docs/sequence-settings.svg)
+
+**シート見出しの色と「その他の色」** ([sequence-color.puml](docs/sequence-color.puml))
+
+シート見出しの色の指定と、Excel の「色の設定」画面 (「その他の色」)。
+
+![シート見出しの色と「その他の色」](docs/sequence-color.svg)
+
+**バッジの検出と進捗** ([sequence-badge.puml](docs/sequence-badge.puml))
+
+バッジ (エラー、メモ、保護、進捗) の検出と、進捗の印の操作。
+
+![バッジの検出と進捗](docs/sequence-badge.svg)
+
+**メモ・コメントのバッジのクリック** ([sequence-comment.puml](docs/sequence-comment.puml))
+
+メモ・コメントのバッジをクリックして、内容を読む。
+
+![メモ・コメントのバッジのクリック](docs/sequence-comment.svg)
+
+**シート名のルール** ([sequence-namerule.puml](docs/sequence-namerule.puml))
+
+シート名のルール (`A | B`) による、フォルダの構成と、名前の同期。
+
+![シート名のルール](docs/sequence-namerule.svg)
+
+**アニメーション (揺れ・ゴースト・追加削除・完了)** ([sequence-animation.puml](docs/sequence-animation.puml))
+
+揺れ、ゴースト、追加・削除、完了のはじける動き。
+
+![アニメーション (揺れ・ゴースト・追加削除・完了)](docs/sequence-animation.svg)
+
+### 状態遷移図とアクティビティ図 (アニメーション)
+
+アニメーションは、種類ごとに状態を持ち、起動するかどうかを、いくつもの条件で決める。シーケンス図「アニメーション」の補足として読む。
+
+#### 状態遷移図
+
+アニメーションは、種類ごとに独立した状態を持つ (`TabStrip`)。([state-animation.puml](docs/state-animation.puml))
+
+![アニメーションの状態遷移](docs/state-animation.svg)
+
+#### アクティビティ図
+
+行の増減、揺れ、完了のはじける動きを、起動するかどうか判断する流れ。([activity-animation.puml](docs/activity-animation.puml))
+
+![アニメーションを起動するかどうかの判断](docs/activity-animation.svg)
+
+### 図の作り直し
+
+構成や流れを変えたら、`docs/*.puml` を直し、`tools\make-diagrams.ps1` で、SVG を作り直します (Java、Graphviz、`tools\PlantUML\plantuml-bsd-*.jar` が要る。jar はリポジトリに含めない)。`docs/*.puml` のすべてを、SVG にします。
 
 ## ビルド
 
