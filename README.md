@@ -88,6 +88,8 @@ zip を展開して、`setup.exe` を実行し、Excelを起動するだけで�
 
 現在の仕様と実装の説明は、ソースのリポジトリの `Agents.md` に、ビルドやインストーラの作成 (開発者向け) は、`DEVELOPMENT.md` にまとめています。
 
+**ソースコードを読みたい方へ**: 設計図 (UML) を、[DEVELOPMENT.md](DEVELOPMENT.md#設計図-uml) に載せています。[ユースケース図](DEVELOPMENT.md#ユースケース図) (何ができるか)、[コンポーネント図](DEVELOPMENT.md#コンポーネント図) (どんな部品か)、[クラス図](DEVELOPMENT.md#クラス図)、[シーケンス図](DEVELOPMENT.md#シーケンス図) (処理の流れ)、[状態遷移図とアクティビティ図](DEVELOPMENT.md#状態遷移図とアクティビティ図-アニメーション) の順に読むと、全体から細部へ進めます。最初は、[全体像](DEVELOPMENT.md#全体像)からどうぞ (リポジトリで読む場合のリンクです。配布用zipには、`DEVELOPMENT.md` は入っていません)。
+
 ## 目次
 
 1. [使うとこう変わる (画面で見る Before / After)](#1-使うとこう変わる-画面で見る-before--after)
