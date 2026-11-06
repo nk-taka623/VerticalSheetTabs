@@ -1,0 +1,50 @@
+@startuml
+title 検索 (シート名・フォルダ名の絞り込み)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip\n(検索ボックス)" as S
+participant "TabPaneControl" as C
+participant "PaneManager" as P
+participant "Excel" as XL
+
+== 絞り込み (Excelには触れない) ==
+U -> S : Ctrl+F、または縦タブで文字キーを押す
+S -> S : 検索ボックスにフォーカス
+U -> S : 文字を入力
+loop 入力するたび
+  S -> S : OnQueryChanged (_query を更新)
+  S -> S : ApplyFilter
+  note right of S : 部分一致・大文字小文字と全角半角は区別しない。\nシート名の検索: 一致したシートのあるフォルダは開いた形で出す。\nフォルダ切り替えがON: フォルダ名を検索する。\n一致した文字を黄色で強調する。
+  S -> S : 結果の最初の行を選ぶ (_searchSel)、描き直し
+end
+note over S : 検索中は、ドラッグでの移動を無効にする
+
+U -> S : ↑ / ↓
+S -> S : MoveSearchSelection
+
+== 結果へ移動 ==
+U -> S : Enter
+alt 選んだ行がフォルダ
+  S -> C : FolderToggleRequested(folderId)
+  C -> P : フォルダの開閉
+else シートの行
+  S -> S : 選択とアクティブを、そのシートにする
+  S -> S : ClearSearch (絞り込みを解除)
+  S -> C : SelectionRequested(names, active)
+  C -> P : SelectionRequested(names, active)
+  P -> P : CommitCellEdit
+  P -> XL : シートを選ぶ
+  S -> C : GridFocusForced
+  C -> P : FocusGrid (Excelにフォーカスを戻す)
+end
+
+== 終わる ==
+U -> S : Esc
+alt 入力が残っている
+  S -> S : ClearSearch (入力を空にして、シートの一覧に戻る)
+else 入力が空
+  S -> C : GridFocusForced (Excelにフォーカスを戻す)
+end
+@enduml
