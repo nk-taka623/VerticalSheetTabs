@@ -1,0 +1,71 @@
+@startuml
+title ウィンドウとブックの終了処理、アドインの停止
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "Excel" as XL
+participant "ThisAddIn" as T
+participant "PaneManager" as P
+participant "ペイン\n(CustomTaskPanes)" as Pane
+
+== ウィンドウ・ブックを閉じる (イベントはなく、同期で気づく) ==
+U -> XL : ブックを閉じる (保存確認のキャンセルもありうる)
+note right of P : 閉じる直前には、管理情報を消さない\n(キャンセルされてもペインが残るように)
+loop 同期の Tick
+  P -> P : SyncEntries
+  P -> XL : シートを読む
+  alt 答えがない (ウィンドウ・ブックがない、Excelが忙しい)
+    P -> P : entry.Failures++
+    alt 20回続けて失敗 (約6秒)
+      P -> P : DropIfWindowGone
+      P -> XL : IsWindow(entry.Hwnd)
+      alt ウィンドウが無い
+        P -> P : PurgeEntry
+        P -> Pane : Remove(entry.Pane)
+        P -> P : NotifyBadgeEvents (バッジを使うウィンドウがなければ、購読を外す)
+      else ウィンドウが残っている
+        P -> P : Failures = 0、AliveRounds++\n(未保存のフォルダ操作や × の状態を失わないため、管理情報は残す)
+        opt AliveRounds が 10 に達した (最後のブックを閉じてもウィンドウは残る)
+          P -> P : PurgeEntry
+        end
+      end
+    end
+  else 成功
+    P -> P : Failures = 0、AliveRounds = 0 (数え直す)
+  end
+end
+
+== ブックを閉じて、開き直したとき (ウィンドウハンドルの再利用) ==
+U -> XL : 別のブックを開く
+XL -> T : WindowActivate(wb, window)
+T -> P : EnsurePane(window, wb)
+alt 同じ Hwnd の entry があり、ブックも同じ
+  P --> P : 何もしない
+else 同じ Hwnd だが、ブックが違う
+  P -> P : PurgeEntry(古い entry)
+  P -> Pane : Remove(古いペイン)
+  P -> P : 新しい entry とペインを作る
+end
+
+== ペインが無いウィンドウ ==
+loop 3秒ごと
+  P -> XL : Windows.Count と entry の数を比べる
+  opt 食い違う (閉じるのをキャンセルした、ダイアログ中で作れなかった)
+    P -> P : EnsureAllPanes (見えているウィンドウにペインを作り直す)
+  end
+end
+
+== アドインの停止 (ユーザーが無効にした、または Excelの終了) ==
+U -> XL : アドインを無効にする / Excelを終了する
+XL -> T : Shutdown
+T -> P : BadgeEventsWanted = null
+T -> XL : SheetChange / SheetCalculate / SheetDeactivate の購読を外す
+T -> P : Shutdown()
+P -> P : タイマーを止める
+loop すべての entry
+  P -> Pane : Remove(entry.Pane)
+end
+P -> P : _entries.Clear()
+note right of XL : 横タブには触れない (アドインは、横タブの表示を変えない)
+@enduml

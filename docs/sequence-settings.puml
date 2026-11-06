@@ -1,0 +1,54 @@
+@startuml
+title 設定画面 (開く・OK・キャンセル)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "リボン / 右クリックメニュー" as R
+participant "PaneManager" as P
+participant "PcSettings\n(settings.ini)" as INI
+participant "SettingsForm" as D
+participant "TabPaneControl\nTabStrip" as C
+participant "ペイン / Excel" as XL
+
+U -> R : 「タブ表示の設定」\n(リボンの「表示」タブ、横タブ・縦タブの右クリックの先頭)
+R -> P : ShowSettings() / SettingsRequested
+P -> P : アクティブなウィンドウの entry を探す
+
+== 開く ==
+P -> P : いまの Mode を控える (そのウィンドウの状態)
+P -> INI : ApplyTo(entry.Settings) (他のウィンドウやExcelが変えた値を読み直す)
+P -> P : Mode を、控えた値に戻す
+P -> INI : before = ToValues(entry.Settings) (画面の初期値。変更判定の基準)
+P -> D : new SettingsForm(いまの値)
+P -> D : ShowDialog(Excelのウィンドウを親に)
+note right of D : いつも「基本」のタブから。\nサンプルは TabStrip の描画をそのまま使う。\n「アニメーション」のタブを開いている間だけ、\n揺れのサンプルが2.2秒おきに動く。
+
+== OK ==
+U -> D : OK
+D --> P : DialogResult.OK
+P -> P : 画面の値を entry.Settings に入れる\n(NameRule が false → true なら nameRuleTurnedOn)
+opt バッジの種類が変わった
+  P -> P : Badges / BadgeDirty / BadgeScanned を空にする (調べ直す)
+end
+P -> INI : Update(before, ToValues(entry.Settings))
+note right of INI : 変更のあった値だけを書く。\n一時ファイル (固有の名前) 経由で置き換える。\n書けなくても握りつぶす。
+opt NameRule が変わった
+  P -> P : MarkChanged (ブックを「変更あり」にする)
+end
+
+== キャンセル ==
+U -> D : キャンセル
+D --> P : DialogResult.Cancel
+note right of P : ファイルには何も書かない。\n読み直した値は、縦タブに反映する (設定と画面を食い違わせない)
+
+== 反映 (OK でもキャンセルでも) ==
+P -> C : 見た目・バッジ・アニメーション・効果音の設定を渡す
+P -> XL : Pane.DockPosition = ToDock(Side)
+P -> P : ApplyMode (縦タブの表示 / 非表示)
+P -> P : NotifyBadgeEvents (バッジのイベントの購読を切り替える)
+opt NameRule を「使う」にした
+  P -> P : EnableNameRule (「シート名のルール」の図)
+end
+note over P, XL : 反映するのは、設定画面を開いたウィンドウだけ。\nほかのウィンドウは、開き直したとき (そのとき PCの設定ファイルを読む)
+@enduml

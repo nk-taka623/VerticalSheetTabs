@@ -89,6 +89,38 @@ flowchart LR
 
 ![フォルダの出し入れ・移動・コピー](docs/sequence-folder-drop.svg)
 
+**シート名のルール** ([sequence-namerule.puml](docs/sequence-namerule.puml))
+
+![シート名のルール](docs/sequence-namerule.svg)
+
+**シートの操作 (+・挿入・名前の変更・移動とコピー・非表示と再表示)** ([sequence-sheetops.puml](docs/sequence-sheetops.puml))
+
+![シートの操作 (+・挿入・名前の変更・移動とコピー・非表示と再表示)](docs/sequence-sheetops.svg)
+
+**バッジの検出と進捗** ([sequence-badge.puml](docs/sequence-badge.puml))
+
+![バッジの検出と進捗](docs/sequence-badge.svg)
+
+**シート見出しの色と「その他の色」** ([sequence-color.puml](docs/sequence-color.puml))
+
+![シート見出しの色と「その他の色」](docs/sequence-color.svg)
+
+**表示モードとペインの出し入れ** ([sequence-mode.puml](docs/sequence-mode.puml))
+
+![表示モードとペインの出し入れ](docs/sequence-mode.svg)
+
+**設定画面** ([sequence-settings.puml](docs/sequence-settings.puml))
+
+![設定画面](docs/sequence-settings.svg)
+
+**コピーアイコン** ([sequence-copyicon.puml](docs/sequence-copyicon.puml))
+
+![コピーアイコン](docs/sequence-copyicon.svg)
+
+**ウィンドウとブックの終了処理、アドインの停止** ([sequence-shutdown.puml](docs/sequence-shutdown.puml))
+
+![ウィンドウとブックの終了処理、アドインの停止](docs/sequence-shutdown.svg)
+
 ## ビルド
 
 - Visual Studio 2026 (「Office/SharePoint 開発」ワークロード) で、`VerticalSheetTabs.sln` を開く
