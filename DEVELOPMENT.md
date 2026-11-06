@@ -47,7 +47,31 @@ flowchart LR
 
 ![コンポーネント図](docs/component.svg)
 
-図のソースは [docs/component.puml](docs/component.puml)。構成を変えたら、`tools\make-component-diagram.ps1` で、SVG を作り直す (Java、Graphviz、`tools\PlantUML\plantuml-bsd-*.jar` が要る)。
+図のソースは [docs/component.puml](docs/component.puml)。構成を変えたら、`tools\make-diagrams.ps1` で、SVG を作り直す (Java、Graphviz、`tools\PlantUML\plantuml-bsd-*.jar` が要る)。
+
+### シーケンス図 (PlantUML)
+
+主な流れを、シーケンス図で示す。ソースは `docs/sequence-*.puml`、SVG は同じ名前で `docs/` にある。`tools\make-diagrams.ps1` は、`docs/*.puml` のすべてを SVG にする。
+
+**起動、ペインの作成、同期** ([sequence-startup.puml](docs/sequence-startup.puml))
+
+![起動、ペインの作成、同期](docs/sequence-startup.svg)
+
+**シートのクリックによる選択** ([sequence-select.puml](docs/sequence-select.puml))
+
+![シートのクリックによる選択](docs/sequence-select.svg)
+
+**シートの行をセルへドラッグしてリンクを作る** ([sequence-link.puml](docs/sequence-link.puml))
+
+![シートの行をセルへドラッグしてリンクを作る](docs/sequence-link.svg)
+
+**メモ・コメントのバッジのクリック** ([sequence-comment.puml](docs/sequence-comment.puml))
+
+![メモ・コメントのバッジのクリック](docs/sequence-comment.svg)
+
+**ブックの保存** ([sequence-save.puml](docs/sequence-save.puml))
+
+![ブックの保存](docs/sequence-save.svg)
 
 ## ビルド
 

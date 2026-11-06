@@ -1,4 +1,4 @@
-# Makes docs\component.svg from docs\component.puml (PlantUML).
+# Makes the .svg of every docs\*.puml (PlantUML).
 # Needs: Java, Graphviz (dot), and tools\PlantUML\plantuml-*.jar.
 # Usage: powershell -NoProfile -ExecutionPolicy Bypass -File tools\make-component-diagram.ps1
 $ErrorActionPreference = "Stop"
@@ -20,9 +20,12 @@ $java = Find-Exe "java.exe" @("C:\Program Files\Microsoft", "C:\Program Files\Ec
 $dot = Find-Exe "dot.exe" @("C:\Program Files\Graphviz", "C:\Program Files (x86)\Graphviz")
 $env:GRAPHVIZ_DOT = $dot
 
-$src = Join-Path $root "docs\component.puml"
-& $java "-Dfile.encoding=UTF-8" -jar $jar.FullName -charset UTF-8 -tsvg $src
+# every docs\*.puml (the component diagram, the sequence diagrams) becomes a .svg beside it
+$sources = Get-ChildItem (Join-Path $root "docs") -Filter "*.puml" | ForEach-Object { $_.FullName }
+& $java "-Dfile.encoding=UTF-8" -jar $jar.FullName -charset UTF-8 -tsvg $sources
 if ($LASTEXITCODE -ne 0) { throw "plantuml failed ($LASTEXITCODE)" }
-$out = Join-Path $root "docs\component.svg"
-if (-not (Test-Path $out)) { throw "component.svg was not made" }
-"made: $out ($((Get-Item $out).Length) bytes)"
+foreach ($src in $sources) {
+    $out = [IO.Path]::ChangeExtension($src, ".svg")
+    if (-not (Test-Path $out)) { throw "$out was not made" }
+    "made: $out ($((Get-Item $out).Length) bytes)"
+}

@@ -1,0 +1,39 @@
+@startuml
+title 起動、ペインの作成、同期
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+participant "Excel" as XL
+participant "ThisAddIn" as T
+participant "PaneManager" as P
+participant "TabPaneControl\nTabStrip" as C
+participant "設定・モデル\nPcSettings / WorkbookSettings\nFolderStore / HistoryStore" as M
+
+== 起動 ==
+XL -> T : Startup
+T -> P : new PaneManager (タイマー 0.3秒を開始)
+T -> XL : イベントを購読\n(WindowActivate・SheetActivate・WorkbookBeforeSave など)
+
+== ウィンドウを有効にしたとき ==
+XL -> T : WindowActivate(wb, window)
+T -> P : EnsurePane(window, wb)
+P -> M : WorkbookSettings.Load / PcSettings を読む
+P -> C : new TabPaneControl、見た目の設定を渡す
+P -> M : FolderStore.Load / HistoryStore.Load
+P -> XL : CustomTaskPanes.Add (ペインを作る)
+
+== 0.3から3秒おきの同期 ==
+loop タイマーの Tick
+  P -> P : SyncAll
+  alt Excelのダイアログが開いている、または操作中 (Busy)
+    P --> P : Excelに触れない
+  else
+    P -> XL : 全シートの名前・表示状態・タブ色・選択を読む
+    XL --> P : 読み取り結果
+    P -> M : Reconcile (フォルダとシート順の突き合わせ)
+    P -> C : SetSheets / SetBadges / SetNavigation
+    note right of C : 内容が変わったときだけ\n描き直す
+  end
+  P -> P : 1回の処理時間の8倍で周期を調整 (0.3から3秒)
+end
+@enduml
