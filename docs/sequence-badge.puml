@@ -1,0 +1,63 @@
+@startuml
+title バッジの検出と進捗
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "Excel" as XL
+participant "ThisAddIn" as T
+participant "PaneManager" as P
+participant "TabPaneControl\nTabStrip" as C
+
+== イベントの購読 (バッジを使うウィンドウがあるときだけ) ==
+P -> P : NotifyBadgeEvents (Settings.Badges が None 以外のウィンドウがあるか)
+P -> T : BadgeEventsWanted(on)
+T -> XL : SheetChange / SheetCalculate / SheetDeactivate を購読 (on)、または解除 (off)
+
+== 検出 (同期のたび。UpdateBadges) ==
+alt バッジを1つも選んでいない
+  P -> C : SetBadges(null) (何も調べない)
+else
+  loop 同期の Tick
+    P -> P : 1. アクティブなシートのメモと保護を読み直す (毎回)
+    P -> XL : ReadMemoCount、ProtectContents
+    P -> P : 2. 変更・再計算・離れたシート (BadgeDirty) のうち、\n0.5秒静かだったものを、古い順に ScanOne
+    P -> XL : ScanBadges (数式エラー: Evaluate(SUMPRODUCT) / メモ: Comments + CommentsThreaded / 保護)
+    note right of XL : 1回は30msまで。重いシートは、かかった時間の20倍が\n過ぎるまで調べ直さない。ブックは変更しない
+    P -> P : 3. ほかのシートを、10秒に1回、古い順に調べる
+    P -> C : SetBadges(entry.Badges)
+  end
+end
+XL -> T : SheetChange / SheetCalculate
+T -> P : MarkBadgesDirty(sheet)
+XL -> T : SheetDeactivate
+T -> P : MarkBadgesDirty(sheet, atOnce = true)
+
+== 進捗の印をクリック ==
+U -> C : 印をクリック
+alt 完了 (done) の印
+  C -> P : ProgressProtectRequested(sheet)
+  P -> P : ToggleSheetProtect (ProtectAsking = true)
+  alt すでに保護されている
+    P --> P : 何もしない (印のクリックでは解除しない)
+  else
+    P -> P : CommitCellEdit
+    P -> XL : そのシートだけを選ぶ (グループ選択を外す)
+    P -> XL : ExecuteMso("SheetProtect") (Excelのダイアログ)
+    note right of P : ダイアログが開いている間、\n同期は Excel に触れない
+    P -> P : ProtectAsking = false
+    note right of P : 保護されたかは、次の Tick で読む\n(アクティブなシートの保護は毎回読む)
+  end
+else なし > 未着手 > 作業中 > 完了
+  C -> P : ProgressRequested(sheets, state)
+  P -> XL : VTab.Progress (カスタムプロパティ) を書く
+  P -> P : MarkChanged (ブックを「変更あり」にする)
+  P -> C : SetBadges (印をすぐ出す)
+  note right of C : 完了にしたとき、印がはじける
+end
+
+== 右クリックの「進捗」で「なし」に戻す ==
+U -> C : 右クリック > 進捗 > なし
+C -> P : ProgressRequested(sheets, 0)
+P -> XL : VTab.Progress を削除
+@enduml

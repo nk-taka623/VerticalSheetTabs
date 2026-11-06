@@ -1,0 +1,82 @@
+@startuml
+title シートの操作 (+・挿入・名前の変更・移動とコピー・非表示と再表示)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip" as S
+participant "TabPaneControl" as C
+participant "PaneManager" as P
+participant "FolderModel\n(entry.Folders)" as F
+participant "Excel" as XL
+
+== 「+」で追加 ==
+U -> S : 下端の「+」をクリック
+S -> C : AddRequested
+C -> P : AddSheet
+P -> P : CommitCellEdit、Busy にする (同期を止める)
+alt フォルダがあるブック
+  P -> XL : RefreshKeys、アクティブなシートの key
+  P -> F : アクティブなシートのフォルダを調べる (新しいシートができる前に)
+end
+alt 選択が、閉じたフォルダの中だけ
+  P -> XL : Worksheets.Add (一番下。フォルダの外)
+else
+  P -> XL : Worksheets.Add (アクティブなシートの次)
+  opt フォルダの中で、シート名のルールを使う
+    P -> XL : 新しいシートを「フォルダ名 | 名前」に改名\n(フォルダの連なりの中に収める)
+  end
+  opt フォルダの最後のシートの次に入った (フォルダの外)
+    P -> F : Move (フォルダに入れる)
+    P -> XL : ApplyNamesFromModel (ルールを使うとき)
+  end
+end
+P -> XL : SyncSheets (新しい行をすぐ出す)
+note over P : 構造が保護されているときは、メッセージを出す
+
+== 挿入 (右クリック) ==
+U -> S : 右クリック > 「挿入」
+S -> C : InsertRequested
+C -> P : InsertSheet
+P -> XL : ExecuteMso("SheetInsert") (Excelの挿入。アクティブなシートの前)
+alt アクティブなシートがフォルダの中
+  alt シート名のルールを使う
+    P -> XL : 新しいシートを「フォルダ名 | 名前」に改名
+  else
+    P -> F : Move (新しいシートを、そのフォルダに入れる)
+  end
+end
+P -> XL : SyncSheets
+
+== 名前の変更 ==
+U -> S : ダブルクリック、または F2
+S -> S : 名前の編集欄 (31文字まで)
+U -> S : Enter
+S -> C : RenameRequested(古い名前, 新しい名前)
+C -> P : RenameSheet
+P -> P : CheckSheetName (空・31文字超・使えない文字・重複)
+alt 無効
+  P -> U : メッセージ
+else
+  P -> XL : Name = 新しい名前
+  note right of XL : 次の同期で、行に反映する
+end
+
+== 移動・コピー (フォルダの外へ。フォルダの出し入れは別の図) ==
+U -> S : ドラッグ (Ctrl+ドラッグでコピー)
+S -> C : MoveRequested(names, before, copy)
+C -> P : MoveOrCopySheets
+alt 複数のシート
+  P -> XL : Sheets(配列).Move / Copy
+else 1枚
+  P -> XL : Move / Copy (移動は、移したシートをすぐ選んでアクティブにする)
+end
+P -> XL : SyncSheets
+
+== 非表示・再表示・コードの表示・保護など ==
+U -> S : 右クリックメニュー
+S -> C : HideRequested / UnhideRequested / DeleteRequested / MoveCopyRequested ...
+C -> P : RunExcelCommand(idMso)
+P -> XL : Window.Activate、CommandBars.ExecuteMso("SheetHide" など)
+note right of XL : Excel自身のコマンド (ダイアログも Excel のもの)。\n実行できないとき (構造の保護) は、何も起きない
+@enduml
