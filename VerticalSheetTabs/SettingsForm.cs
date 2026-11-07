@@ -14,6 +14,8 @@ namespace VerticalSheetTabs
         private readonly RadioButton _sideLeft = new RadioButton();
         private readonly RadioButton _sideRight = new RadioButton();
         private GroupBox _sideGroup;
+        private readonly RadioButton _jumpCenter = new RadioButton();
+        private readonly RadioButton _jumpTopLeft = new RadioButton();
         private readonly CheckBox _outlineShow = new CheckBox();
         private readonly TrackBar _outlineLevel = new TrackBar();
         private readonly Panel _outlineSwatch = new Panel();
@@ -64,7 +66,7 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim)
+        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim, CommentJump commentJump = CommentJump.TopLeft)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -85,6 +87,9 @@ namespace VerticalSheetTabs
 
             var modeGroup = CreateRowGroup("表示モード", _modeHorizontal, _modeBoth);
             _sideGroup = CreateRowGroup("縦タブの位置", _sideLeft, _sideRight);
+            _jumpCenter.Text = "行・列の中央 (できる範囲で)";
+            _jumpTopLeft.Text = "左上 (Excelの標準)";
+            var jumpGroup = CreateRowGroup("コメントの「そのセルへ移動」で、セルを表示する位置", _jumpTopLeft, _jumpCenter);
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
@@ -148,6 +153,9 @@ namespace VerticalSheetTabs
             int sideWidth = (width - 12) * 34 / 100;
             modeGroup.Size = new Size(width - sideWidth - 6, topHeight);
             _sideGroup.Size = new Size(sideWidth, topHeight);
+            jumpGroup.Dock = DockStyle.None;
+            jumpGroup.Size = new Size(width, jumpGroup.Height);
+            jumpGroup.Margin = new Padding(3);
             modeGroup.Margin = new Padding(3);
             _sideGroup.Margin = new Padding(3);
             var top = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
@@ -156,7 +164,7 @@ namespace VerticalSheetTabs
             _tabs.Padding = new Point(16, 5); // (room around the titles of the tabs)
             // (the tabs other than "このブック" are kept for the whole PC)
             string pcNote = "このタブの設定は、このPCのすべてのブックに共通です。";
-            var basic = new List<Control> { Banner(pcNote, width), top };
+            var basic = new List<Control> { Banner(pcNote, width), top, jumpGroup };
             if (tabsHidden) basic.Add(Banner("このブックは、横タブが非表示のため、縦タブは表示されません。", width));
             _tabs.TabPages.Add(CreatePage("基本", width, basic.ToArray()));
             _tabs.TabPages.Add(CreatePage("デザイン", width, Banner(pcNote, width), _markerGroup, _styleGroup, _outlineGroup));
@@ -209,6 +217,8 @@ namespace VerticalSheetTabs
             _modeBoth.Checked = mode == TabMode.Both;
             _sideLeft.Checked = side == TabSide.Left;
             _sideRight.Checked = side == TabSide.Right;
+            _jumpCenter.Checked = commentJump != CommentJump.TopLeft;
+            _jumpTopLeft.Checked = commentJump == CommentJump.TopLeft;
 
             _nameRule.Checked = nameRule;
             _styleStandard.Checked = selectStyle == SelectStyle.Standard;
@@ -252,6 +262,11 @@ namespace VerticalSheetTabs
         public TabSide Side
         {
             get { return _sideRight.Checked ? TabSide.Right : TabSide.Left; }
+        }
+
+        public CommentJump CommentJump
+        {
+            get { return _jumpTopLeft.Checked ? CommentJump.TopLeft : CommentJump.Center; }
         }
 
         public SelectStyle SelectStyle

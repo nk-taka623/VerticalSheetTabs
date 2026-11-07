@@ -45,6 +45,7 @@ namespace VerticalSheetTabs
             string t;
             if (v.TryGetValue("Mode", out t)) s.Mode = t == "A" ? TabMode.HorizontalOnly : TabMode.Both;
             if (v.TryGetValue("Side", out t)) s.Side = t == "Right" ? TabSide.Right : TabSide.Left;
+            if (v.TryGetValue("CommentJump", out t)) s.CommentJump = t == "Center" ? CommentJump.Center : CommentJump.TopLeft;
             if (v.TryGetValue("ActiveMarker", out t))
             {
                 s.ActiveMarker = t == "None" ? ActiveMarker.None : t == "Triangle" ? ActiveMarker.Triangle : t == "EdgeBars" ? ActiveMarker.EdgeBars : t == "CheckBadge" ? ActiveMarker.CheckBadge : ActiveMarker.Underline;
@@ -72,6 +73,7 @@ namespace VerticalSheetTabs
             {
                 { "Mode", s.Mode == TabMode.HorizontalOnly ? "A" : "C" },
                 { "Side", s.Side == TabSide.Right ? "Right" : "Left" },
+                { "CommentJump", s.CommentJump == CommentJump.TopLeft ? "TopLeft" : "Center" },
                 { "ActiveMarker", s.ActiveMarker.ToString() },
                 { "SelectStyle", WorkbookSettings.SelectStyleToString(s.SelectStyle) },
                 { "Outline", s.OutlineVisible ? "On" : "Off" },
