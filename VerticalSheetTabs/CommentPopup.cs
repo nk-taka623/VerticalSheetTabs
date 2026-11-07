@@ -231,7 +231,14 @@ namespace VerticalSheetTabs
                 form.Controls.Add(header);
                 form.Paint += (s, e) => e.Graphics.DrawRectangle(Pens.Gray, 0, 0, form.Width - 1, form.Height - 1);
                 form.KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) form.Close(); };
-                form.Deactivate += (s, e) => { if (!form.IsDisposed) form.Close(); };
+                // Closed after the activation change is over: destroying the window inside Deactivate (while Windows still decides which window
+                // becomes active) lets another application beneath Excel come to the front.
+                form.Deactivate += (s, e) =>
+                {
+                    if (form.IsDisposed || !form.IsHandleCreated) return;
+                    try { form.BeginInvoke((Action)(() => { if (!form.IsDisposed) form.Close(); })); }
+                    catch (Exception) { }
+                };
                 form.FormClosed += (s, e) => form.Dispose();
 
                 Rectangle area = Screen.FromPoint(screen).WorkingArea;
