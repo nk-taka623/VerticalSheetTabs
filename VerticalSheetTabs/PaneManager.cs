@@ -1187,7 +1187,8 @@ namespace VerticalSheetTabs
                 ws.Activate();
                 var cell = ws.Range[c.Address];
                 _app.Goto(cell, true);
-                if (entry.Settings.CommentJump == CommentJump.Center) CenterCell(entry.Window, ws, cell);
+                CommentJump jump = entry.Settings.CommentJump;
+                if (jump != CommentJump.TopLeft) CenterCell(entry.Window, ws, cell, jump == CommentJump.Center);
             }
             catch (Exception)
             {
@@ -1200,8 +1201,8 @@ namespace VerticalSheetTabs
         }
 
         // After Goto the cell sits at the top left of the window. Scrolls back so the cell is in the middle of the visible rows and columns
-        // (as far as the sheet allows). Frozen panes: only when the cell is in the scrolling pane. Hidden rows and columns are not counted.
-        private static void CenterCell(Excel.Window win, Excel.Worksheet ws, Excel.Range cell)
+        // (as far as the sheet allows); with centerRows false the row stays at the top and only the column is centered. Frozen panes: only when the cell is in the scrolling pane. Hidden rows and columns are not counted.
+        private static void CenterCell(Excel.Window win, Excel.Worksheet ws, Excel.Range cell, bool centerRows)
         {
             try
             {
@@ -1222,7 +1223,7 @@ namespace VerticalSheetTabs
 
                 int rowsShown = CountVisible(ws, true, firstRow, vis.Rows.Count);
                 int colsShown = CountVisible(ws, false, firstCol, vis.Columns.Count);
-                int backRows = Math.Max(0, (rowsShown - 1) / 2);
+                int backRows = centerRows ? Math.Max(0, (rowsShown - 1) / 2) : 0;
                 int backCols = Math.Max(0, (colsShown - 1) / 2);
 
                 int targetRow = StepBack(ws, true, row, backRows, minRow);

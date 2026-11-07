@@ -46,8 +46,9 @@ namespace VerticalSheetTabs
     // Where a sheet goes in the window when the comment list's "go to the cell" is used.
     public enum CommentJump
     {
-        Center,   // the cell is centered in the visible rows and columns (as far as possible)
-        TopLeft   // Excel's own: the cell is at the top left
+        Center,    // the cell is centered in the visible rows and columns (as far as possible)
+        TopLeft,   // Excel's own: the cell is at the top left
+        TopCenter  // the row is the first one shown, the column is centered
     }
 
     public enum TabSide
