@@ -1317,7 +1317,25 @@ namespace VerticalSheetTabs
         // behind it (a pale sheet color would be lost there), whatever color the sheet has.
         private Color RowAnimVisibleColor(StripRow r)
         {
-            return Visible(RowAnimColor(r), Theme.BarBack);
+            return VisibleLightness(Visible(RowAnimColor(r), Theme.BarBack), Theme.BarBack);
+        }
+
+        // A bright, saturated color (yellow) differs from the pale bar in hue (a large CIE76 distance) but hardly in lightness, and small
+        // moving dots of it are lost. The lightness (L*) must differ by MinLightnessGap too: the color is made darker (on a light bar) or
+        // lighter (on a dark one) by the smallest step that gives it.
+        private const double MinLightnessGap = 30;
+
+        private static Color VisibleLightness(Color mark, Color behind)
+        {
+            double lb = Lab(behind)[0];
+            if (Math.Abs(Lab(mark)[0] - lb) >= MinLightnessGap) return mark;
+            Color toward = lb >= 50 ? Color.Black : Color.White;
+            for (int i = 1; i <= 20; i++)
+            {
+                Color c = Mix(mark, toward, i * 0.05);
+                if (Math.Abs(Lab(c)[0] - lb) >= MinLightnessGap) return c;
+            }
+            return toward;
         }
 
         private Color RowAnimColor(StripRow r)
