@@ -1,0 +1,43 @@
+@startuml
+title コンポーネント図: インターフェースのつながり (v1.4.1)
+left to right direction
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam nodesep 50
+skinparam ranksep 110
+
+component "Excel\n(ホスト)" as HOST
+component "入口" as ENTRY
+component "制御" as CTRL
+component "画面\n(縦タブ)" as VIEW
+component "設定画面" as SETTINGS
+component "動き・音" as FX
+component "モデル" as MODEL
+component "設定の保持" as CONFIG
+database "ブック" as BOOK
+database "settings.ini" as INI
+
+' 「提供側 -0)- 利用側」: 丸が提供するインターフェース、受け口が利用 (I1 から I13 は、DEVELOPMENT.md の表)
+HOST -0)- ENTRY : I1 Excelイベント
+ENTRY -0)- HOST : I2 リボン拡張
+HOST -0)- CTRL : I3 オブジェクトモデル
+HOST -0)- CTRL : I4 ペイン登録
+CTRL -0)- ENTRY : I5 ペイン管理
+ENTRY -0)- CTRL : I6 バッジ購読
+VIEW -0)- CTRL : I7 表示の更新
+CTRL -0)- VIEW : I8 操作の要求
+CTRL -0)- VIEW : I9 値の問い合わせ
+SETTINGS -0)- CTRL : I10 設定画面
+VIEW -0)- SETTINGS : I7 表示の更新 (サンプル)
+FX -0)- VIEW : I11 動きと音
+FX -0)- SETTINGS : I11 動きと音
+FX -0)- CONFIG : I11 (揺れの種類)
+MODEL -0)- CTRL : I12 モデルの操作
+MODEL -0)- SETTINGS : I12 (シート名のルール)
+CONFIG -0)- CTRL : I13 設定の読み書き
+
+CTRL ..> BOOK : 保存時に書く
+MODEL ..> BOOK : XMLパート・VTab.Id\n(FolderStore・HistoryStore)
+CONFIG ..> BOOK : VTab.Width\nVTab.NameRule
+CONFIG ..> INI : 読み書き
+@enduml

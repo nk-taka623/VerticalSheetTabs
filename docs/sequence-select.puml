@@ -1,0 +1,42 @@
+@startuml
+title シートのクリックによる選択
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip" as S
+participant "TabPaneControl" as C
+participant "PaneManager" as P
+participant "Excel" as XL
+
+U -> S : シートの行を押す
+S -> S : 自分の選択とアクティブを先に更新して、描き直す
+note right of S : 別のシートを選ぶクリックでは、\nペインにフォーカスを取らせない (WndProc)
+U -> S : ボタンを離す (左ボタン)
+S -> C : SelectionRequested(names, active)
+C -> P : SelectionRequested(names, active)
+P -> P : CommitCellEdit
+note right of P : セルの入力中なら Ctrl+Enter を送って確定し、\n終わるまで待つ (最長1.5秒)
+P -> P : SelectSheets
+alt すでに Excel の選択と同じ
+  P --> P : 何もしない (フォーカスも動かさない)
+else 同じグループで、アクティブなシートだけ違う
+  P -> XL : そのシートをアクティブにする (グループは保つ)
+else
+  P -> P : Busy = true (選択の途中を同期に読ませない)
+  P -> XL : アクティブにするシートを選び、残りを追加で選ぶ\n(画面更新を止めて。13枚以上は配列で1回)
+  XL --> P : SheetActivate (Busy の間は、同期は Excel に触れない)
+  P -> P : Busy = false
+end
+S -> C : GridFocusRequested(クリック時にペインがフォーカスを持っていたか)
+C -> P : GridFocusRequested
+P -> P : FocusGrid
+opt 選択が変わった
+  opt ペインがフォーカスを持っていた
+    P -> XL : F6 を送る (ペインのキー入力の占有を終わらせる)
+  end
+  P -> XL : シートの窓 (EXCEL7) にフォーカスを移す
+  note right of XL : 次のキー入力が\nセルに入る
+end
+note over P, S : Excelの結果は、次の同期 (タイマー) の SetSheets で\n縦タブに届く (縦タブが先に更新した表示と合わせる)
+@enduml

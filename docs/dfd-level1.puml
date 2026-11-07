@@ -1,0 +1,70 @@
+@startuml
+title データフロー図 レベル1 (プロセスの分解)
+top to bottom direction
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam nodesep 40
+skinparam ranksep 70
+
+rectangle "ユーザー" as U
+rectangle "Excel" as XL
+rectangle "Officeテーマ\n(レジストリ)" as THEME
+
+usecase "1\nシートの情報を同期する\n(PaneManager)" as P1
+usecase "2\n縦タブを描き、操作を受ける\n(TabStrip\nTabPaneControl)" as P2
+usecase "3\n操作をExcelに反映する\n(PaneManager)" as P3
+usecase "4\nフォルダを管理する\n(FolderModel・NameRule)" as P4
+usecase "5\n履歴を管理する\n(SheetHistory)" as P5
+usecase "6\nバッジを検出する\n(PaneManager)" as P6
+usecase "7\n設定を管理する\n(設定画面・PcSettings\nWorkbookSettings)" as P7
+usecase "8\n保存時に書き込む\n(WorkbookBeforeSave)" as P8
+
+database "D1 ブックのフォルダ構成\n(カスタムXMLパート、VTab.Id)" as D1
+database "D2 ブックの履歴\n(カスタムXMLパート)" as D2
+database "D3 ブックの設定・進捗\n(VTab.Width / NameRule / Progress)" as D3
+database "D4 PCの設定\n(settings.ini)" as D4
+
+' --- 同期 (Excel -> アドイン)
+XL --> P1 : シートの名前・表示状態・色・選択、\n横タブの表示 (0.3から3秒おき)
+P1 --> P4 : シートの一覧と識別
+P1 --> P5 : アクティブなシート
+P1 --> P2 : シートの一覧・選択・色
+
+' --- 縦タブ (表示と操作)
+THEME --> P2 : 配色
+U --> P2 : クリック・ドラッグ・キー・検索語
+P2 --> U : 縦タブの表示、アニメーション、効果音
+P4 --> P2 : フォルダとシートの行
+P5 --> P2 : 戻る・進むの可否、履歴の一覧
+P6 --> P2 : バッジの情報
+P7 --> P2 : 見た目・アニメーション・バッジの設定
+
+' --- 操作の反映
+P2 --> P3 : 操作の要求\n(選択・移動・名前・色・進捗・リンク ...)
+P3 --> XL : 操作の指示 (Excelのシートを変える)、\nセルへのリンク
+P3 --> P4 : フォルダの操作
+P3 --> D3 : 進捗の印の変更 (VTab.Progress)
+
+' --- フォルダ・履歴・バッジ
+D1 --> P4 : フォルダ構成 (ペインを作るとき)
+D2 --> P5 : 履歴 (ペインを作るとき)
+P1 --> D1 : シートの識別 (VTab.Id を付ける。\nフォルダのあるブックだけ)
+XL --> P6 : 数式エラー・メモ・保護の有無
+D3 --> P6 : 進捗の印
+
+' --- 設定
+U --> P7 : 設定の入力 (設定画面)
+D4 --> P7 : PCの設定
+P7 --> D4 : 変更のあった値
+D3 --> P7 : ブックの設定
+P7 --> P1 : 表示モード
+
+' --- 保存
+XL --> P8 : 保存のイベント
+P4 --> P8 : フォルダ構成
+P5 --> P8 : 履歴
+P7 --> P8 : ブックの設定
+P8 --> D1 : フォルダ構成、シートの識別
+P8 --> D2 : 履歴
+P8 --> D3 : VTab.Width / NameRule
+@enduml

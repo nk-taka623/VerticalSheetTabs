@@ -1,0 +1,105 @@
+@startuml
+title ユースケース図 (v1.4.1)
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor "ユーザー\n(Excelの利用者)" as U
+actor "Excel" as XL <<システム>>
+
+rectangle "縦並びシートタブ" {
+
+  package "シートを操作する" {
+    usecase "シートを選ぶ\n(複数・範囲・グループ)" as UC_SEL
+    usecase "シートを追加する (+・挿入)" as UC_ADD
+    usecase "名前を変える" as UC_REN
+    usecase "移動・コピーする\n(ドラッグ)" as UC_MOVE
+    usecase "削除する" as UC_DEL
+    usecase "非表示 / 再表示する" as UC_HIDE
+    usecase "シート見出しの色を付ける" as UC_COLOR
+    usecase "「その他の色」を選ぶ" as UC_MORE
+    usecase "シートを保護する" as UC_PROT
+    usecase "セルへのリンクを作る\n(セルにドロップ)" as UC_LINK
+  }
+
+  package "整理する" {
+    usecase "フォルダを作る・出し入れする" as UC_FOLDER
+    usecase "フォルダを開閉する\n(全開・全閉)" as UC_TOGGLE
+    usecase "フォルダの色を付ける\n(中のシートと同一色)" as UC_FCOLOR
+    usecase "フォルダを削除する" as UC_FDEL
+    usecase "シート名のルールを使う\n(A | B)" as UC_RULE
+  }
+
+  package "探す・戻る" {
+    usecase "シートを検索する" as UC_SEARCH
+    usecase "見たシートへ戻る・進む\n(履歴)" as UC_HIST
+    usecase "名前をコピーする\n(左右ボタン同時押し)" as UC_COPY
+  }
+
+  package "状態を見る" {
+    usecase "バッジを見る\n(エラー・メモ・保護・進捗)" as UC_BADGE
+    usecase "メモ・コメントを読む" as UC_MEMO
+    usecase "進捗を付ける\n(未着手・作業中・完了)" as UC_PROG
+  }
+
+  package "表示を整える" {
+    usecase "縦タブを表示 / 非表示にする\n(表示モード)" as UC_MODE
+    usecase "縦タブの位置を決める" as UC_SIDE
+    usecase "縦タブの幅を変える\n(ペインの境界をドラッグ)" as UC_WIDTH
+    usecase "設定画面を開く" as UC_SET
+    usecase "見た目を選ぶ\n(選択デザイン・マーカー・点線)" as UC_LOOK
+    usecase "アニメーション・効果音を選ぶ" as UC_ANIM
+  }
+
+  usecase "ブックを保存する\n(フォルダ・履歴・設定を書く)" as UC_SAVE
+  usecase "Officeテーマに合わせる" as UC_THEME
+}
+
+U --> UC_SEL
+U --> UC_ADD
+U --> UC_REN
+U --> UC_MOVE
+U --> UC_DEL
+U --> UC_HIDE
+U --> UC_COLOR
+U --> UC_PROT
+U --> UC_LINK
+U --> UC_FOLDER
+U --> UC_TOGGLE
+U --> UC_FCOLOR
+U --> UC_FDEL
+U --> UC_RULE
+U --> UC_SEARCH
+U --> UC_HIST
+U --> UC_COPY
+U --> UC_BADGE
+U --> UC_PROG
+U --> UC_MODE
+U --> UC_WIDTH
+U --> UC_SET
+U --> UC_SAVE
+
+UC_MORE ..> UC_COLOR : <<extend>>
+UC_MORE ..> UC_FCOLOR : <<extend>>
+UC_MEMO ..> UC_BADGE : <<extend>>
+UC_PROT ..> UC_PROG : <<extend>>\n(完了の印のクリック)
+UC_SET ..> UC_SIDE : <<include>>
+UC_SET ..> UC_LOOK : <<include>>
+UC_SET ..> UC_ANIM : <<include>>
+UC_SET ..> UC_RULE : <<include>>
+
+UC_SAVE --> XL
+UC_THEME --> XL
+UC_BADGE --> XL
+
+note bottom of XL
+  「シートを操作する」のすべては、
+  Excelのオブジェクトモデルを通して行う
+  (図では、線を省いた)
+end note
+
+note right of UC_THEME
+  アドインが自動で行う
+  (ユーザーの操作ではない)
+end note
+@enduml

@@ -1,0 +1,61 @@
+@startuml
+title 表示モードとペインの出し入れ
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "Excel" as XL
+participant "PaneManager" as P
+participant "WorkbookSettings\nPcSettings" as W
+participant "ペイン\n(CustomTaskPane)" as Pane
+
+== 表示するかどうかの判定 ==
+note over P
+  WantsVertical(entry):
+  そのウィンドウのモードが C (両方) かつ Window.DisplayWorkbookTabs が true
+  (横タブを隠したブックは、作成者の意思として、縦タブを出さない)
+end note
+
+== ペインの作成時 ==
+P -> W : PcSettings を読む (Mode は PC で1つ)
+P -> P : ApplyMode(entry)
+alt 縦タブを出す
+  P -> Pane : Visible = true (WantVisible = true、IgnoreVisibleUntil = 1秒後)
+  P -> P : 250ms 後に InitializeWidth (保存した幅 VTab.Width を、実際のDPIで戻す)
+  P -> P : VerifyWidth (300msごとに最大4回、幅のずれを直す)
+else 出さない
+  P -> Pane : Visible = false
+end
+
+== 横タブの表示を、ユーザーが変えたとき ==
+U -> XL : オプション「シート見出しを表示する」を切り替える
+note right of XL : Excelにはイベントがない
+loop 同期の Tick (ブックを開いた・ウィンドウを有効にした・シートを選んだときも、すぐ)
+  P -> P : CheckHorizontalTabs (操作中・保護ダイアログ中・同期中は、読まない)
+  P -> XL : DisplayWorkbookTabs を読む
+  alt WantsVertical が、最後に決めた WantVisible と違う
+    P -> P : ApplyMode (縦タブを出し入れする)
+  end
+end
+
+== ユーザーがペインの「×」を押したとき ==
+U -> Pane : ×
+Pane -> P : VisibleChanged
+P -> P : OnPaneVisibleChanged
+alt ペインが見えている、アドインが隠した (WantVisible = false)、または IgnoreVisibleUntil の間
+  P --> P : 何もしない
+else アクティブなウィンドウでない
+  P --> P : 何もしない
+else ユーザーの×
+  P -> W : entry.Settings.Mode = A (横のみ。メモリ上だけ。PCの設定には書かない)
+  P -> P : ApplyMode
+  note right of P : ほかのウィンドウ、あとで開くウィンドウは、PCの設定どおり
+end
+
+== 旧「縦のみ」で保存したブックを開いたとき ==
+P -> W : WorkbookSettings.Load (VTab.Mode が B)
+P -> P : SetHorizontalTabs(entry, true)
+P -> XL : DisplayWorkbookTabs = true (横タブを表示に戻す)
+P -> XL : 変更前に Saved だったら、Saved = true に戻す
+note right of P : 縦タブは、PCのモードに従う。\n古い VTab.* は読まず、保存時に削除する
+@enduml

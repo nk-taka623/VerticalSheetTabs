@@ -1,0 +1,188 @@
+@startuml
+title クラス図: データ・モデル・設定 (v1.4.1。主なメンバーだけ)
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+hide empty members
+
+package "モデル (Excelに依存しない)" {
+  class FolderModel {
+    +Nodes : List<FolderNode>
+    +HasFolders : bool
+    +Flatten() : List<string>
+    +FolderOf(sheetCode) : FolderNode
+    +Reconcile(excelOrder) : bool
+    +ToXml() : string
+  }
+  class FolderNode {
+    +FolderId : string
+    +Name : string
+    +Color : TabColorChoice
+    +Expanded : bool
+    +SyncColor : bool
+    +Sheets : List<string>
+    +SheetCode : string
+    +IsFolder : bool
+  }
+  class TabColorChoice {
+    +Kind : TabColorKind
+    +Bgr : int
+    +ThemeIndex : int
+    +Tint : double
+  }
+  enum TabColorKind {
+    None
+    Rgb
+    Theme
+  }
+  class SheetHistory {
+    +Keys : List<string>
+    +Cursor : int
+    +Push(key) : bool
+    +Find(direction, usable) : int
+    +Prune(existing) : bool
+  }
+  class NameRule <<static>> {
+    +TryParse(name, folder, sheet) : bool
+    +Compose(folder, sheet) : string
+    +GroupingMoves(names)
+    +BuildModel(names, keys, old) : FolderModel
+  }
+  class SafeXml <<static>> {
+    +Parse(xml, maxChars) : XDocument
+    +Load(stream, maxChars) : XDocument
+  }
+}
+
+package "ブックとの読み書き" {
+  class FolderStore <<static>> {
+    +Load(wb) : FolderModel
+    +Save(wb, model, keepUnreadable) : bool
+    +SheetKeys(wb, assign) : List<string>
+    +KeyOf(sheet, assign) : string
+  }
+  class HistoryStore <<static>> {
+    +Load(wb) : SheetHistory
+    +Save(wb, history)
+  }
+}
+
+package "設定" {
+  class WorkbookSettings {
+    +Mode : TabMode
+    +Side : TabSide
+    +WidthDip : int
+    +NameRule : bool
+    +SelectStyle : SelectStyle
+    +ActiveMarker : ActiveMarker
+    +Badges : BadgeKinds
+    +Wobble : WobbleType
+    +RowAnim / DoneAnim : bool
+    +Load(wb) {static}
+    +Save(wb)
+  }
+  class PcSettings <<static>> {
+    +ApplyTo(settings)
+    +ToValues(settings) : Dictionary
+    +Update(before, after)
+  }
+  enum TabMode {
+    HorizontalOnly
+    Both
+  }
+  enum SelectStyle {
+    Standard
+    DoubleFrame
+    FrostedGlass
+    GlossyGlass
+    FrostedGlass2
+    Inset
+    Stripes
+    Crystal
+  }
+  enum ActiveMarker {
+    None
+    Underline
+    Triangle
+    EdgeBars
+    CheckBadge
+  }
+  enum BadgeKinds <<Flags>> {
+    None
+    Error
+    Memo
+    Protect
+    Progress
+  }
+  enum TabSide {
+    Left
+    Right
+  }
+  enum WobbleType {
+    None
+    Shake
+    Wobble
+    Jelly
+    Bounce
+    Pulse
+    Swing
+    Random
+  }
+}
+
+package "画面に渡すデータ" {
+  class StripRow {
+    +Sheet : string
+    +Display : string
+    +Indented : bool
+    +FolderId : string
+    +FolderName : string
+    +Expanded : bool
+    +ColorBgr : int
+    +SyncColor : bool
+    +Members : List<string>
+    +Children : List<StripRow>
+    +IsFolder : bool
+    +Signature() : string
+  }
+  class BadgeInfo {
+    +Errors : int
+    +Memos : int
+    +Protected : bool
+    +Progress : int
+  }
+  class HistoryItem {
+    +Key : string
+    +Name : string
+    +Current : bool
+  }
+  class CommentEntry {
+    +Sheet : string
+    +Address : string
+    +Author : string
+    +Text : string
+    +Threaded : bool
+    +Done : bool
+    +Replies : List<string>
+  }
+}
+
+FolderModel *-- "0..*" FolderNode : Nodes
+FolderNode *-- TabColorChoice
+TabColorChoice --> TabColorKind
+StripRow o-- "0..*" StripRow : Children
+
+FolderStore ..> FolderModel : XMLの読み書き
+FolderModel ..> SafeXml
+HistoryStore ..> SheetHistory
+HistoryStore ..> SafeXml
+NameRule ..> FolderModel : 名前から作る
+
+WorkbookSettings --> TabMode
+WorkbookSettings --> TabSide
+WorkbookSettings --> SelectStyle
+WorkbookSettings --> ActiveMarker
+WorkbookSettings --> BadgeKinds
+WorkbookSettings --> WobbleType
+PcSettings ..> WorkbookSettings : 値を入れる / 取り出す
+@enduml

@@ -1,0 +1,57 @@
+@startuml
+title フォルダの出し入れ・移動・コピー (ドラッグ)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip" as S
+participant "TabPaneControl" as C
+participant "PaneManager" as P
+participant "FolderModel\n(entry.Folders)" as F
+participant "Excel" as XL
+
+U -> S : シート (またはフォルダ) の行を押して動かす
+S -> S : DoDragDrop (ゴーストを出す)
+loop ドラッグ中
+  U -> S : ポインターを動かす
+  S -> S : OnDragOver (挿入位置の三角を出す)
+  note right of S : 閉じたフォルダには落とせない。\nフォルダ内の最後のシートの下に落とすと、\nフォルダの外に出る位置になる。
+end
+U -> S : ボタンを離す
+S -> S : OnDragDrop (into, beforeSheet, beforeFolder を決める)
+S -> C : FolderMoveRequested(sheets, folders, into, beforeSheet, beforeFolder, copy)
+C -> P : FolderMoveRequested(...)
+
+alt ブックの構造が保護されている
+  P -> U : メッセージ (移動・コピーしない)
+else Ctrl+ドラッグ (コピー)
+  P -> P : CopyItems (Busy にして)
+  P -> XL : RefreshKeys、コピー元のシートを、落とした位置の前へコピー
+  opt シート名のルールを使い、フォルダをコピーしていない
+    P -> XL : NameCopiesForDrop (コピーを、落とした先に合わせて改名)
+  end
+  P -> XL : RefreshKeys (コピーの key を読む)
+  P -> F : コピーに所属を与える
+  note right of F : 落とした先がフォルダなら、そのフォルダに入れる。\nコピーしたフォルダは「フォルダ名 (2)」の新しいフォルダにして、\nコピーしたシートを入れる
+  opt シート名のルールを使う
+    P -> XL : ApplyNamesFromModel
+  end
+  P -> P : Busy を戻す、SyncSheets
+else 移動
+  P -> P : ChangeFolders(変更の内容)
+  P -> XL : RefreshKeys (key を読む)
+  P -> F : Move(keys, folders, into, beforeKey, beforeFolder)
+  note right of F : Move が false (動かせない) なら、ここで終わる
+  opt シート名のルールを使うブック
+    P -> XL : ApplyNamesFromModel (シート名を新しいフォルダに合わせる)
+  end
+  P -> XL : ApplyExcelOrder (Excelのシートの並びを、フォルダの並びに合わせる)
+  opt 1枚だけをドラッグした
+    P -> XL : そのシートを選んでアクティブにする
+  end
+  note right of P : 複数のシートは、選択を保つ
+  P -> P : MarkChanged、SyncSheets
+end
+P -> C : SetSheets
+C -> S : 行を並べ直す。ゴーストが挿入位置に収まり、揺れる
+@enduml

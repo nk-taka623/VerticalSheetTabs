@@ -1,0 +1,63 @@
+@startuml
+title シート見出しの色と「その他の色」
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip\nTabColorPalette" as S
+participant "TabPaneControl" as C
+participant "PaneManager" as P
+participant "DialogPlacer" as DP
+participant "Excel" as XL
+
+== パレットから選ぶ ==
+U -> S : 右クリック > 「シート見出しの色」
+S -> C : ThemeColorProvider
+C -> P : ThemeColors(entry)
+P -> XL : Workbook.Theme (保護されたシートがあると null)
+alt 読めない (null)
+  P -> P : 保存済みファイルの theme1.xml (SafeXml)、なければ Office の既定
+  P -> XL : 組み込みのセルのスタイルから読めた9色で上書き (保護されていても読める)
+end
+P --> S : テーマの色 (読んだ結果を、5秒間 (読めなかったときは30秒間) 使い回す)
+U -> S : 色を選ぶ (テーマの色 + 明るさ、または RGB、または色なし)
+S -> C : TabColorRequested(names, choice)
+C -> P : ApplyTabColor
+P -> XL : Tab.Color / Tab.ThemeColor (Excelの番号に入れ替えて渡す) / Tab.TintAndShade\nなし: ColorIndex = none
+note right of XL : シートが保護されていると失敗する。\nそのときはメッセージを出す
+
+== 「その他の色」 ==
+U -> S : 「その他の色」(フォルダの印のダブルクリックでも)
+S -> C : MoreColorsProvider
+C -> P : PickMoreColor(entry)
+P -> DP : new DialogPlacer(クリックした位置)
+P -> P : TryExcelColorDialog
+P -> P : CommitCellEdit (入力中なら確定)
+alt セルの入力中のまま
+  P --> P : false (Excelの画面は出せない)
+end
+P -> XL : Window.Activate (このブックをアクティブにする)
+alt アクティブなブックがこのブックではない
+  P --> P : false (Excelの画面は出せない)
+else
+  P -> XL : 56番の色と Saved を控える
+  P -> XL : Colors[56] = いまのタブの色
+  P -> XL : SetForegroundWindow、Dialogs[xlDialogEditColor].Show(56)
+  DP -> XL : ダイアログが出たら (EVENT_OBJECT_SHOW)、左上をクリックした位置に動かす
+  U -> XL : 色を選ぶ / キャンセル
+  alt OK
+    P -> XL : Colors[56] を読んで採用する
+  else キャンセル (0.5秒以上かかった)
+    P --> P : null
+  else 0.5秒未満で false (開けなかった)
+    P --> P : 開けなかったとして扱う
+  end
+  P -> XL : 56番の色を元に戻す、変更なしだったブックは Saved = true
+end
+opt Excelの画面を開けなかった
+  P -> U : Windows標準のカラーダイアログ
+  note right of U : それも開けないときは、メッセージを出す
+end
+P -> C : 選んだ色
+C -> P : TabColorRequested (上と同じ)
+@enduml

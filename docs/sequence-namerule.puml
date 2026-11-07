@@ -1,0 +1,83 @@
+@startuml
+title シート名のルール (フォルダ名 | シート名)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "設定画面" as D
+participant "PaneManager" as P
+participant "NameRule" as R
+participant "FolderModel\n(entry.Folders)" as F
+participant "Excel" as XL
+
+== 「使う」に切り替える (設定画面の「このブック」) ==
+U -> D : シート名のルールを「使う」にして OK
+D --> P : form.NameRule = true
+P -> P : MarkChanged (NameRule が変わったので、ブックを「変更あり」にする)
+P -> P : EnableNameRule
+P -> XL : RefreshKeys (ルールなしの状態でシートの key を読む)
+opt すでにフォルダがある
+  P -> XL : ApplyNamesFromModel (中のシートに「フォルダ名 | 」を付ける)
+  note right of XL : 仮の名前を経由して入れ替える。\n付けられない (長さ・重複・保護) ときは、\n「使わない」のままにして、メッセージを出す
+end
+P -> XL : SyncSheets
+
+== ブックを開いたとき ==
+P -> P : EnsurePane (QuietRegroup = ルールを使うか)
+loop 同期
+  P -> XL : シート名を読む
+  alt シート名の並びが、前回と同じ
+    P --> P : 並べ直しは調べない
+  else 変わった
+    P -> R : GroupingMoves(names)
+    R --> P : 「A | x」が A の並びから外れているシートの移動
+    alt 移動がある
+      P -> XL : ScreenUpdating を止め、シートを左側の最も近い「A | 」の右へ Move
+      alt 1枚も動かせなかった (構造の保護)
+        P -> P : QuietRegroup = false (ブックは変えない。同じ並びでは試し続けない)
+      else QuietRegroup (開いた直後)
+        P -> P : SyncWrote = true\n(同期の最後に、Saved を元に戻す = 変更扱いにしない)
+        P --> P : 次の Tick で読み直す
+      else 開いたあと
+        P -> P : RuleChanged = true、MarkChanged (ユーザーの変更として扱う)
+        P --> P : 次の Tick で読み直す
+      end
+    else 移動がない
+      P -> P : QuietRegroup = false (以後の移動は、本当の変更)
+    end
+  end
+  P -> R : BuildRows の中で BuildModel(names, keys, folders)\n(名前・識別の並びが変わったときだけ)
+  R -> F : フォルダ構成をシート名から作る
+end
+
+== 横タブで名前を変えたとき ==
+U -> XL : 横タブでシート名を「B | x」などに変える
+note right of XL : Excelには名前変更のイベントがない
+P -> XL : 次の同期でシート名を読む (名前の並びが変わった)
+P -> R : GroupingMoves → 並べ直し (上と同じ。ユーザーの変更として扱う)
+P -> R : BuildModel (フォルダの所属を、名前から更新)
+
+== 縦タブで名前を変えたとき ==
+U -> P : RenameSheet(古い名前, 入力した名前)
+alt ルールを使うブックで、「 | 」を含む入力
+  P -> U : メッセージ (中断)
+else ルールを使うブックで、フォルダ内のシートの合計が28文字を超える
+  P -> U : メッセージ (中断)
+else
+  opt ルールを使うブックで、フォルダ内のシート
+    P -> R : Compose(フォルダ名, 入力した名前)
+  end
+  P -> P : CheckSheetName (Excelと同じ検査: 31文字・使えない文字・先頭か末尾が '・空・重複)
+  alt 無効
+    P -> U : メッセージ (中断)
+  else
+    P -> XL : シート名を変える
+  end
+end
+
+== 縦タブの操作 (フォルダの作成・出し入れ・「+」・挿入・コピー) ==
+P -> P : ChangeFolders (フォルダの作成・出し入れ・コピー) → ApplyNamesFromModel
+P -> XL : シート名を「フォルダ名 | シート名」に合わせる (仮の名前を経由して入れ替える)
+note right of P : 付けられない (長さ・重複・保護) ときは、\nモデルを元に戻して、メッセージを出す
+note over P : 「+」と挿入は、新しいシートだけを「フォルダ名 | 名前」に改名する\n(長さを超えるときは改名しない。挿入は、重複のときも改名しない)
+@enduml

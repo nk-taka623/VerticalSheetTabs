@@ -1,0 +1,27 @@
+@startuml
+title ブックの保存
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "Excel" as XL
+participant "ThisAddIn" as T
+participant "PaneManager" as P
+participant "FolderStore\nHistoryStore" as F
+participant "WorkbookSettings" as W
+
+U -> XL : 保存 (Ctrl+S など)
+XL -> T : WorkbookBeforeSave(wb)
+T -> P : SaveSettings(wb)
+note right of P : そのブックのウィンドウのうち、最初の1つの状態が\nブックを代表する
+opt フォルダがあるブック
+  P -> XL : RefreshKeys: シートを読み直し、識別 (VTab.Id) のないシートに識別を付ける
+end
+P -> F : FolderStore.Save (カスタムXMLパート)
+note right of F : 新しいパートを足してから、古いパートを消す。\n読めなかったパートは消さない
+P -> F : HistoryStore.Save (履歴)
+P -> W : Save(wb)
+W -> XL : VTab.NameRule を書く (VTab.Width は、ペインを一度でも出したときだけ)\n古い VTab.* (15個) を削除
+note right of W : 失敗 (読み取り専用など) は握りつぶす。\n保存は止めない
+XL -> XL : 保存を続ける
+@enduml

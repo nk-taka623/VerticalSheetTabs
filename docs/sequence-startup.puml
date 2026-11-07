@@ -1,0 +1,66 @@
+@startuml
+title 起動、ペインの作成、同期
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+participant "Excel" as XL
+participant "ThisAddIn" as T
+participant "PaneManager" as P
+participant "TabPaneControl\nTabStrip" as C
+participant "設定・モデル\nPcSettings / WorkbookSettings\nFolderStore / HistoryStore" as M
+
+== 起動 ==
+XL -> T : Startup
+T -> P : new PaneManager (タイマー 0.3秒を開始)
+T -> XL : イベントを購読\n(WindowActivate・SheetActivate・WorkbookBeforeSave)
+note right of T : SheetChange・SheetCalculate・SheetDeactivate は、\nバッジを出すウィンドウがあるときだけ購読する\n(PaneManager.BadgeEventsWanted)
+T -> P : EnsureAllPanes (見えているウィンドウのうち、ペインが無いもの)
+P -> P : 各ウィンドウに EnsurePane
+
+== ウィンドウを有効にしたとき ==
+XL -> T : WindowActivate(wb, window)
+T -> P : EnsurePane(window, wb)
+alt このウィンドウに、同じブックのペインがある
+  P --> P : 何もしない
+else
+  P -> M : WorkbookSettings.Load (PCの設定ファイルとブックのプロパティ)
+  P -> C : new TabPaneControl
+  P -> XL : CustomTaskPanes.Add (ペインを作る)
+  P -> M : FolderStore.Load / HistoryStore.Load
+  P -> C : 見た目の設定を渡す、イベントをつなぐ
+  P -> P : ApplyMode (ペインを出す / 隠す)、SyncSheets
+end
+
+== 0.3から3秒おきの同期 ==
+loop タイマーの Tick
+  P -> P : SyncAll → SyncEntries
+  alt Excelのメインウィンドウが無効 (ダイアログが開いている)
+    P --> P : Excelに触れない
+  else
+    opt 前回から3秒以上たち、ウィンドウの数とペインの数が違う
+      P -> P : EnsureAllPanes
+    end
+    loop ウィンドウごと
+      P -> P : AllowPaneInput、CheckHorizontalTabs
+      alt Busy (操作中)、保護ダイアログ中、同期が実行中
+        P --> P : Excelに触れない
+      else
+        P -> XL : 全シートの名前・表示状態・タブ色・選択を読む
+        XL --> P : 読み取り結果
+        P -> M : BuildRows → Reconcile (フォルダとシート順の突き合わせ)
+        P -> C : SetSheets
+        P -> M : TrackHistory (履歴に積む)
+        P -> C : SetNavigation
+        P -> C : SetBadges (バッジを出すときだけ)
+        note right of C : 内容が変わったときだけ\n描き直す
+      end
+    end
+  end
+  P -> P : 1回の処理時間の8倍で周期を調整 (0.3から3秒)
+end
+
+== SheetActivate ==
+XL -> T : SheetActivate(sheet)
+T -> P : SyncSheetOf(sheet)
+P -> P : そのブックのウィンドウだけを、すぐ同期する
+@enduml

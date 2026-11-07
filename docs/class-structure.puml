@@ -1,0 +1,117 @@
+@startuml
+title クラス図: 主なクラスと関係 (v1.4.1)
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+hide empty members
+
+class ThisAddIn <<VSTO>> {
+  -_panes : PaneManager
+  #CreateRibbonExtensibilityObject() : IRibbonExtensibility
+}
+
+class RibbonController <<IRibbonExtensibility>> {
+  +GetCustomUI(ribbonId) : string
+  +OnSettingsClick(control)
+}
+
+class PaneManager {
+  -_collection : CustomTaskPaneCollection
+  -_entries : Dictionary<int, Entry>
+  -_timer : Timer (300ms)
+  +BadgeEventsWanted : Action<bool>
+  +EnsurePane(window, workbook)
+  +EnsureAllPanes()
+  +SyncSheetOf(sheet)
+  +ShowSettings()
+  +SaveSettings(workbook)
+  +MarkBadgesDirty(sheet)
+  +Shutdown()
+}
+
+class "PaneManager.Entry" as Entry <<ウィンドウごと>> {
+  +Pane : CustomTaskPane
+  +Window : Excel.Window
+  +Workbook : Excel.Workbook
+  +Settings : WorkbookSettings
+  +Folders : FolderModel
+  +History : SheetHistory
+  +Badges : Dictionary<string, BadgeInfo>
+  +Busy / Syncing / ProtectAsking : bool
+  +Failures / AliveRounds : int
+}
+
+class TabPaneControl <<UserControl>> {
+  -_strip : TabStrip
+  -_menu : ContextMenuStrip
+  -_folderMenu : ContextMenuStrip
+  +ThemeColorProvider : Func<Color[]>
+  +MoreColorsProvider : Func<int?>
+  +*Requested : event (操作の通知)
+}
+
+class TabStrip <<Control>> {
+  -_rows : List<StripRow>
+  -_names : List<string>
+  +SetSheets(names, activeName, selected, colors, rows)
+  +SetBadges(info)
+  +SetWobble(type, amp, dur)
+  +*Requested : event (操作の通知)
+  +HistoryProvider : Func<List<HistoryItem>>
+  +IsExcelEditing : Func<bool>
+}
+
+class TabColorPalette <<Control>> {
+  +ColorChosen : event Action<TabColorChoice>
+}
+
+class SettingsForm <<Form>> {
+  +ShowDialog(owner)
+  -(5つのタブ)
+}
+
+class CommentPopup <<static>> {
+  +ShowList(screen, owner, items, goTo)
+  +ShowContent(screen, owner, item, goTo)
+}
+
+class DialogPlacer <<IDisposable>> {
+  +DialogPlacer(point)
+}
+
+class TabTheme {
+  +Current : TabTheme {static}
+  +BarBack : Color
+}
+
+class DpiHelper <<static>> {
+  +GetDpi(window) : int
+}
+
+class WobbleMotion <<static>> {
+  +At(type, t, amp) : WobbleFrame
+  +PickRandom() : WobbleType
+}
+
+class WobbleSounds <<static>> {
+  +Play(type, volume)
+}
+
+ThisAddIn *-- PaneManager
+ThisAddIn ..> RibbonController : 作る\n(設定画面を開く Action を渡す)
+PaneManager *-- "0..*" Entry : ウィンドウごとに1つ
+Entry o-- TabPaneControl : Control
+TabPaneControl *-- TabStrip
+TabPaneControl ..> TabColorPalette : 作る
+TabStrip ..> TabPaneControl : イベント
+TabPaneControl ..> PaneManager : イベント
+PaneManager ..> SettingsForm : 開く
+PaneManager ..> CommentPopup : 表示する
+PaneManager ..> DialogPlacer : 「色の設定」の位置
+SettingsForm ..> TabStrip : サンプルの描画
+TabStrip ..> TabTheme
+TabStrip ..> DpiHelper
+TabStrip ..> WobbleMotion
+TabStrip ..> WobbleSounds
+SettingsForm ..> WobbleMotion
+@enduml

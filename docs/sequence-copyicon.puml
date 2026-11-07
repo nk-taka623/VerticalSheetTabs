@@ -1,0 +1,45 @@
+@startuml
+title コピーアイコン (左ボタンを押したまま、右ボタンも押す)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip" as S
+participant "クリップボード" as CB
+
+U -> S : 左ボタンを、シートまたはフォルダの行で押す
+S -> S : ArmChord(row)\n選択・アクティブ・フォルダの選択を控える (_chordSelected など)
+note right of S : 左の押下で変わった画面上の選択は、そのまま描かれる。\nExcelへの通知は、離すまで保留 (_selectionPending)
+
+U -> S : 左を押したまま、右ボタンも押す
+S -> S : OnMouseDown(Right) → TryStartChord
+alt 左の押下で控えていない、ドラッグ中、ゴーストが出ている、\n押した行と違う行、コピーアイコンの対象でない (サンプル、名前の編集中、追加削除の動き中)
+  S --> S : 何もしない (通常の右クリック)
+else
+  S -> S : 控えていた選択・アクティブに戻す\n_selectionPending = false (Excelへの通知を取り消す)
+  S -> S : ContextMenuStrip = null (右クリックのメニューを出さない)
+  S -> S : _chord = true、アイコンをポインターに重ねて描く
+  note right of S : アクティブなシート、選択、ブックの「変更あり」は、変わらない
+end
+
+loop ボタンを押している間
+  U -> S : ポインターを動かす
+  S -> S : UpdateChordPointer
+  alt 行から出た
+    S -> S : _chordOnRow = false (アイコンを消す。戻っても再開しない)
+  end
+end
+
+U -> S : 両方のボタンを離す
+S -> S : OnMouseUp → ChordMouseUp\n(両方が離れたときだけ)
+alt 行の上で離した (_chordOnRow)
+  S -> CB : SetDataObject(名前)\nシート: Excelのシート名そのもの (ルールを使うブックは「売上 | 東京」)\nフォルダ: フォルダ名だけ
+  alt 成功
+    S -> S : アイコンが緑のチェックに変わる (1秒後に消える)、\nツールチップ「コピーしました: 名前」
+  else 失敗
+    S -> S : ツールチップ「コピーできませんでした」
+  end
+else 行の外で離した
+  S -> S : 何もコピーしない (取り消し)
+end
+@enduml

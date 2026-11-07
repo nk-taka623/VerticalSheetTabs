@@ -1,0 +1,63 @@
+@startuml
+title 履歴 (見たシートの記録と、戻る・進む)
+skinparam shadowing false
+skinparam sequenceMessageAlign left
+
+actor "ユーザー" as U
+participant "TabStrip\n(◀ ▶ ボタン)" as S
+participant "TabPaneControl" as C
+participant "PaneManager" as P
+participant "SheetHistory" as H
+participant "Excel" as XL
+
+== 記録 (同期のたび) ==
+P -> XL : アクティブなシートを読む
+P -> P : TrackHistory
+alt 新しくアクティブになったシート
+  P -> H : Push(key)
+  note right of H : 先頭に入れる (最大20枚)。\n戻った位置から別のシートを選ぶと、\n進む側は消える (ブラウザと同じ)
+end
+opt シートの名前の並びが変わった
+  P -> H : Prune(存在するシートの key)
+  note right of H : 削除したシートを取り除く。\n名前の変更には、key で追従する
+end
+P -> C : SetNavigation(CanBack, CanForward)
+
+== ◀ 戻る / ▶ 進む ==
+U -> S : ◀ (または ▶) をクリック
+S -> C : BackRequested / ForwardRequested
+C -> P : NavigateHistory(direction)
+P -> H : Find(direction, 見えているシートか)
+H --> P : 履歴の位置 (なければ何もしない)
+P -> P : GoToHistory
+P -> P : CommitCellEdit
+P -> H : Cursor = 位置 (同期で追加されない)
+opt 閉じたフォルダの中のシート
+  P -> P : フォルダを開く (ToggleFolder)
+end
+P -> XL : シートを選ぶ
+P -> C : SetNavigation
+P -> XL : FocusGrid
+
+== 一覧から選ぶ ==
+U -> S : ◀ の長押し、または ◀ ▶ の右クリック
+S -> C : HistoryProvider
+C -> P : HistoryItems
+P --> S : 最近見た10枚 (現在の位置つき)
+S -> U : メニュー (最後に「履歴をクリア」)
+alt シートを選ぶ
+  U -> S : 1枚を選ぶ
+  S -> C : HistoryJumpRequested(key)
+  C -> P : JumpToHistory(key) → GoToHistory (上と同じ)
+else 履歴をクリア
+  U -> S : 「履歴をクリア」
+  S -> C : HistoryClearRequested
+  C -> P : ClearHistory
+  P -> H : Keys を空にする、Cursor = 0
+  P -> C : SetNavigation(false, false)
+  note right of H : いま見ているシートは、\n次の同期で入り直す
+end
+
+== 保存 ==
+P -> H : (ブックの保存時) HistoryStore.Save → カスタムXMLパート
+@enduml
