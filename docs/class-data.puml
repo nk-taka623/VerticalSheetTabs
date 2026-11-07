@@ -72,6 +72,9 @@ package "設定" {
     +Mode : TabMode
     +Side : TabSide
     +CommentJump : CommentJump
+    +InitialWidthMode : InitialWidthMode
+    +InitialWidthChars : int
+    +InitialWidthPx : int
     +WidthDip : int
     +NameRule : bool
     +SelectStyle : SelectStyle
@@ -121,6 +124,10 @@ package "設定" {
   enum TabSide {
     Left
     Right
+  }
+  enum InitialWidthMode {
+    Chars
+    Px
   }
   enum CommentJump {
     Center
@@ -218,6 +225,7 @@ NameRule ..> FolderModel : 名前から作る
 WorkbookSettings --> TabMode
 WorkbookSettings --> TabSide
 WorkbookSettings --> CommentJump
+WorkbookSettings --> InitialWidthMode
 WorkbookSettings --> SelectStyle
 WorkbookSettings --> ActiveMarker
 WorkbookSettings --> BadgeKinds

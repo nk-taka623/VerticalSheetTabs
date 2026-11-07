@@ -14,6 +14,14 @@ namespace VerticalSheetTabs
         private readonly RadioButton _sideLeft = new RadioButton();
         private readonly RadioButton _sideRight = new RadioButton();
         private GroupBox _sideGroup;
+        // The first width of the vertical tabs: by characters or by pixels; each way keeps its own value.
+        private readonly RadioButton _widthChars = new RadioButton();
+        private readonly RadioButton _widthPx = new RadioButton();
+        private readonly TrackBar _widthCharsBar = new TrackBar();
+        private readonly NumericUpDown _widthCharsBox = new NumericUpDown();
+        private readonly TrackBar _widthPxBar = new TrackBar();
+        private readonly NumericUpDown _widthPxBox = new NumericUpDown();
+        private GroupBox _widthGroup;
         private readonly BackgroundPanel _background;
         private GroupBox _jumpGroup; // the position of the comment jump: only used while the note / comment badge is shown
         private readonly RadioButton _jumpCenter = new RadioButton();
@@ -69,8 +77,9 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim, CommentJump commentJump = CommentJump.TopLeft, WallpaperOptions wallpaper = null, int rowTransparency = 0, bool textOutline = true)
+        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim, CommentJump commentJump = CommentJump.TopLeft, WallpaperOptions wallpaper = null, int rowTransparency = 0, bool textOutline = true, InitialWidthMode initialWidthMode = InitialWidthMode.Chars, int initialWidthChars = 12, int initialWidthPx = 0)
         {
+            _initialPx = initialWidthPx;
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
             AutoScaleMode = AutoScaleMode.Font;
@@ -158,6 +167,7 @@ namespace VerticalSheetTabs
             int sideWidth = (width - 12) * 34 / 100;
             modeGroup.Size = new Size(width - sideWidth - 6, topHeight);
             _sideGroup.Size = new Size(sideWidth, topHeight);
+            _widthGroup = CreateWidthGroup(width, initialWidthMode, initialWidthChars, initialWidthPx);
             _jumpGroup.Dock = DockStyle.None;
             _jumpGroup.Size = new Size(width, _jumpGroup.Height);
             _jumpGroup.Margin = new Padding(3);
@@ -169,7 +179,7 @@ namespace VerticalSheetTabs
             _tabs.Padding = new Point(16, 5); // (room around the titles of the tabs)
             // (the tabs other than "このブック" are kept for the whole PC)
             string pcNote = "このタブの設定は、このPCのすべてのブックに共通です。";
-            var basic = new List<Control> { Banner(pcNote, width), top };
+            var basic = new List<Control> { Banner(pcNote, width), top, _widthGroup };
             if (tabsHidden) basic.Add(Banner("このブックは、横タブが非表示のため、縦タブは表示されません。", width));
             _tabs.TabPages.Add(CreatePage("基本", width, basic.ToArray()));
             _tabs.TabPages.Add(CreatePage("背景", width, Banner(pcNote, width), _background.WallpaperGroup, _background.PairRow(width), _background.TransparencyGroup));
@@ -267,6 +277,16 @@ namespace VerticalSheetTabs
                 return _modeHorizontal.Checked ? TabMode.HorizontalOnly : TabMode.Both;
             }
         }
+
+        private int _initialPx;
+        private int _minPx = 0;
+
+        public InitialWidthMode InitialWidthMode { get { return _widthPx.Checked ? InitialWidthMode.Px : InitialWidthMode.Chars; } }
+
+        public int InitialWidthChars { get { return (int)_widthCharsBox.Value; } }
+
+        // 0 stays 0 while the value is untouched at its minimum (the minimum depends on the screen's scale).
+        public int InitialWidthPx { get { int v = (int)_widthPxBox.Value; return _initialPx == 0 && v == _minPx ? 0 : v; } }
 
         public TabSide Side
         {
@@ -722,6 +742,69 @@ namespace VerticalSheetTabs
         private void UpdateSideEnabled()
         {
             _sideGroup.Enabled = !_modeHorizontal.Checked;
+            if (_widthGroup != null) _widthGroup.Enabled = !_modeHorizontal.Checked;
+        }
+
+        // 縦タブの初回幅: a radio button, a slider, a number box and a unit on each of two lines (characters, pixels).
+        private GroupBox CreateWidthGroup(int width, InitialWidthMode mode, int chars, int px)
+        {
+            var group = new GroupBox { Text = "縦タブの初回幅", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6) };
+            int dpi = DpiHelper.GetDpi(IntPtr.Zero);
+            int minPx = TabStrip.ContentWidthForChars(12, dpi);
+            _minPx = minPx;
+            _widthChars.Text = "文字数";
+            _widthPx.Text = "px";
+            _widthChars.AutoSize = false; _widthPx.AutoSize = false;
+            _widthChars.Checked = mode != InitialWidthMode.Px;
+            _widthPx.Checked = mode == InitialWidthMode.Px;
+            _widthCharsBar.Minimum = 12; _widthCharsBar.Maximum = 64; _widthCharsBar.TickFrequency = 4; _widthCharsBar.SmallChange = 1; _widthCharsBar.LargeChange = 4; _widthCharsBar.Value = Math.Max(12, Math.Min(64, chars));
+            _widthPxBar.Minimum = minPx; _widthPxBar.Maximum = 2000; _widthPxBar.TickFrequency = 100; _widthPxBar.SmallChange = 1; _widthPxBar.LargeChange = 50; _widthPxBar.Value = Math.Max(minPx, Math.Min(2000, px > 0 ? px : minPx));
+            _widthCharsBox.Minimum = 12; _widthCharsBox.Maximum = 64; _widthCharsBox.Value = _widthCharsBar.Value;
+            _widthPxBox.Minimum = minPx; _widthPxBox.Maximum = 2000; _widthPxBox.Value = _widthPxBar.Value;
+            _widthCharsBar.ValueChanged += (s, e) => _widthCharsBox.Value = _widthCharsBar.Value;
+            _widthCharsBox.ValueChanged += (s, e) => _widthCharsBar.Value = (int)_widthCharsBox.Value;
+            _widthPxBar.ValueChanged += (s, e) => _widthPxBox.Value = _widthPxBar.Value;
+            _widthPxBox.ValueChanged += (s, e) => _widthPxBar.Value = (int)_widthPxBox.Value;
+            _widthChars.CheckedChanged += (s, e) => UpdateWidthEnabled();
+            UpdateWidthEnabled();
+            int rowH = 34;
+            int boxW = TextRenderer.MeasureText("20000", group.Font).Width + SystemInformation.VerticalScrollBarWidth + 10;
+            int unitW = TextRenderer.MeasureText("文字分", group.Font).Width + 8;
+            int radioW = TextRenderer.MeasureText("文字数", group.Font).Width + 30;
+            int inner = width - group.Padding.Horizontal - 12;
+            int barW = inner - radioW - boxW - unitW - 12;
+            Control[][] lines =
+            {
+                new Control[] { _widthChars, _widthCharsBar, _widthCharsBox, new Label { Text = "文字分" } },
+                new Control[] { _widthPx, _widthPxBar, _widthPxBox, new Label { Text = "px" } },
+            };
+            int y = 20;
+            foreach (Control[] line in lines)
+            {
+                int x = 8;
+                line[0].SetBounds(x, y + 4, radioW, 24); x += radioW;
+                line[1].SetBounds(x, y, barW, rowH - 4); x += barW + 4;
+                line[2].SetBounds(x, y + 4, boxW, 24); x += boxW + 4;
+                line[3].SetBounds(x, y + 8, unitW, 20);
+                ((Label)line[3]).AutoSize = false;
+                foreach (Control c in line) group.Controls.Add(c);
+                y += rowH;
+            }
+            var hint = new Label
+            {
+                Text = "文字数は半角で 12 ～ 64 文字、px は半角12文字分 (" + minPx + " px) ～ 2000 px。ブックを初めて開いたときの幅で、保存したブックは保存した幅で開きます。",
+                AutoSize = false, ForeColor = SystemColors.GrayText
+            };
+            hint.SetBounds(8, y + 2, inner, TextRenderer.MeasureText(hint.Text, group.Font, new Size(inner, 0), TextFormatFlags.WordBreak).Height + 2);
+            group.Controls.Add(hint);
+            group.Size = new Size(width, hint.Bottom + group.Padding.Bottom + 4);
+            return group;
+        }
+
+        private void UpdateWidthEnabled()
+        {
+            _widthCharsBar.Enabled = _widthCharsBox.Enabled = _widthChars.Checked;
+            _widthPxBar.Enabled = _widthPxBox.Enabled = _widthPx.Checked;
         }
 
         // A group box with its radio buttons side by side, at equal steps: the widest one plus a gap of about

@@ -51,6 +51,13 @@ namespace VerticalSheetTabs
         TopCenter  // the row is the first one shown, the column is centered
     }
 
+    // How the first width of the vertical tabs is given: by half-width characters or by pixels (each keeps its own value).
+    public enum InitialWidthMode
+    {
+        Chars,
+        Px
+    }
+
     public enum TabSide
     {
         Left,
@@ -93,6 +100,11 @@ namespace VerticalSheetTabs
         public TabMode Mode { get; set; }
         public TabSide Side { get; set; }
         public CommentJump CommentJump { get; set; }
+        // The width of the vertical tabs for a workbook that has no stored width. Chars: 12 to 64; Px: 0 (= the width of 12 characters) or up to 2000.
+        public InitialWidthMode InitialWidthMode { get; set; }
+        public int InitialWidthChars { get; set; }
+        public int InitialWidthPx { get; set; }
+        public const int InitialCharsMin = 12, InitialCharsMax = 64, InitialPxMax = 2000;
         // 0 means "not stored": the caller uses the default (12 half-width characters).
         public int WidthDip { get; set; }
         // The dashed outline around an open folder: shown or not, and its color level (1..9, 5 = middle).
@@ -147,6 +159,9 @@ namespace VerticalSheetTabs
             Mode = TabMode.Both;
             Side = TabSide.Left;
             CommentJump = CommentJump.TopLeft;
+            InitialWidthMode = InitialWidthMode.Chars;
+            InitialWidthChars = InitialCharsMin;
+            InitialWidthPx = 0;
             WidthDip = 0;
             OutlineVisible = true;
             OutlineLevel = 5;
