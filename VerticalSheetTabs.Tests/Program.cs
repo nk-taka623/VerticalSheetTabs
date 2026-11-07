@@ -179,6 +179,66 @@ namespace VerticalSheetTabs.Tests
                 Throws(() => SafeXml.Parse(big, 1000), "long document");
             });
 
+
+            // ---- Wallpaper layout (picture 90 x 120 in an area of 150 x 200)
+            Func<WallpaperFit, bool, bool, WallpaperHAlign, WallpaperVAlign, WallpaperLayout> lay = (fit, keep, tile, h, v) =>
+                Wallpaper.Layout(90, 120, 150, 200, new WallpaperOptions { Fit = fit, KeepRatio = keep, Tile = tile, HAlign = h, VAlign = v });
+            Test("Wallpaper original size is centered", () =>
+            {
+                WallpaperLayout l = lay(WallpaperFit.Original, true, false, WallpaperHAlign.Center, WallpaperVAlign.Center);
+                Equal(90, l.Width); Equal(120, l.Height); Equal(30, l.X); Equal(40, l.Y);
+            });
+            Test("Wallpaper original size at the right bottom", () =>
+            {
+                WallpaperLayout l = lay(WallpaperFit.Original, true, false, WallpaperHAlign.Right, WallpaperVAlign.Bottom);
+                Equal(60, l.X); Equal(80, l.Y);
+            });
+            Test("Wallpaper fit width keeps the ratio and places only vertically", () =>
+            {
+                WallpaperLayout l = lay(WallpaperFit.FitWidth, true, false, WallpaperHAlign.Right, WallpaperVAlign.Top);
+                Equal(150, l.Width); Equal(200, l.Height); Equal(0, l.X); Equal(0, l.Y);
+                l = Wallpaper.Layout(90, 120, 150, 120, new WallpaperOptions { Fit = WallpaperFit.FitWidth, VAlign = WallpaperVAlign.Bottom });
+                Equal(200, l.Height); Equal(-80, l.Y);
+            });
+            Test("Wallpaper fit height keeps the ratio and places only horizontally", () =>
+            {
+                WallpaperLayout l = Wallpaper.Layout(90, 120, 100, 200, new WallpaperOptions { Fit = WallpaperFit.FitHeight, HAlign = WallpaperHAlign.Center, VAlign = WallpaperVAlign.Bottom });
+                Equal(150, l.Width); Equal(200, l.Height); Equal(-25, l.X); Equal(0, l.Y);
+            });
+            Test("Wallpaper stretch fills the area", () =>
+            {
+                WallpaperLayout l = lay(WallpaperFit.FitBoth, false, true, WallpaperHAlign.Right, WallpaperVAlign.Bottom);
+                Equal(150, l.Width); Equal(200, l.Height); Equal(0, l.X); Equal(0, l.Y); True(!l.Tile, "no tile when fitting both");
+            });
+            Test("Wallpaper cover keeps the ratio and can be placed", () =>
+            {
+                WallpaperLayout l = Wallpaper.Layout(90, 120, 150, 120, new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = true, HAlign = WallpaperHAlign.Left, VAlign = WallpaperVAlign.Center });
+                Equal(150, l.Width); Equal(200, l.Height); Equal(0, l.X); Equal(-40, l.Y);
+            });
+            Test("Wallpaper tile only applies to the fits that allow it", () =>
+            {
+                True(lay(WallpaperFit.Original, true, true, WallpaperHAlign.Left, WallpaperVAlign.Top).Tile, "original tiles");
+                True(!lay(WallpaperFit.FitBoth, true, true, WallpaperHAlign.Left, WallpaperVAlign.Top).Tile, "cover does not tile");
+            });
+            Test("Wallpaper settings that do not apply are disabled", () =>
+            {
+                True(!WallpaperOptions.HAlignApplies(WallpaperFit.FitWidth, true), "width: no horizontal");
+                True(!WallpaperOptions.VAlignApplies(WallpaperFit.FitHeight, true), "height: no vertical");
+                True(!WallpaperOptions.HAlignApplies(WallpaperFit.FitBoth, false), "stretch: no position");
+                True(WallpaperOptions.HAlignApplies(WallpaperFit.FitBoth, true) && WallpaperOptions.VAlignApplies(WallpaperFit.FitBoth, true), "cover: both");
+                True(WallpaperOptions.KeepRatioApplies(WallpaperFit.FitBoth) && !WallpaperOptions.KeepRatioApplies(WallpaperFit.Original), "ratio only for fit both");
+            });
+            Test("Wallpaper accepts jpg and png files only", () =>
+            {
+                True(Wallpaper.IsSupportedFile("a.JPG") && Wallpaper.IsSupportedFile("b.jpeg") && Wallpaper.IsSupportedFile("c.png"), "supported");
+                True(!Wallpaper.IsSupportedFile("d.gif") && !Wallpaper.IsSupportedFile("") && !Wallpaper.IsSupportedFile(null), "unsupported");
+                True(Wallpaper.Load(@"C:\no\such\file.png") == null, "missing file");
+            });
+            Test("Row transparency steps", () =>
+            {
+                Equal(0, RowTransparencyScale.Clamp(-5)); Equal(45, RowTransparencyScale.Clamp(47)); Equal(90, RowTransparencyScale.Clamp(200));
+            });
+
             Console.WriteLine(_run + " tests, " + _failed + " failed");
             return _failed;
         }

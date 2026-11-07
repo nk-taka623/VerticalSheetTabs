@@ -1046,6 +1046,7 @@ namespace VerticalSheetTabs
             g.Clear(Theme.BarBack);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.Half;
+            DrawWallpaper(g);
 
             // a newly selected sheet, and the folders that have just been opened or closed, start the wobble (the first ones seen do not)
             if (!IsSample)
@@ -1114,7 +1115,7 @@ namespace VerticalSheetTabs
                 else if (_animClock != null && (_rows[i].IsFolder ? (_animFolders != null && _animFolders.Contains(_rows[i].FolderId)) : (_rows[i].Sheet == _animSheet || (_animSheets != null && _rows[i].Sheet != null && _animSheets.Contains(_rows[i].Sheet))))) wobbling.Add(i);
                 else
                 {
-                    if (_rows[i].IsFolder) DrawFolder(g, _rows[i], row); else DrawTab(g, _rows[i], row);
+                    DrawRow(g, _rows[i], row);
                     if (IsFadedRow(_rows[i])) DrawFadedPlace(g, row);
                 }
             }
@@ -1135,7 +1136,7 @@ namespace VerticalSheetTabs
                 g.ScaleTransform((float)f.ScaleX, (float)f.ScaleY);
                 g.TranslateTransform(-pivot.X, -pivot.Y);
                 _transforming = true;
-                try { if (_rows[index].IsFolder) DrawFolder(g, _rows[index], row); else DrawTab(g, _rows[index], row); }
+                try { DrawRow(g, _rows[index], row); }
                 finally { _transforming = false; g.Restore(state); }
             }
 
@@ -1153,6 +1154,189 @@ namespace VerticalSheetTabs
 
             if (ShowAllButtons) DrawAllButtons(g);
             if (!IsSample) DrawPlus(g);
+        }
+
+        // ---- the wallpaper and the transparent rows ----
+        // The wallpaper lies behind the rows, from the line under the last row (while the rows are not transparent) or from the top of
+        // the first row (while they are) down to the "+" row. A transparent row is drawn into a bitmap of its own, which is laid over
+        // the wallpaper with the opacity of the rows; what must stay sharp (the names, the folder mark, the badges and the marks of the
+        // active sheet) is collected while the row is drawn (Defer) and drawn over the bitmap afterwards.
+
+        private WallpaperOptions _wpOptions = new WallpaperOptions();
+        private Bitmap _wpSource;               // the picture, as it was read
+        private string _wpLoadedPath = "";
+        private DateTime _wpLoadedStamp;
+        private Bitmap _wpCache;                // the picture laid out for the area it is drawn in
+        private Size _wpCacheSize;
+        private int _rowTransparency;           // percent, 0 to 90
+        private bool _textOutline = true;
+        private List<Action<Graphics>> _defer;  // the parts of the row that are drawn after its (transparent) body
+
+        private bool WallpaperOn { get { return !IsSample && _wpSource != null; } }
+
+        private bool Translucent { get { return WallpaperOn && _rowTransparency > 0; } }
+
+        private bool TextOutlined { get { return _textOutline && Translucent; } }
+
+        public int RowTransparency
+        {
+            get { return _rowTransparency; }
+            set
+            {
+                int v = Math.Max(0, Math.Min(WorkbookSettings.TransparencyMax, value));
+                if (_rowTransparency != v) { _rowTransparency = v; Invalidate(); }
+            }
+        }
+
+        public bool TextOutline
+        {
+            get { return _textOutline; }
+            set { if (_textOutline != value) { _textOutline = value; Invalidate(); } }
+        }
+
+        // Takes the wallpaper settings (the picture is read again only when the file or its date changed).
+        public void SetWallpaper(WallpaperOptions options)
+        {
+            if (IsSample) return;
+            options = options ?? new WallpaperOptions();
+            string path = options.Path ?? "";
+            DateTime stamp = DateTime.MinValue;
+            if (path.Length > 0)
+            {
+                try { stamp = System.IO.File.GetLastWriteTimeUtc(path); }
+                catch (Exception) { }
+            }
+            bool reload = path != _wpLoadedPath || stamp != _wpLoadedStamp;
+            if (!reload && _wpOptions.SameAs(options)) return;
+            if (reload)
+            {
+                if (_wpSource != null) { _wpSource.Dispose(); _wpSource = null; }
+                _wpSource = path.Length > 0 ? Wallpaper.Load(path) : null;
+                _wpLoadedPath = path;
+                _wpLoadedStamp = stamp;
+            }
+            _wpOptions = options.Clone();
+            DropWallpaperCache();
+            Invalidate();
+        }
+
+        private void DropWallpaperCache()
+        {
+            if (_wpCache != null) { _wpCache.Dispose(); _wpCache = null; }
+            _wpCacheSize = Size.Empty;
+        }
+
+        private void DisposeWallpaper()
+        {
+            DropWallpaperCache();
+            if (_wpSource != null) { _wpSource.Dispose(); _wpSource = null; }
+        }
+
+        // The place of the wallpaper: empty when the rows fill the view.
+        private Rectangle WallpaperRegion()
+        {
+            int top = HeaderPx;
+            if (_rowTransparency == 0) top = Math.Max(top, HeaderPx + _rows.Count * RowPx - _scrollY);
+            int bottom = ViewHeight;
+            if (bottom - top < 1 || ClientSize.Width < 1) return Rectangle.Empty;
+            return new Rectangle(0, top, ClientSize.Width, bottom - top);
+        }
+
+        private void DrawWallpaper(Graphics g)
+        {
+            if (!WallpaperOn) return;
+            try
+            {
+                Rectangle area = WallpaperRegion();
+                if (area.IsEmpty) return;
+                if (_wpCache == null || _wpCacheSize != area.Size)
+                {
+                    DropWallpaperCache();
+                    _wpCache = Wallpaper.Render(_wpSource, area.Width, area.Height, _wpOptions);
+                    _wpCacheSize = area.Size;
+                }
+                if (_wpCache == null) return;
+                var mode = g.CompositingMode;
+                g.CompositingMode = CompositingMode.SourceOver;
+                g.DrawImageUnscaled(_wpCache, area.Location);
+                g.CompositingMode = mode;
+            }
+            catch (Exception)
+            {
+                // A wallpaper that cannot be drawn is left out: the bar stays plain.
+            }
+        }
+
+        private bool Defer(Action<Graphics> part)
+        {
+            if (_defer == null) return false;
+            _defer.Add(part);
+            return true;
+        }
+
+        // Draws a row. While the rows are transparent, the body of the row is a bitmap laid over the wallpaper.
+        private void DrawRow(Graphics g, StripRow r, Rectangle row)
+        {
+            if (!Translucent)
+            {
+                if (r.IsFolder) DrawFolder(g, r, row); else DrawTab(g, r, row);
+                return;
+            }
+            int padX = Px(8), padY = Px(8);
+            int left = Math.Max(0, row.Left - padX), right = Math.Min(Math.Max(left + 1, ClientSize.Width), row.Right + padX);
+            var box = new Rectangle(left, row.Top - padY, Math.Max(1, right - left), row.Height + 2 * padY);
+            var parts = new List<Action<Graphics>>();
+            Bitmap body = null;
+            try
+            {
+                body = new Bitmap(box.Width, box.Height, PixelFormat.Format32bppPArgb);
+                using (Graphics gb = Graphics.FromImage(body))
+                {
+                    gb.SmoothingMode = SmoothingMode.AntiAlias;
+                    gb.PixelOffsetMode = PixelOffsetMode.Half;
+                    gb.TranslateTransform(-box.X, -box.Y);
+                    // the row's own color: the bar's
+                    using (var brush = new SolidBrush(Theme.BarBack)) gb.FillRectangle(brush, row);
+                    var saved = _defer;
+                    _defer = parts;
+                    try { if (r.IsFolder) DrawFolder(gb, r, row); else DrawTab(gb, r, row); }
+                    finally { _defer = saved; }
+                }
+                float opacity = (100 - _rowTransparency) / 100f;
+                using (var attr = new ImageAttributes())
+                {
+                    attr.SetColorMatrix(new ColorMatrix { Matrix33 = opacity });
+                    g.DrawImage(body, box, 0, 0, box.Width, box.Height, GraphicsUnit.Pixel, attr);
+                }
+            }
+            catch (Exception)
+            {
+                // Out of memory or the like: the row is drawn the plain way.
+                parts.Clear();
+                if (r.IsFolder) DrawFolder(g, r, row); else DrawTab(g, r, row);
+            }
+            finally
+            {
+                if (body != null) body.Dispose();
+            }
+            foreach (Action<Graphics> part in parts) part(g);
+        }
+
+        // The name with an outline: the text drawn around itself in the opposite color (light text: dark outline), so that it can be read
+        // on any picture.
+        private void DrawTextOutline(Graphics g, string text, Font font, Rectangle rect, StringFormat format, Color textColor)
+        {
+            Color edge = textColor.GetBrightness() < 0.55f ? Color.White : Color.Black;
+            int d = Math.Max(1, Px(1));
+            using (var brush = new SolidBrush(Color.FromArgb(215, edge)))
+            {
+                foreach (Point o in new[] { new Point(-d, 0), new Point(d, 0), new Point(0, -d), new Point(0, d), new Point(-d, -d), new Point(d, -d), new Point(-d, d), new Point(d, d) })
+                {
+                    Rectangle r = rect;
+                    r.Offset(o.X, o.Y);
+                    g.DrawString(text, font, brush, r, format);
+                }
+            }
         }
 
         // ---- the burst of a progress mark that turns to "done" ----
@@ -1492,7 +1676,8 @@ namespace VerticalSheetTabs
                 try
                 {
                     var local = new Rectangle(0, 0, bmp.Width, bmp.Height);
-                    if (r.IsFolder) DrawFolder(g, r, local); else DrawTab(g, r, local);
+                    if (Translucent) DrawRow(g, r, local); // (the body as transparent as the rows are)
+                    else if (r.IsFolder) DrawFolder(g, r, local); else DrawTab(g, r, local);
                 }
                 finally { _transforming = false; }
             }
@@ -2261,6 +2446,7 @@ namespace VerticalSheetTabs
 
         private void DrawRowBadges(Graphics g, StripRow r, Rectangle row)
         {
+            if (Defer(g2 => DrawRowBadges(g2, r, row))) return;
             List<RowBadgeSpec> specs = RowBadges(r, row);
             if (specs.Count == 0) return;
             DrawBadgeGlows(g, specs);
@@ -3081,29 +3267,38 @@ namespace VerticalSheetTabs
             Point[] chevron = folder.Expanded
                 ? new[] { new Point(cx - h / 2, cy - w / 2), new Point(cx, cy + w / 2), new Point(cx + h / 2, cy - w / 2) }
                 : new[] { new Point(cx - w / 2, cy - h / 2), new Point(cx + w / 2, cy), new Point(cx - w / 2, cy + h / 2) };
-            using (var pen = new Pen(textColor, Math.Max(1.5f, Px(1.4))))
+            Action<Graphics> drawChevron = g2 =>
             {
-                pen.LineJoin = LineJoin.Miter;
-                g.DrawLines(pen, chevron);
-            }
+                using (var pen = new Pen(textColor, Math.Max(1.5f, Px(1.4))))
+                {
+                    pen.LineJoin = LineJoin.Miter;
+                    g2.DrawLines(pen, chevron);
+                }
+            };
+            if (!Defer(drawChevron)) drawChevron(g);
 
             int textLeft = left + markShift + Px(TextPadLeft) + Px(FolderMarkWidth) + Px(4);
             int roomRight = 0;
             var textRect = new Rectangle(textLeft, row.Top - (selected && DoubleFrame ? Px(ActiveTextLift) : 0) + TextShift(folder.FolderName), Math.Max(1, right - textLeft - Px(TextPadRight) - roomRight - CheckReserve(folder) - RowBadgeReserve(folder)), row.Height);
-            g.TextRenderingHint = _transforming ? TextRenderingHint.AntiAliasGridFit : TextRenderingHint.ClearTypeGridFit;
             if (_editor == null || _editingFolderId != folder.FolderId)
             {
-                using (var bold = new Font(TabFont, FontStyle.Bold))
-                using (var brush = new SolidBrush(textColor))
-                using (var format = new StringFormat(StringFormat.GenericDefault))
+                Action<Graphics> drawFolderName = g2 =>
                 {
-                    format.Alignment = StringAlignment.Near;
-                    format.LineAlignment = StringAlignment.Center;
-                    format.Trimming = StringTrimming.EllipsisCharacter;
-                    format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
-                    DrawMatch(g, folder.FolderName, bold, textRect, format, true);
-                    g.DrawString(folder.FolderName, bold, brush, textRect, format);
-                }
+                    g2.TextRenderingHint = _transforming ? TextRenderingHint.AntiAliasGridFit : TextRenderingHint.ClearTypeGridFit;
+                    using (var bold = new Font(TabFont, FontStyle.Bold))
+                    using (var brush = new SolidBrush(textColor))
+                    using (var format = new StringFormat(StringFormat.GenericDefault))
+                    {
+                        format.Alignment = StringAlignment.Near;
+                        format.LineAlignment = StringAlignment.Center;
+                        format.Trimming = StringTrimming.EllipsisCharacter;
+                        format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
+                        DrawMatch(g2, folder.FolderName, bold, textRect, format, true);
+                        if (TextOutlined) DrawTextOutline(g2, folder.FolderName, bold, textRect, format, textColor);
+                        g2.DrawString(folder.FolderName, bold, brush, textRect, format);
+                    }
+                };
+                if (!Defer(drawFolderName)) drawFolderName(g);
             }
             if (folder.SyncColor) DrawCheck(g, row, right);
             if (!(selected && Glass)) DrawRowBadges(g, folder, row);
@@ -3116,6 +3311,7 @@ namespace VerticalSheetTabs
         // looks like a blur), so that it can be seen on the dark bar of the dark Office themes and on any folder color alike.
         private void DrawCheck(Graphics g, Rectangle row, int right)
         {
+            if (Defer(g2 => DrawCheck(g2, row, right))) return;
             float r = Px(CanRadius);
             float cx = right - Px(CheckPadRight) - Px(CheckWidth) / 2f;
             int top = row.Top + Px(PlainTop), bottom = row.Bottom - Px(BottomInset);
@@ -3329,18 +3525,24 @@ namespace VerticalSheetTabs
             var textRect = new Rectangle(left + roomLeft + Px(TextPadLeft), row.Top - lift + TextShift(text), Math.Max(1, right - left - roomLeft - room - Px(TextPadLeft) - Px(TextPadRight) - RowBadgeReserve(tabRow)), row.Height);
             if (_editor == null || name != _editingSheet)
             {
-                g.TextRenderingHint = _transforming ? TextRenderingHint.AntiAliasGridFit : TextRenderingHint.ClearTypeGridFit;
-                using (var font = selected && (DoubleFrame || Glass || Inset || Stripes || Crystal) ? new Font(TabFont, FontStyle.Bold) : null)
-                using (var brush = new SolidBrush(textColor))
-                using (var format = new StringFormat(StringFormat.GenericDefault))
+                bool boldName = selected && (DoubleFrame || Glass || Inset || Stripes || Crystal);
+                Action<Graphics> drawName = g2 =>
                 {
-                    format.Alignment = StringAlignment.Near;
-                    format.LineAlignment = StringAlignment.Center;
-                    format.Trimming = StringTrimming.EllipsisCharacter;
-                    format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
-                    DrawMatch(g, text, font ?? TabFont, textRect, format, false);
-                    g.DrawString(text, font ?? TabFont, brush, textRect, format);
-                }
+                    g2.TextRenderingHint = _transforming ? TextRenderingHint.AntiAliasGridFit : TextRenderingHint.ClearTypeGridFit;
+                    using (var font = boldName ? new Font(TabFont, FontStyle.Bold) : null)
+                    using (var brush = new SolidBrush(textColor))
+                    using (var format = new StringFormat(StringFormat.GenericDefault))
+                    {
+                        format.Alignment = StringAlignment.Near;
+                        format.LineAlignment = StringAlignment.Center;
+                        format.Trimming = StringTrimming.EllipsisCharacter;
+                        format.FormatFlags = StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
+                        DrawMatch(g2, text, font ?? TabFont, textRect, format, false);
+                        if (TextOutlined) DrawTextOutline(g2, text, font ?? TabFont, textRect, format, textColor);
+                        g2.DrawString(text, font ?? TabFont, brush, textRect, format);
+                    }
+                };
+                if (!Defer(drawName)) drawName(g);
             }
         }
 
@@ -3501,6 +3703,7 @@ namespace VerticalSheetTabs
         // badge with a white check; on a colored row a white badge with a check in the color of the row.
         private void DrawCheckBadge(Graphics g, Rectangle body, bool colored, Color color)
         {
+            if (Defer(g2 => DrawCheckBadge(g2, body, colored, color))) return;
             int full = Math.Max(6, body.Height - Px(8)); // the first size; the badge keeps its left edge and is 0.75 times as large
             int d = Math.Max(5, (int)Math.Round(full * BadgeScale));
             var badge = new Rectangle(body.Left + (body.Height - full) / 2 + Px(1), body.Top + (body.Height - d) / 2, d, d);
@@ -3688,6 +3891,7 @@ namespace VerticalSheetTabs
         // marks, with a white edge so that they can be seen on any color of the row and on the dark Office themes.
         private void DrawEdgeBars(Graphics g, Rectangle body, Color color)
         {
+            if (Defer(g2 => DrawEdgeBars(g2, body, color))) return;
             int width = Px(BarWidth), inset = Px(BarInset);
             foreach (int x in new[] { body.Left + inset, body.Right - inset - width }) DrawEdgeBar(g, body, x, color);
         }
@@ -3710,6 +3914,7 @@ namespace VerticalSheetTabs
         // the bottom of the body).
         private void DrawUnderline(Graphics g, Rectangle body, Color color)
         {
+            if (Defer(g2 => DrawUnderline(g2, body, color))) return;
             int thick = Math.Max(1, Px(UnderlineThickness));
             int ux = body.Left + Px(UnderlineInset);
             int uw = body.Width - 2 * Px(UnderlineInset);
@@ -3721,6 +3926,7 @@ namespace VerticalSheetTabs
         // the middle of the body.
         private void DrawMarkers(Graphics g, Rectangle body, int raise, Color marker)
         {
+            if (Defer(g2 => DrawMarkers(g2, body, raise, marker))) return;
             int cy = body.Top + body.Height / 2 - raise;
             DrawMarker(g, body.Left + Px(MarkerInset), cy, 1, marker);
             DrawMarker(g, body.Right - Px(MarkerInset), cy, -1, marker);
@@ -4639,6 +4845,7 @@ namespace VerticalSheetTabs
                 EndDoneAnim();
                 if (_dnTimer != null) _dnTimer.Dispose();
                 if (_longPress != null) _longPress.Dispose();
+                DisposeWallpaper();
                 _tip.Dispose();
             }
             base.Dispose(disposing);

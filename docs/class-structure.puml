@@ -1,5 +1,5 @@
 @startuml
-title クラス図: 主なクラスと関係 (v1.4.10)
+title クラス図: 主なクラスと関係 (v1.5.0)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
@@ -67,7 +67,20 @@ class TabColorPalette <<Control>> {
 
 class SettingsForm <<Form>> {
   +ShowDialog(owner)
-  -(5つのタブ)
+  -(6つのタブ。「背景」は BackgroundPanel)
+}
+
+class BackgroundPanel <<Control>> {
+  +Wallpaper : WallpaperOptions
+  +RowTransparency : int
+  +TextOutline : bool
+  +Refresh()
+}
+
+class Wallpaper <<static>> {
+  +Load(path) : Bitmap
+  +Layout(srcW, srcH, areaW, areaH, options) : WallpaperLayout
+  +Render(source, areaW, areaH, options) : Bitmap
 }
 
 class CommentPopup <<static>> {
@@ -114,4 +127,7 @@ TabStrip ..> DpiHelper
 TabStrip ..> WobbleMotion
 TabStrip ..> WobbleSounds
 SettingsForm ..> WobbleMotion
+SettingsForm *-- BackgroundPanel : 「背景」タブ
+BackgroundPanel ..> Wallpaper : 読めるか確かめる
+TabStrip ..> Wallpaper : 壁紙の描画
 @enduml

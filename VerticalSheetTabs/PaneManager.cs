@@ -155,6 +155,9 @@ namespace VerticalSheetTabs
             control.ShownBadges = settings.Badges;
             control.RowAnimation = settings.RowAnim;
             control.DoneAnimation = settings.DoneAnim;
+            control.RowTransparency = settings.RowTransparency;
+            control.TextOutline = settings.TextOutline;
+            control.SetWallpaper(settings.Wallpaper);
             control.ProgressRequested += (sheets, state) => SetProgress(entry, sheets, state);
             control.ProgressProtectRequested += sheet => ToggleSheetProtect(entry, sheet);
             control.LinkDropRequested += (names, screen) => CreateSheetLinks(entry, names, screen);
@@ -348,7 +351,7 @@ namespace VerticalSheetTabs
             bool tabsHidden = false;
             try { tabsHidden = !entry.Window.DisplayWorkbookTabs; }
             catch (Exception) { }
-            using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim, entry.Settings.CommentJump))
+            using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim, entry.Settings.CommentJump, entry.Settings.Wallpaper, entry.Settings.RowTransparency, entry.Settings.TextOutline))
             {
                 // (when the dialog is cancelled the pane still takes what was read from the file: the settings and the pane agree)
                 accepted = form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) == System.Windows.Forms.DialogResult.OK;
@@ -372,6 +375,9 @@ namespace VerticalSheetTabs
                     entry.Settings.WobbleSound = form.WobbleSound;
                     entry.Settings.WobbleVolume = form.WobbleVolume;
                     entry.Settings.WobbleSampleStyle = form.WobbleSampleStyle;
+                    entry.Settings.Wallpaper = form.Wallpaper;
+                    entry.Settings.RowTransparency = form.RowTransparency;
+                    entry.Settings.TextOutline = form.TextOutline;
                 }
             }
             // (the sheets are looked at again for another choice of badges, whether it came from the dialog or from the file)
@@ -390,6 +396,9 @@ namespace VerticalSheetTabs
                 entry.Control.ShownBadges = entry.Settings.Badges;
                 entry.Control.RowAnimation = entry.Settings.RowAnim;
                 entry.Control.DoneAnimation = entry.Settings.DoneAnim;
+                entry.Control.RowTransparency = entry.Settings.RowTransparency;
+                entry.Control.TextOutline = entry.Settings.TextOutline;
+                entry.Control.SetWallpaper(entry.Settings.Wallpaper);
                 entry.Control.SetWobble(entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur);
                 entry.Control.SetWobbleSound(entry.Settings.WobbleSound, entry.Settings.WobbleVolume);
             }

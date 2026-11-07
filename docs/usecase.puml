@@ -1,5 +1,5 @@
 @startuml
-title ユースケース図 (v1.4.10)
+title ユースケース図 (v1.5.0)
 left to right direction
 skinparam shadowing false
 skinparam packageStyle rectangle
@@ -47,7 +47,7 @@ rectangle "縦並びシートタブ" {
     usecase "縦タブの位置を決める" as UC_SIDE
     usecase "縦タブの幅を変える\n(ペインの境界をドラッグ)" as UC_WIDTH
     usecase "設定画面を開く" as UC_SET
-    usecase "見た目を選ぶ\n(選択デザイン・マーカー・点線)" as UC_LOOK
+    usecase "見た目を選ぶ\n(選択デザイン・マーカー・点線・壁紙)" as UC_LOOK
     usecase "アニメーション・効果音を選ぶ" as UC_ANIM
   }
 

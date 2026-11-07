@@ -58,7 +58,7 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.4.10.0</ApplicationVersion>
+    <ApplicationVersion>1.5.0.0</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>false</CreateDesktopShortcut>
     <CreateWebPageOnPublish>false</CreateWebPageOnPublish>
@@ -254,6 +254,8 @@
     <Compile Include="TabStrip.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Wallpaper.cs" />
+    <Compile Include="SettingsBackground.cs" />
     <Compile Include="Wobble.cs" />
     <Compile Include="WobbleSounds.cs" />
     <Compile Include="WorkbookSettings.cs" />

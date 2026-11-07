@@ -1,5 +1,5 @@
 @startuml
-title VerticalSheetTabs コンポーネント図 (v1.4.10)
+title VerticalSheetTabs コンポーネント図 (v1.5.0)
 left to right direction
 skinparam componentStyle uml2
 skinparam shadowing false
@@ -29,10 +29,12 @@ package "縦並びシートタブ (VSTOアドイン)" as ADDIN {
     component "CommentPopup\n(メモ・コメントの表示)" as CommentPopup
     component "TabTheme\n(Officeテーマの配色)" as TabTheme
     component "DpiHelper\n(画面の拡大率)" as DpiHelper
+    component "Wallpaper\n(壁紙の読み込み・配置・描画)" as Wallpaper
   }
 
   component "設定画面" as SETTINGS {
     component "SettingsForm" as SettingsForm
+    component "SettingsBackground\n(「背景」タブの部品)" as SettingsBackground
     component "AddInVersion" as AddInVersion
   }
 
@@ -90,11 +92,14 @@ TabStrip --> TabTheme
 TabStrip --> DpiHelper
 TabStrip --> WobbleSounds
 TabStrip --> Wobble : WobbleMotion
+TabStrip --> Wallpaper : 壁紙の描画
 TabColorPalette --> DpiHelper
 CommentPopup --> DpiHelper
 
 ' --- 設定画面
 SettingsForm --> TabStrip : サンプルの描画
+SettingsForm --> SettingsBackground
+SettingsBackground --> Wallpaper : 読めるか確かめる
 SettingsForm --> TabTheme
 SettingsForm --> Wobble
 SettingsForm --> NameRule

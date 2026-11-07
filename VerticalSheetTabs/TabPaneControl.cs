@@ -332,6 +332,9 @@ namespace VerticalSheetTabs
 
         public ActiveMarker ActiveMarker { get { return _strip.ActiveMarker; } set { _strip.ActiveMarker = value; } }
         public bool DoneAnimation { get { return _strip.DoneAnimation; } set { _strip.DoneAnimation = value; } }
+        public int RowTransparency { get { return _strip.RowTransparency; } set { _strip.RowTransparency = value; } }
+        public bool TextOutline { get { return _strip.TextOutline; } set { _strip.TextOutline = value; } }
+        public void SetWallpaper(WallpaperOptions options) { _strip.SetWallpaper(options); }
         public event Action<System.Collections.Generic.List<string>, int> ProgressRequested;
         public event Action<string> ProgressProtectRequested;
         public event Action<System.Collections.Generic.List<string>, System.Drawing.Point> LinkDropRequested;
