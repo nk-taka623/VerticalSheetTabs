@@ -89,7 +89,7 @@ namespace VerticalSheetTabs
             _sideGroup = CreateRowGroup("縦タブの位置", _sideLeft, _sideRight);
             _jumpCenter.Text = "行・列の中央 (できる範囲で)";
             _jumpTopLeft.Text = "左上 (Excelの標準)";
-            var jumpGroup = CreateRowGroup("コメントの「そのセルへ移動」で、セルを表示する位置", _jumpCenter, _jumpTopLeft);
+            var jumpGroup = CreateRowGroup("コメントの「そのセルへ移動」で、セルを表示する位置", _jumpTopLeft, _jumpCenter);
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
