@@ -66,7 +66,7 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim, CommentJump commentJump = CommentJump.Center)
+        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim, CommentJump commentJump = CommentJump.TopLeft)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
