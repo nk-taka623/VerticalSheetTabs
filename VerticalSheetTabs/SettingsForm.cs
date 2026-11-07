@@ -14,6 +14,7 @@ namespace VerticalSheetTabs
         private readonly RadioButton _sideLeft = new RadioButton();
         private readonly RadioButton _sideRight = new RadioButton();
         private GroupBox _sideGroup;
+        private readonly BackgroundPanel _background;
         private GroupBox _jumpGroup; // the position of the comment jump: only used while the note / comment badge is shown
         private readonly RadioButton _jumpCenter = new RadioButton();
         private readonly RadioButton _jumpTopLeft = new RadioButton();
@@ -68,7 +69,7 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim, CommentJump commentJump = CommentJump.TopLeft)
+        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim, CommentJump commentJump = CommentJump.TopLeft, WallpaperOptions wallpaper = null, int rowTransparency = 0, bool textOutline = true)
         {
             Text = "タブ表示の設定";
             Font = SystemFonts.MessageBoxFont;
@@ -96,6 +97,7 @@ namespace VerticalSheetTabs
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
+            _background = new BackgroundPanel(wallpaper, rowTransparency, textOutline);
             _rowAnim.Text = "フォルダ・シートの追加・削除を、動きで見せる";
             _rowAnim.Checked = rowAnim;
             _doneAnim.Text = "進捗を「完了」にしたとき、印をはじけさせる";
@@ -170,6 +172,7 @@ namespace VerticalSheetTabs
             var basic = new List<Control> { Banner(pcNote, width), top };
             if (tabsHidden) basic.Add(Banner("このブックは、横タブが非表示のため、縦タブは表示されません。", width));
             _tabs.TabPages.Add(CreatePage("基本", width, basic.ToArray()));
+            _tabs.TabPages.Add(CreatePage("背景", width, Banner(pcNote, width), _background.WallpaperGroup, _background.FitGroup, _background.PositionGroup, _background.TransparencyGroup));
             _tabs.TabPages.Add(CreatePage("デザイン", width, Banner(pcNote, width), _markerGroup, _styleGroup, _outlineGroup));
             _animPage = CreatePage("アニメーション", width, Banner(pcNote, width), _wobbleGroup, _animGroup);
             _tabs.TabPages.Add(_animPage);
@@ -290,6 +293,12 @@ namespace VerticalSheetTabs
         }
 
         public bool RowAnim { get { return _rowAnim.Checked; } }
+
+        public WallpaperOptions Wallpaper { get { return _background.Wallpaper; } }
+
+        public int RowTransparency { get { return _background.RowTransparency; } }
+
+        public bool TextOutline { get { return _background.TextOutline; } }
 
         public bool DoneAnim { get { return _doneAnim.Checked; } }
 

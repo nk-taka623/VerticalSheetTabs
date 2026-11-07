@@ -64,6 +64,20 @@ namespace VerticalSheetTabs
             if (v.TryGetValue("RowAnim", out t)) s.RowAnim = t != "Off";
             if (v.TryGetValue("DoneAnim", out t)) s.DoneAnim = t != "Off";
             if (v.TryGetValue("Badges", out t)) s.Badges = WorkbookSettings.ParseBadges(t);
+            WallpaperOptions w2 = s.Wallpaper ?? new WallpaperOptions();
+            if (v.TryGetValue("WallpaperPath", out t)) w2.Path = t;
+            if (v.TryGetValue("WallpaperFit", out t))
+            {
+                WallpaperFit fit;
+                if (Enum.TryParse(t, out fit) && Enum.IsDefined(typeof(WallpaperFit), fit)) w2.Fit = fit;
+            }
+            if (v.TryGetValue("WallpaperRatio", out t)) w2.KeepRatio = t != "Stretch";
+            if (v.TryGetValue("WallpaperTile", out t)) w2.Tile = t == "On";
+            if (v.TryGetValue("WallpaperHAlign", out t)) w2.HAlign = t == "Left" ? WallpaperHAlign.Left : t == "Right" ? WallpaperHAlign.Right : WallpaperHAlign.Center;
+            if (v.TryGetValue("WallpaperVAlign", out t)) w2.VAlign = t == "Top" ? WallpaperVAlign.Top : t == "Bottom" ? WallpaperVAlign.Bottom : WallpaperVAlign.Center;
+            s.Wallpaper = w2;
+            if (v.TryGetValue("RowTransparency", out t) && int.TryParse(t, out n)) s.RowTransparency = WorkbookSettings.ClampTransparency(n);
+            if (v.TryGetValue("TextOutline", out t)) s.TextOutline = t != "Off";
         }
 
         // The values as they are written in the file.
@@ -86,7 +100,15 @@ namespace VerticalSheetTabs
                 { "WobbleSampleStyle", s.WobbleSampleStyle ? "On" : "Off" },
                 { "RowAnim", s.RowAnim ? "On" : "Off" },
                 { "DoneAnim", s.DoneAnim ? "On" : "Off" },
-                { "Badges", WorkbookSettings.BadgesToString(s.Badges) }
+                { "Badges", WorkbookSettings.BadgesToString(s.Badges) },
+                { "WallpaperPath", s.Wallpaper.Path ?? "" },
+                { "WallpaperFit", s.Wallpaper.Fit.ToString() },
+                { "WallpaperRatio", s.Wallpaper.KeepRatio ? "Keep" : "Stretch" },
+                { "WallpaperTile", s.Wallpaper.Tile ? "On" : "Off" },
+                { "WallpaperHAlign", s.Wallpaper.HAlign.ToString() },
+                { "WallpaperVAlign", s.Wallpaper.VAlign.ToString() },
+                { "RowTransparency", s.RowTransparency.ToString() },
+                { "TextOutline", s.TextOutline ? "On" : "Off" }
             };
         }
 
