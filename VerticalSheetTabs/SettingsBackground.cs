@@ -144,6 +144,23 @@ namespace VerticalSheetTabs
             Refresh();
         }
 
+        // "表示方法" and "表示位置" side by side, in two columns of the same width (the whole row is width pixels wide).
+        public Control PairRow(int width)
+        {
+            int half = (width - 6) / 2;
+            int height = Math.Max(FitGroup.Height, PositionGroup.Height);
+            foreach (GroupBox g in new[] { FitGroup, PositionGroup })
+            {
+                g.Dock = DockStyle.None;
+                g.Size = new Size(half, height);
+                g.Margin = new Padding(3);
+            }
+            var row = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
+            row.Controls.Add(FitGroup);
+            row.Controls.Add(PositionGroup);
+            return row;
+        }
+
         public WallpaperOptions Wallpaper
         {
             get
