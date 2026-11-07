@@ -129,7 +129,7 @@ namespace VerticalSheetTabs
         {
             Mode = TabMode.Both;
             Side = TabSide.Left;
-            CommentJump = CommentJump.Center;
+            CommentJump = CommentJump.TopLeft;
             WidthDip = 0;
             OutlineVisible = true;
             OutlineLevel = 5;
