@@ -1,5 +1,5 @@
 @startuml
-title クラス図: データ・モデル・設定 (v1.4.9。主なメンバーだけ)
+title クラス図: データ・モデル・設定 (v1.4.10。主なメンバーだけ)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
@@ -71,6 +71,7 @@ package "設定" {
   class WorkbookSettings {
     +Mode : TabMode
     +Side : TabSide
+    +CommentJump : CommentJump
     +WidthDip : int
     +NameRule : bool
     +SelectStyle : SelectStyle
@@ -117,6 +118,11 @@ package "設定" {
   enum TabSide {
     Left
     Right
+  }
+  enum CommentJump {
+    Center
+    TopLeft
+    TopCenter
   }
   enum WobbleType {
     None
@@ -180,6 +186,7 @@ NameRule ..> FolderModel : 名前から作る
 
 WorkbookSettings --> TabMode
 WorkbookSettings --> TabSide
+WorkbookSettings --> CommentJump
 WorkbookSettings --> SelectStyle
 WorkbookSettings --> ActiveMarker
 WorkbookSettings --> BadgeKinds
