@@ -16,6 +16,7 @@ namespace VerticalSheetTabs
         private GroupBox _sideGroup;
         private readonly RadioButton _jumpCenter = new RadioButton();
         private readonly RadioButton _jumpTopLeft = new RadioButton();
+        private readonly RadioButton _jumpTopCenter = new RadioButton();
         private readonly CheckBox _outlineShow = new CheckBox();
         private readonly TrackBar _outlineLevel = new TrackBar();
         private readonly Panel _outlineSwatch = new Panel();
@@ -87,9 +88,10 @@ namespace VerticalSheetTabs
 
             var modeGroup = CreateRowGroup("表示モード", _modeHorizontal, _modeBoth);
             _sideGroup = CreateRowGroup("縦タブの位置", _sideLeft, _sideRight);
-            _jumpCenter.Text = "行・列の中央 (できる範囲で)";
-            _jumpTopLeft.Text = "左上 (Excelの標準)";
-            var jumpGroup = CreateRowGroup("コメントの「そのセルへ移動」で、セルを表示する位置", _jumpTopLeft, _jumpCenter);
+            _jumpTopCenter.Text = "中央上";
+            _jumpCenter.Text = "行・列の中央";
+            _jumpTopLeft.Text = "左上 (標準)";
+            var jumpGroup = CreateRowGroup("コメントの「そのセルへ移動」で、セルを表示する位置", true, _jumpTopLeft, _jumpTopCenter, _jumpCenter);
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
@@ -217,8 +219,9 @@ namespace VerticalSheetTabs
             _modeBoth.Checked = mode == TabMode.Both;
             _sideLeft.Checked = side == TabSide.Left;
             _sideRight.Checked = side == TabSide.Right;
-            _jumpCenter.Checked = commentJump != CommentJump.TopLeft;
-            _jumpTopLeft.Checked = commentJump == CommentJump.TopLeft;
+            _jumpCenter.Checked = commentJump == CommentJump.Center;
+            _jumpTopCenter.Checked = commentJump == CommentJump.TopCenter;
+            _jumpTopLeft.Checked = commentJump != CommentJump.Center && commentJump != CommentJump.TopCenter;
 
             _nameRule.Checked = nameRule;
             _styleStandard.Checked = selectStyle == SelectStyle.Standard;
@@ -266,7 +269,7 @@ namespace VerticalSheetTabs
 
         public CommentJump CommentJump
         {
-            get { return _jumpTopLeft.Checked ? CommentJump.TopLeft : CommentJump.Center; }
+            get { return _jumpCenter.Checked ? CommentJump.Center : _jumpTopCenter.Checked ? CommentJump.TopCenter : CommentJump.TopLeft; }
         }
 
         public SelectStyle SelectStyle
@@ -811,6 +814,12 @@ namespace VerticalSheetTabs
 
         private static GroupBox CreateRowGroup(string title, params ButtonBase[] radios)
         {
+            return CreateRowGroup(title, false, radios);
+        }
+
+        // equalGaps: the space between the texts is the same (otherwise every button is as wide as the widest one)
+        private static GroupBox CreateRowGroup(string title, bool equalGaps, params ButtonBase[] radios)
+        {
             var group = new GroupBox
             {
                 Text = title,
@@ -836,7 +845,7 @@ namespace VerticalSheetTabs
             int gap = TextRenderer.MeasureText("0000", group.Font).Width;
             foreach (ButtonBase r in radios)
             {
-                r.Margin = new Padding(3, 3, widest - r.PreferredSize.Width + gap, 3);
+                r.Margin = new Padding(3, 3, equalGaps ? gap : widest - r.PreferredSize.Width + gap, 3);
                 panel.Controls.Add(r);
             }
             group.Controls.Add(panel);
