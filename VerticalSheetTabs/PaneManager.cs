@@ -348,7 +348,7 @@ namespace VerticalSheetTabs
             bool tabsHidden = false;
             try { tabsHidden = !entry.Window.DisplayWorkbookTabs; }
             catch (Exception) { }
-            using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim))
+            using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim, entry.Settings.CommentJump))
             {
                 // (when the dialog is cancelled the pane still takes what was read from the file: the settings and the pane agree)
                 accepted = form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) == System.Windows.Forms.DialogResult.OK;
@@ -356,6 +356,7 @@ namespace VerticalSheetTabs
                 {
                     entry.Settings.Mode = form.Mode;
                     entry.Settings.Side = form.Side;
+                    entry.Settings.CommentJump = form.CommentJump;
                     entry.Settings.OutlineVisible = form.OutlineVisible;
                     entry.Settings.OutlineLevel = form.OutlineLevel;
                     nameRuleTurnedOn = !entry.Settings.NameRule && form.NameRule;
@@ -1186,7 +1187,7 @@ namespace VerticalSheetTabs
                 ws.Activate();
                 var cell = ws.Range[c.Address];
                 _app.Goto(cell, true);
-                CenterCell(entry.Window, ws, cell);
+                if (entry.Settings.CommentJump == CommentJump.Center) CenterCell(entry.Window, ws, cell);
             }
             catch (Exception)
             {
