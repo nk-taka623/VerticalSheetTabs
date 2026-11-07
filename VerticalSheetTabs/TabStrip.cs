@@ -1100,7 +1100,7 @@ namespace VerticalSheetTabs
 
             // the tabs scroll inside the area above the pinned "+" row
             g.SetClip(new Rectangle(0, HeaderPx, ClientSize.Width, Math.Max(0, ViewHeight - HeaderPx)));
-            DrawFolderOutlines(g);
+            if (!Translucent) DrawFolderOutlines(g); // (with transparent rows, the line goes over them: under them, they would dim it)
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
             var wobbling = new List<int>();
             var comingIn = new List<int>();
@@ -1119,6 +1119,7 @@ namespace VerticalSheetTabs
                     if (IsFadedRow(_rows[i])) DrawFadedPlace(g, row);
                 }
             }
+            if (Translucent) DrawFolderOutlines(g);
             DrawRowAnim(g, comingIn);
             DrawDoneAnim(g);
             foreach (int index in wobbling)
@@ -1453,6 +1454,7 @@ namespace VerticalSheetTabs
         private Dictionary<string, bool> _raIndent;       // sheet name -> whether it was indented before
         private int[] _raAddedAt;                         // the indexes of the rows that come in, in order (for the rows below them)
         private int[] _raGhostAt;                         // the At of the rows that go, in order
+        private int _raShift;                             // how far the scroll position moved up because the list got shorter (rows that go at the bottom of a scrolled list)
         private Dictionary<string, Bitmap> _raPictures;   // the pictures of the rows that come in (made when first drawn)
 
         private class RowAnimGhost
@@ -1466,6 +1468,7 @@ namespace VerticalSheetTabs
         {
             public HashSet<string> Added = new HashSet<string>();
             public List<RowAnimGhost> Ghosts = new List<RowAnimGhost>();
+            public int ScrollY; // the scroll position before
             public Dictionary<string, bool> OldIndented = new Dictionary<string, bool>();
         }
 
@@ -1540,7 +1543,7 @@ namespace VerticalSheetTabs
             var removed = new HashSet<string>(_names.Where(n => !names.Contains(n)).Select(n => "S:" + n).Concat(oldFolders.Where(f => !newFolders.Contains(f)).Select(f => "F:" + f)));
             // only rows that came, or only rows that went (a rename or a regrouping does both)
             if ((added.Count == 0) == (removed.Count == 0)) return null;
-            var p = new RowAnimPending { Added = new HashSet<string>(added) };
+            var p = new RowAnimPending { Added = new HashSet<string>(added), ScrollY = _scrollY };
             foreach (StripRow r in _rows) if (!r.IsFolder && r.Sheet != null) p.OldIndented[r.Sheet] = r.Indented;
             int before = 0;
             for (int i = 0; i < _rows.Count; i++)
@@ -1576,6 +1579,8 @@ namespace VerticalSheetTabs
                 foreach (RowAnimGhost g in p.Ghosts) g.At = Math.Min(g.At, _rows.Count);
                 _raGhosts = p.Ghosts;
                 _raGhostAt = p.Ghosts.Select(g => g.At).ToArray(); // (in order: the rows that go were taken from the top down)
+                // (a scrolled list that gets shorter scrolls back: the rows and the ones that go are then drawn from where they were)
+                _raShift = Math.Max(0, p.ScrollY - _scrollY);
             }
             // the sheets whose indent changes (a folder came or went around them) slide to their new place
             var indent = new Dictionary<string, bool>();
@@ -1607,6 +1612,7 @@ namespace VerticalSheetTabs
             _raIndent = null;
             _raAddedAt = null;
             _raGhostAt = null;
+            _raShift = 0;
             DropRowAnimPictures();
             if (_raGhosts != null)
             {
@@ -1648,7 +1654,7 @@ namespace VerticalSheetTabs
             if (_raGhostAt != null)
             {
                 int before = CountBelow(_raGhostAt, index, true);
-                return (int)Math.Round(RowPx * before * (1 - RowAnimSlide()));
+                return (int)Math.Round((RowPx * before - _raShift) * (1 - RowAnimSlide()));
             }
             return 0;
         }
@@ -1737,7 +1743,7 @@ namespace VerticalSheetTabs
             {
                 RowAnimGhost gh = _raGhosts[j];
                 if (gh.Bmp == null) continue; // (out of view when it went)
-                var row = new Rectangle(0, HeaderPx + (gh.At + j) * RowPx - _scrollY, gh.Bmp.Width, gh.Bmp.Height);
+                var row = new Rectangle(0, HeaderPx + (gh.At + j) * RowPx - _scrollY - _raShift, gh.Bmp.Width, gh.Bmp.Height);
                 if (row.Bottom < HeaderPx - RowPx || row.Top > ViewHeight + RowPx) continue; // (out of view now: the particles too)
                 double shrink = EaseOut((t - 0.1) / 0.55);
                 double sy = t < 0.1 ? 1 + 0.06 * (t / 0.1) : 1 - shrink;
@@ -3401,6 +3407,7 @@ namespace VerticalSheetTabs
 
         private void DrawSeparator(Graphics g, Rectangle row)
         {
+            if (Defer(g2 => DrawSeparator(g2, row))) return; // (a line of its own: not thinned with the row's color)
             int sepHalf = Px(SeparatorLength) / 2;
             int cx = row.Left + row.Width / 2;
             using (var pen = new Pen(Theme.Separator, 1))

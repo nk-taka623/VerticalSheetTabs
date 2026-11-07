@@ -1,5 +1,5 @@
 @startuml
-title クラス図: データ・モデル・設定 (v1.5.0。主なメンバーだけ)
+title クラス図: データ・モデル・設定 (v1.5.1。主なメンバーだけ)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
