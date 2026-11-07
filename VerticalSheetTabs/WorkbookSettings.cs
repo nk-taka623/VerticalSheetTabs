@@ -100,6 +100,8 @@ namespace VerticalSheetTabs
         public TabMode Mode { get; set; }
         public TabSide Side { get; set; }
         public CommentJump CommentJump { get; set; }
+        // How the rows are laid out in the pane (kept for the whole PC).
+        public RowLayout RowLayout { get; set; }
         // The width of the vertical tabs for a workbook that has no stored width. Chars: 12 to 64; Px: 0 (= the width of 12 characters) or up to 2000.
         public InitialWidthMode InitialWidthMode { get; set; }
         public int InitialWidthChars { get; set; }
@@ -159,6 +161,7 @@ namespace VerticalSheetTabs
             Mode = TabMode.Both;
             Side = TabSide.Left;
             CommentJump = CommentJump.TopLeft;
+            RowLayout = RowLayout.Hanging;
             InitialWidthMode = InitialWidthMode.Chars;
             InitialWidthChars = InitialCharsMin;
             InitialWidthPx = 0;

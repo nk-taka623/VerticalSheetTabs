@@ -202,7 +202,7 @@ namespace VerticalSheetTabs
             BackColor = _theme.BarBack;
             CreateSearchBox();
             _scroll.Dock = DockStyle.None;
-            _scroll.Scroll += (s, e) => { _scrollY = _scroll.Value; Invalidate(); };
+            _scroll.Scroll += (s, e) => { _scrollY = _scroll.Value; _fromBottom = RowPlacement.FromBottom(_scrollY, _rows.Count, RowPx, AreaHeight); Invalidate(); };
             Controls.Add(_scroll);
         }
 
@@ -345,11 +345,39 @@ namespace VerticalSheetTabs
         private const double HeaderHeight = 24, HeaderGap = 1.6, HeaderRadius = 3.2, HeaderTextShift = 1.5;
         private int _folderCount;
         private int _headerDown, _headerHot; // 0 none, 1 open all, 2 close all
-        private bool ShowAllButtons { get { return !IsSample && _folderCount >= 1; } }
+        private bool ShowAllButtons { get { return HasChrome && _folderCount >= 1; } }
         private int BandPx { get { return ShowAllButtons ? Px(HeaderHeight) : 0; } }
-        // The rows start below the tool row (back, forward, search) and the band.
-        private int HeaderPx { get { return ToolPx + BandPx; } }
-        private int AreaHeight { get { return Math.Max(0, ViewHeight - HeaderPx); } }
+
+        // ---- where the rows are: the area of the rows, and the tool row and the band around it ----
+        // Hanging: tool row, band, rows (from the top), "+" at the bottom. Stacked: rows (from the bottom up), band, tool row, "+".
+        private RowLayout _layout = RowLayout.Hanging;
+
+        public RowLayout Arrangement
+        {
+            get { return _layout; }
+            set
+            {
+                if (_layout == value) return;
+                EndRowAnim();
+                _layout = value;
+                _fromBottom = 0;
+                UpdateScrollBar();
+                LayoutSearch();
+                Invalidate();
+            }
+        }
+
+        private bool Stacked { get { return _layout == RowLayout.Stacked; } }
+        // The tool row, the band and the "+" belong to the pane itself (a sample has none; the preview of a layout does).
+        private bool HasChrome { get { return !IsSample || IsPreview; } }
+        private int ToolTop { get { return Stacked ? Math.Max(0, ViewHeight - ToolPx) : 0; } }
+        private int BandTop { get { return Stacked ? Math.Max(0, ToolTop - BandPx) : ToolPx; } }
+        private int AreaTop { get { return Stacked ? 0 : ToolPx + BandPx; } }
+        private int AreaBottom { get { return Stacked ? BandTop : ViewHeight; } }
+        private int AreaHeight { get { return Math.Max(0, AreaBottom - AreaTop); } }
+        // The space above the first row when the rows pile up from the bottom and all of them fit.
+        private int StackOffset { get { return RowPlacement.StackOffset(Stacked, AreaHeight, _rows.Count, RowPx); } }
+        private int _fromBottom;                    // stacked: how far the list is scrolled up from its bottom end
 
         public event Action<bool> AllFoldersRequested;
 
@@ -358,7 +386,7 @@ namespace VerticalSheetTabs
         {
             int gap = Math.Max(1, Px(HeaderGap));
             int w = Math.Max(1, (ClientSize.Width - 3 * gap) / 2);
-            return new Rectangle(open ? gap : 2 * gap + w, ToolPx + gap, w, Math.Max(1, BandPx - 2 * gap));
+            return new Rectangle(open ? gap : 2 * gap + w, BandTop + gap, w, Math.Max(1, BandPx - 2 * gap));
         }
 
         private int AllButtonAt(Point p)
@@ -390,7 +418,7 @@ namespace VerticalSheetTabs
         public event Action<string> HistoryJumpRequested;
         public event Action HistoryClearRequested;
 
-        private int ToolPx { get { return IsSample ? 0 : Px(ToolHeight); } }
+        private int ToolPx { get { return HasChrome ? Px(ToolHeight) : 0; } }
         private bool Filtering { get { return !IsSample && _query.Length > 0; } }
 
         public void SetNavigation(bool canBack, bool canForward)
@@ -404,7 +432,7 @@ namespace VerticalSheetTabs
         private Rectangle ToolBackRect()
         {
             int s = Px(ToolButton);
-            return new Rectangle(Px(ToolGap), (ToolPx - s) / 2, s, s);
+            return new Rectangle(Px(ToolGap), ToolTop + (ToolPx - s) / 2, s, s);
         }
 
         private Rectangle ToolForwardRect()
@@ -416,7 +444,7 @@ namespace VerticalSheetTabs
         private Rectangle ToolFolderRect()
         {
             int s = Px(ToolButton);
-            return new Rectangle(ClientSize.Width - Px(ToolGap) - s, (ToolPx - s) / 2, s, s);
+            return new Rectangle(ClientSize.Width - Px(ToolGap) - s, ToolTop + (ToolPx - s) / 2, s, s);
         }
 
         private Rectangle ToolBoxRect()
@@ -424,7 +452,7 @@ namespace VerticalSheetTabs
             int left = ToolForwardRect().Right + Px(ToolGap);
             int right = ToolFolderRect().Left - Px(ToolGap);
             int h = Px(ToolBoxHeight);
-            return new Rectangle(left, (ToolPx - h) / 2, Math.Max(Px(36), right - left), h);
+            return new Rectangle(left, ToolTop + (ToolPx - h) / 2, Math.Max(Px(36), right - left), h);
         }
 
         private Rectangle ToolClearRect()
@@ -445,7 +473,7 @@ namespace VerticalSheetTabs
 
         private int ToolAt(Point p)
         {
-            if (IsSample || p.Y >= ToolPx) return 0;
+            if (IsSample || p.Y < ToolTop || p.Y >= ToolTop + ToolPx) return 0;
             if (ToolBackRect().Contains(p)) return 1;
             if (ToolForwardRect().Contains(p)) return 2;
             if (_query.Length > 0 && ToolClearRect().Contains(p)) return 3;
@@ -697,7 +725,7 @@ namespace VerticalSheetTabs
                 if (_searchSel < 0 || _searchSel >= result.Count || !IsResultRow(result[_searchSel])) _searchSel = first;
             }
             UpdateScrollBar();
-            if (_scrollY > 0 && !_scroll.Visible) _scrollY = 0;
+            if (_scrollY > 0 && !_scroll.Visible) { _scrollY = 0; _fromBottom = 0; }
             Invalidate();
         }
 
@@ -879,7 +907,8 @@ namespace VerticalSheetTabs
             menu.Items.Add(clear);
             menu.Closed += (s, e) => BeginInvoke(new Action(menu.Dispose));
             Rectangle b = ToolBackRect();
-            menu.Show(this, new Point(b.Left, b.Bottom + Px(2)));
+            if (Stacked) menu.Show(this, new Point(b.Left, b.Top - Px(2)), ToolStripDropDownDirection.AboveRight); // (below it is the "+")
+            else menu.Show(this, new Point(b.Left, b.Bottom + Px(2)));
         }
 
         private void StartLongPress()
@@ -902,7 +931,7 @@ namespace VerticalSheetTabs
             _longPress.Start();
         }
 
-        private int ViewHeight { get { return IsSample ? ClientSize.Height : Math.Max(0, ClientSize.Height - RowPx); } }
+        private int ViewHeight { get { return HasChrome ? Math.Max(0, ClientSize.Height - RowPx) : ClientSize.Height; } }
 
         // The rows of an open folder that has sheets listed (they are enclosed by the dashed outline).
         private static void MarkGroups(List<StripRow> rows)
@@ -959,14 +988,12 @@ namespace VerticalSheetTabs
 
         public int IndexFromPoint(Point p)
         {
-            if (p.Y < HeaderPx || p.Y >= ViewHeight || RowPx <= 0) return -1;
-            int i = (p.Y - HeaderPx + _scrollY) / RowPx;
-            return i >= 0 && i < _rows.Count ? i : -1;
+            return RowPlacement.IndexFromY(p.Y, AreaTop, AreaBottom, StackOffset, _scrollY, RowPx, _rows.Count);
         }
 
         private Rectangle RowRect(int index)
         {
-            return new Rectangle(0, HeaderPx + index * RowPx - _scrollY, ContentWidth, RowPx);
+            return new Rectangle(0, RowPlacement.RowTop(AreaTop, StackOffset, index, RowPx, _scrollY), ContentWidth, RowPx);
         }
 
         private int ContentWidth { get { return ClientSize.Width - (_scroll.Visible ? _scroll.Width : 0); } }
@@ -990,16 +1017,17 @@ namespace VerticalSheetTabs
             if (!need)
             {
                 _scrollY = 0;
+                _fromBottom = 0;
                 return;
             }
             try
             {
-                _scroll.SetBounds(ClientSize.Width - _scroll.Width, HeaderPx, _scroll.Width, view);
+                _scroll.SetBounds(ClientSize.Width - _scroll.Width, AreaTop, _scroll.Width, view);
                 _scroll.Minimum = 0;
                 _scroll.LargeChange = view;
                 _scroll.SmallChange = RowPx;
                 _scroll.Maximum = total - 1;
-                _scrollY = Math.Max(0, Math.Min(_scrollY, total - view));
+                _scrollY = Stacked ? RowPlacement.ScrollFromBottom(_fromBottom, _rows.Count, RowPx, view) : Math.Max(0, Math.Min(_scrollY, total - view));
                 _scroll.Value = Math.Max(0, Math.Min(_scrollY, _scroll.Maximum - _scroll.LargeChange + 1));
             }
             catch (ArgumentException)
@@ -1013,6 +1041,7 @@ namespace VerticalSheetTabs
             if (!_scroll.Visible) return;
             int max = Math.Max(0, _rows.Count * RowPx - AreaHeight);
             _scrollY = Math.Max(0, Math.Min(y, max));
+            _fromBottom = RowPlacement.FromBottom(_scrollY, _rows.Count, RowPx, AreaHeight);
             try
             {
                 _scroll.Value = Math.Max(0, Math.Min(_scrollY, Math.Max(0, _scroll.Maximum - _scroll.LargeChange + 1)));
@@ -1028,8 +1057,8 @@ namespace VerticalSheetTabs
         {
             if (index < 0 || !_scroll.Visible) return;
             Rectangle r = RowRect(index);
-            if (r.Top < HeaderPx) SetScroll(_scrollY + r.Top - HeaderPx);
-            else if (r.Bottom > ViewHeight) SetScroll(_scrollY + r.Bottom - ViewHeight);
+            if (r.Top < AreaTop) SetScroll(_scrollY + r.Top - AreaTop);
+            else if (r.Bottom > AreaBottom) SetScroll(_scrollY + r.Bottom - AreaBottom);
         }
 
         protected override void OnResize(EventArgs e)
@@ -1113,7 +1142,7 @@ namespace VerticalSheetTabs
             }
 
             // the tabs scroll inside the area above the pinned "+" row
-            g.SetClip(new Rectangle(0, HeaderPx, ClientSize.Width, Math.Max(0, ViewHeight - HeaderPx)));
+            g.SetClip(new Rectangle(0, AreaTop, ClientSize.Width, AreaHeight));
             if (!Translucent) DrawFolderOutlines(g); // (with transparent rows, the line goes over them: under them, they would dim it)
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
             var wobbling = new List<int>();
@@ -1122,7 +1151,7 @@ namespace VerticalSheetTabs
             {
                 Rectangle row = RowRect(i);
                 row.Offset(0, RowAnimDy(i));
-                if (row.Top > ViewHeight) break;
+                if (row.Top > AreaBottom + RowPx) break;
                 if (row.Bottom < 0) continue;
                 row = RowAnimIndent(row, _rows[i]);
                 if (_raAdded != null && _raAdded.Contains(RowKey(_rows[i]))) comingIn.Add(i);
@@ -1165,10 +1194,10 @@ namespace VerticalSheetTabs
             DrawGhost(g);
             DrawSearchChoice(g);
             g.ResetClip();
-            if (!IsSample) DrawToolRow(g);
+            if (HasChrome) DrawToolRow(g);
 
             if (ShowAllButtons) DrawAllButtons(g);
-            if (!IsSample) DrawPlus(g);
+            if (HasChrome) DrawPlus(g);
         }
 
         // ---- the wallpaper and the transparent rows ----
@@ -1250,9 +1279,8 @@ namespace VerticalSheetTabs
         // The place of the wallpaper: empty when the rows fill the view.
         private Rectangle WallpaperRegion()
         {
-            int top = HeaderPx;
-            if (_rowTransparency == 0) top = Math.Max(top, HeaderPx + _rows.Count * RowPx - _scrollY);
-            int bottom = ViewHeight;
+            int top, bottom;
+            RowPlacement.WallpaperSpan(Stacked, _rowTransparency > 0, AreaTop, AreaBottom, RowPlacement.RowTop(AreaTop, StackOffset, 0, RowPx, _scrollY), _rows.Count, RowPx, _scrollY, out top, out bottom);
             if (bottom - top < 1 || ClientSize.Width < 1) return Rectangle.Empty;
             return new Rectangle(0, top, ClientSize.Width, bottom - top);
         }
@@ -1405,7 +1433,7 @@ namespace VerticalSheetTabs
                 StripRow r = _rows[i];
                 Rectangle row = RowRect(i);
                 row.Offset(0, RowAnimDy(i));
-                if (row.Top > ViewHeight) break;
+                if (row.Top > AreaBottom + RowPx) break;
                 if (row.Bottom < 0 || r.IsFolder || r.Sheet == null || !_dnSheets.Contains(r.Sheet)) continue;
                 RowBadgeSpec spec = RowBadges(r, row).FirstOrDefault(s => s.Kind == RowBadgeKind.Progress);
                 if (spec == null) continue;
@@ -1468,6 +1496,7 @@ namespace VerticalSheetTabs
         private Dictionary<string, bool> _raIndent;       // sheet name -> whether it was indented before
         private int[] _raAddedAt;                         // the indexes of the rows that come in, in order (for the rows below them)
         private int[] _raGhostAt;                         // the At of the rows that go, in order
+        private int _raFirstShift, _raOldFirstTop;       // stacked: how far the first row moved, and where it was before the rows came or went
         private int _raShift;                             // how far the scroll position moved up because the list got shorter (rows that go at the bottom of a scrolled list)
         private Dictionary<string, Bitmap> _raPictures;   // the pictures of the rows that come in (made when first drawn)
 
@@ -1483,6 +1512,7 @@ namespace VerticalSheetTabs
             public HashSet<string> Added = new HashSet<string>();
             public List<RowAnimGhost> Ghosts = new List<RowAnimGhost>();
             public int ScrollY; // the scroll position before
+            public int FirstTop; // where the first row was before
             public Dictionary<string, bool> OldIndented = new Dictionary<string, bool>();
         }
 
@@ -1557,7 +1587,7 @@ namespace VerticalSheetTabs
             var removed = new HashSet<string>(_names.Where(n => !names.Contains(n)).Select(n => "S:" + n).Concat(oldFolders.Where(f => !newFolders.Contains(f)).Select(f => "F:" + f)));
             // only rows that came, or only rows that went (a rename or a regrouping does both)
             if ((added.Count == 0) == (removed.Count == 0)) return null;
-            var p = new RowAnimPending { Added = new HashSet<string>(added), ScrollY = _scrollY };
+            var p = new RowAnimPending { Added = new HashSet<string>(added), ScrollY = _scrollY, FirstTop = RowRect(0).Top };
             foreach (StripRow r in _rows) if (!r.IsFolder && r.Sheet != null) p.OldIndented[r.Sheet] = r.Indented;
             int before = 0;
             for (int i = 0; i < _rows.Count; i++)
@@ -1566,7 +1596,7 @@ namespace VerticalSheetTabs
                 if (!removed.Contains(RowKey(r))) continue;
                 // a picture only of a row the user sees now; the others go without being drawn
                 Rectangle rect = RowRect(i);
-                bool inView = rect.Bottom > HeaderPx && rect.Top < ViewHeight;
+                bool inView = rect.Bottom > AreaTop && rect.Top < AreaBottom;
                 p.Ghosts.Add(new RowAnimGhost { Bmp = inView ? RenderRowBitmap(r, ContentWidth) : null, At = i - before, Color = RowAnimVisibleColor(r) });
                 before++;
             }
@@ -1596,6 +1626,9 @@ namespace VerticalSheetTabs
                 // (a scrolled list that gets shorter scrolls back: the rows and the ones that go are then drawn from where they were)
                 _raShift = Math.Max(0, p.ScrollY - _scrollY);
             }
+            // stacked: the rows above the ones that came or went are on their way, and the first row has moved as well
+            _raOldFirstTop = p.FirstTop;
+            _raFirstShift = Stacked ? p.FirstTop - RowRect(0).Top : 0;
             // the sheets whose indent changes (a folder came or went around them) slide to their new place
             var indent = new Dictionary<string, bool>();
             foreach (StripRow r in _rows)
@@ -1627,6 +1660,7 @@ namespace VerticalSheetTabs
             _raAddedAt = null;
             _raGhostAt = null;
             _raShift = 0;
+            _raFirstShift = 0;
             DropRowAnimPictures();
             if (_raGhosts != null)
             {
@@ -1663,11 +1697,13 @@ namespace VerticalSheetTabs
             if (_raAddedAt != null)
             {
                 int before = CountBelow(_raAddedAt, index, false);
+                if (Stacked) return (int)Math.Round((_raFirstShift - RowPx * before) * (1 - RowAnimSlide()));
                 return -(int)Math.Round(RowPx * before * (1 - RowAnimSlide()));
             }
             if (_raGhostAt != null)
             {
                 int before = CountBelow(_raGhostAt, index, true);
+                if (Stacked) return (int)Math.Round((_raFirstShift + RowPx * before) * (1 - RowAnimSlide()));
                 return (int)Math.Round((RowPx * before - _raShift) * (1 - RowAnimSlide()));
             }
             return 0;
@@ -1757,8 +1793,9 @@ namespace VerticalSheetTabs
             {
                 RowAnimGhost gh = _raGhosts[j];
                 if (gh.Bmp == null) continue; // (out of view when it went)
-                var row = new Rectangle(0, HeaderPx + (gh.At + j) * RowPx - _scrollY - _raShift, gh.Bmp.Width, gh.Bmp.Height);
-                if (row.Bottom < HeaderPx - RowPx || row.Top > ViewHeight + RowPx) continue; // (out of view now: the particles too)
+                int ghostTop = Stacked ? RowPlacement.OldRowTop(_raOldFirstTop, gh.At + j, RowPx) : AreaTop + (gh.At + j) * RowPx - _scrollY - _raShift;
+                var row = new Rectangle(0, ghostTop, gh.Bmp.Width, gh.Bmp.Height);
+                if (row.Bottom < AreaTop - RowPx || row.Top > AreaBottom + RowPx) continue; // (out of view now: the particles too)
                 double shrink = EaseOut((t - 0.1) / 0.55);
                 double sy = t < 0.1 ? 1 + 0.06 * (t / 0.1) : 1 - shrink;
                 double sx = t < 0.1 ? sy : 1 - 0.25 * shrink;
@@ -2304,7 +2341,7 @@ namespace VerticalSheetTabs
             int index = _chordKey == null ? -1 : _rows.FindIndex(r => RowKey(r) == _chordKey);
             if (index < 0 || !CopyIconApplies(_rows[index]) || wobbling.Contains(index)) return;
             Rectangle chip = CopyChipRect(index);
-            if (chip.Bottom < HeaderPx || chip.Top > ViewHeight) return;
+            if (chip.Bottom < AreaTop || chip.Top > AreaBottom) return;
             GraphicsState state = g.Save();
             g.SmoothingMode = SmoothingMode.AntiAlias;
             // the chip behind the icon: it shows on any color of a row
@@ -3011,6 +3048,33 @@ namespace VerticalSheetTabs
             Invalidate();
         }
 
+        // The preview of a layout (the settings dialog): the tool row, the band, a folder with two sheets, one more sheet and the "+",
+        // laid out the given way. No operation; it is drawn as the pane draws.
+        public bool IsPreview { get; private set; }
+
+        public void SetLayoutPreview(RowLayout layout, SelectStyle style, ActiveMarker marker)
+        {
+            IsSample = true;
+            IsPreview = true;
+            TabStop = false;
+            _activeMarker = marker;
+            _selectStyle = style;
+            _layout = layout;
+            var folder = new StripRow { FolderId = "preview", FolderName = "フォルダ１", Expanded = true, Members = new List<string> { "シート１", "シート２" } };
+            var rows = new List<StripRow>
+            {
+                folder,
+                new StripRow { Sheet = "シート１", Indented = true },
+                new StripRow { Sheet = "シート２", Indented = true },
+                new StripRow { Sheet = "シート３" }
+            };
+            var names = new List<string> { "シート１", "シート２", "シート３" };
+            SetSheets(names, "シート２", new List<string> { "シート２" }, new Dictionary<string, int>(), rows);
+            _selFolders.Clear();
+            UpdateScrollBar();
+            Invalidate();
+        }
+
         public bool OutlineVisible
         {
             get { return _outlineVisible; }
@@ -3130,7 +3194,7 @@ namespace VerticalSheetTabs
                 if (last == i) continue; // no sheet of the folder is listed
 
                 Rectangle top = RowRect(i), bottom = RowRect(last);
-                if (bottom.Bottom < 0 || top.Top > ViewHeight) { i = last; continue; }
+                if (bottom.Bottom < 0 || top.Top > AreaBottom) { i = last; continue; }
                 int l = Px(1), r = ContentWidth - Px(OutlineRightInset), t = top.Top + Px(1), b = bottom.Bottom - Px(1);
                 int cut = Math.Min(Px(OutlineCut), Math.Min(r - l, b - t) / 2);
                 var points = new[]
@@ -4450,7 +4514,7 @@ namespace VerticalSheetTabs
                 _hoverIndex = -2 - tool;
                 _tip.Hide(this);
                 string tip = tool == 1 ? "戻る (長押し・右クリックで、履歴)" : tool == 2 ? "進む" : tool == 3 ? "検索を終わる (Esc)" : (_folderSearch ? "フォルダ名で検索中 (押すと、シート名の検索に切り替え)" : "シート名で検索中 (押すと、フォルダ名の検索に切り替え)");
-                if (Control.MouseButtons == MouseButtons.None) _tip.Show(tip, this, p.X, ToolPx + Px(2), 3000);
+                if (Control.MouseButtons == MouseButtons.None) _tip.Show(tip, this, p.X, Stacked ? ToolTop - Px(24) : ToolPx + Px(2), 3000);
                 return;
             }
             int index = IndexFromPoint(p);
@@ -4752,7 +4816,13 @@ namespace VerticalSheetTabs
         private int InsertIndexAt(Point p)
         {
             int index = IndexFromPoint(p);
-            if (p.Y < HeaderPx) return 0;
+            if (Stacked)
+            {
+                // the band, the tool row and the "+" are below the rows: the end; the space above the first row: the start
+                if (p.Y >= AreaBottom) return _rows.Count;
+                if (index < 0) return p.Y < RowRect(0).Top ? 0 : _rows.Count;
+            }
+            else if (p.Y < AreaTop) return 0;
             if (index < 0) return _rows.Count;
             Rectangle r = RowRect(index);
             return p.Y < r.Top + r.Height / 2 ? index : index + 1;
@@ -4762,8 +4832,8 @@ namespace VerticalSheetTabs
         private void ScrollNearEdge(Point p)
         {
             int edge = Math.Max(8, RowPx / 2);
-            if (p.Y < HeaderPx + edge) SetScroll(_scrollY - RowPx / 2);
-            else if (p.Y > ViewHeight - edge) SetScroll(_scrollY + RowPx / 2);
+            if (p.Y < AreaTop + edge) SetScroll(_scrollY - RowPx / 2);
+            else if (p.Y > AreaBottom - edge) SetScroll(_scrollY + RowPx / 2);
         }
 
         // ---- renaming ----

@@ -46,6 +46,7 @@ namespace VerticalSheetTabs
             if (v.TryGetValue("Mode", out t)) s.Mode = t == "A" ? TabMode.HorizontalOnly : TabMode.Both;
             if (v.TryGetValue("Side", out t)) s.Side = t == "Right" ? TabSide.Right : TabSide.Left;
             if (v.TryGetValue("CommentJump", out t)) s.CommentJump = t == "Center" ? CommentJump.Center : t == "TopCenter" ? CommentJump.TopCenter : CommentJump.TopLeft;
+            if (v.TryGetValue("RowLayout", out t)) s.RowLayout = t == "Stacked" ? RowLayout.Stacked : RowLayout.Hanging;
             if (v.TryGetValue("InitialWidthMode", out t)) s.InitialWidthMode = t == "Px" ? InitialWidthMode.Px : InitialWidthMode.Chars;
             int iw;
             if (v.TryGetValue("InitialWidthChars", out t) && int.TryParse(t, out iw)) s.InitialWidthChars = Math.Max(WorkbookSettings.InitialCharsMin, Math.Min(WorkbookSettings.InitialCharsMax, iw));
@@ -92,6 +93,7 @@ namespace VerticalSheetTabs
                 { "Mode", s.Mode == TabMode.HorizontalOnly ? "A" : "C" },
                 { "Side", s.Side == TabSide.Right ? "Right" : "Left" },
                 { "CommentJump", s.CommentJump == CommentJump.Center ? "Center" : s.CommentJump == CommentJump.TopCenter ? "TopCenter" : "TopLeft" },
+                { "RowLayout", s.RowLayout == RowLayout.Stacked ? "Stacked" : "Hanging" },
                 { "InitialWidthMode", s.InitialWidthMode == InitialWidthMode.Px ? "Px" : "Chars" },
                 { "InitialWidthChars", s.InitialWidthChars.ToString() },
                 { "InitialWidthPx", s.InitialWidthPx.ToString() },

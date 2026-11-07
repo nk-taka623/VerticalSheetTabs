@@ -154,6 +154,7 @@ namespace VerticalSheetTabs
             control.ActiveMarker = settings.ActiveMarker;
             control.ShownBadges = settings.Badges;
             control.RowAnimation = settings.RowAnim;
+            control.Arrangement = settings.RowLayout;
             control.DoneAnimation = settings.DoneAnim;
             control.RowTransparency = settings.RowTransparency;
             control.TextOutline = settings.TextOutline;
@@ -351,7 +352,7 @@ namespace VerticalSheetTabs
             bool tabsHidden = false;
             try { tabsHidden = !entry.Window.DisplayWorkbookTabs; }
             catch (Exception) { }
-            using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim, entry.Settings.CommentJump, entry.Settings.Wallpaper, entry.Settings.RowTransparency, entry.Settings.TextOutline, entry.Settings.InitialWidthMode, entry.Settings.InitialWidthChars, entry.Settings.InitialWidthPx))
+            using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim, entry.Settings.CommentJump, entry.Settings.Wallpaper, entry.Settings.RowTransparency, entry.Settings.TextOutline, entry.Settings.InitialWidthMode, entry.Settings.InitialWidthChars, entry.Settings.InitialWidthPx, entry.Settings.RowLayout))
             {
                 // (when the dialog is cancelled the pane still takes what was read from the file: the settings and the pane agree)
                 accepted = form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) == System.Windows.Forms.DialogResult.OK;
@@ -360,6 +361,7 @@ namespace VerticalSheetTabs
                     entry.Settings.Mode = form.Mode;
                     entry.Settings.Side = form.Side;
                     entry.Settings.CommentJump = form.CommentJump;
+                    entry.Settings.RowLayout = form.RowLayout;
                     entry.Settings.InitialWidthMode = form.InitialWidthMode;
                     entry.Settings.InitialWidthChars = form.InitialWidthChars;
                     entry.Settings.InitialWidthPx = form.InitialWidthPx;
@@ -398,6 +400,7 @@ namespace VerticalSheetTabs
                 entry.Control.ActiveMarker = entry.Settings.ActiveMarker;
                 entry.Control.ShownBadges = entry.Settings.Badges;
                 entry.Control.RowAnimation = entry.Settings.RowAnim;
+                entry.Control.Arrangement = entry.Settings.RowLayout;
                 entry.Control.DoneAnimation = entry.Settings.DoneAnim;
                 entry.Control.RowTransparency = entry.Settings.RowTransparency;
                 entry.Control.TextOutline = entry.Settings.TextOutline;
