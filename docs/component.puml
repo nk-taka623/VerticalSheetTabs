@@ -1,5 +1,5 @@
 @startuml
-title VerticalSheetTabs コンポーネント図 (v1.4.9)
+title VerticalSheetTabs コンポーネント図 (v1.4.10)
 left to right direction
 skinparam componentStyle uml2
 skinparam shadowing false
