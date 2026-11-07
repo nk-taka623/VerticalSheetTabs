@@ -1072,7 +1072,7 @@ namespace VerticalSheetTabs
                 if (start == null) return; // (over something that is not a cell)
                 var ws = start.Worksheet;
                 int made = 0;
-                bool protectedCell = false;
+                bool protectedCell = false, insideMerge = false;
                 for (int i = 0; i < names.Count; i++)
                 {
                     try
@@ -1080,6 +1080,12 @@ namespace VerticalSheetTabs
                         if (start.Row + i > ws.Rows.Count) break;
                         var cell = (Excel.Range)start.Cells[i + 1, 1];
                         if (ws.ProtectContents && Convert.ToBoolean(cell.Locked)) { protectedCell = true; continue; }
+                        // a cell inside a merged area (other than its top-left cell) shows nothing: a link there would be hidden
+                        if (Convert.ToBoolean(cell.MergeCells))
+                        {
+                            var area = cell.MergeArea as Excel.Range;
+                            if (area != null && (cell.Row != area.Row || cell.Column != area.Column)) { insideMerge = true; continue; }
+                        }
                         string name = names[i];
                         string target = "'" + name.Replace("'", "''") + "'" + (entry.Workbook.Sheets[name] is Excel.Worksheet ? "!A1" : "");
                         ws.Hyperlinks.Add(cell, "", target, "シート「" + name + "」へ移動", name);
@@ -1090,7 +1096,7 @@ namespace VerticalSheetTabs
                         // a cell that cannot take it (merged, part of a table that refuses): the next one
                     }
                 }
-                if (made == 0) ShowMessage(protectedCell ? "保護されたセルには、リンクを作れません。" : "リンクを作れませんでした。");
+                if (made == 0) ShowMessage(protectedCell ? "保護されたセルには、リンクを作れません。" : insideMerge ? "結合されたセルの内側には、リンクを作れません。" : "リンクを作れませんでした。");
             }
             catch (Exception)
             {
