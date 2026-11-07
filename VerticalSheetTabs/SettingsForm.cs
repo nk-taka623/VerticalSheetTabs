@@ -166,13 +166,13 @@ namespace VerticalSheetTabs
             _tabs.Padding = new Point(16, 5); // (room around the titles of the tabs)
             // (the tabs other than "このブック" are kept for the whole PC)
             string pcNote = "このタブの設定は、このPCのすべてのブックに共通です。";
-            var basic = new List<Control> { Banner(pcNote, width), top, jumpGroup };
+            var basic = new List<Control> { Banner(pcNote, width), top };
             if (tabsHidden) basic.Add(Banner("このブックは、横タブが非表示のため、縦タブは表示されません。", width));
             _tabs.TabPages.Add(CreatePage("基本", width, basic.ToArray()));
             _tabs.TabPages.Add(CreatePage("デザイン", width, Banner(pcNote, width), _markerGroup, _styleGroup, _outlineGroup));
             _animPage = CreatePage("アニメーション", width, Banner(pcNote, width), _wobbleGroup, _animGroup);
             _tabs.TabPages.Add(_animPage);
-            _tabs.TabPages.Add(CreatePage("バッジ", width, Banner(pcNote, width), _badgeGroup));
+            _tabs.TabPages.Add(CreatePage("バッジ", width, Banner(pcNote, width), _badgeGroup, jumpGroup));
             _tabs.TabPages.Add(CreatePage("このブック", width, Banner("このタブの設定は、開いているブックだけに保存されます。", width), _ruleGroup));
             // the tabs are as large as the largest page
             var inner = Size.Empty;
