@@ -1676,7 +1676,8 @@ namespace VerticalSheetTabs
                 try
                 {
                     var local = new Rectangle(0, 0, bmp.Width, bmp.Height);
-                    if (r.IsFolder) DrawFolder(g, r, local); else DrawTab(g, r, local);
+                    if (Translucent) DrawRow(g, r, local); // (the body as transparent as the rows are)
+                    else if (r.IsFolder) DrawFolder(g, r, local); else DrawTab(g, r, local);
                 }
                 finally { _transforming = false; }
             }
