@@ -20,6 +20,7 @@
     <Compile Include="..\VerticalSheetTabs\TabColorPalette.cs" Link="Linked\TabColorPalette.cs" />
     <Compile Include="..\VerticalSheetTabs\DpiHelper.cs" Link="Linked\DpiHelper.cs" />
     <Compile Include="..\VerticalSheetTabs\Wallpaper.cs" Link="Linked\Wallpaper.cs" />
+    <Compile Include="..\VerticalSheetTabs\RowPlacement.cs" Link="Linked\RowPlacement.cs" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Drawing" />
   </ItemGroup>
