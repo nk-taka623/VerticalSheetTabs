@@ -14,6 +14,7 @@ namespace VerticalSheetTabs
         private readonly RadioButton _sideLeft = new RadioButton();
         private readonly RadioButton _sideRight = new RadioButton();
         private GroupBox _sideGroup;
+        private GroupBox _jumpGroup; // the position of the comment jump: only used while the note / comment badge is shown
         private readonly RadioButton _jumpCenter = new RadioButton();
         private readonly RadioButton _jumpTopLeft = new RadioButton();
         private readonly RadioButton _jumpTopCenter = new RadioButton();
@@ -91,7 +92,7 @@ namespace VerticalSheetTabs
             _jumpTopCenter.Text = "中央上";
             _jumpCenter.Text = "行・列の中央";
             _jumpTopLeft.Text = "左上 (標準)";
-            var jumpGroup = CreateRowGroup("コメントの「そのセルへ移動」で、セルを表示する位置", true, _jumpTopLeft, _jumpTopCenter, _jumpCenter);
+            _jumpGroup = CreateRowGroup("コメントの「そのセルへ移動」で、セルを表示する位置", true, _jumpTopLeft, _jumpTopCenter, _jumpCenter);
 
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
@@ -155,9 +156,9 @@ namespace VerticalSheetTabs
             int sideWidth = (width - 12) * 34 / 100;
             modeGroup.Size = new Size(width - sideWidth - 6, topHeight);
             _sideGroup.Size = new Size(sideWidth, topHeight);
-            jumpGroup.Dock = DockStyle.None;
-            jumpGroup.Size = new Size(width, jumpGroup.Height);
-            jumpGroup.Margin = new Padding(3);
+            _jumpGroup.Dock = DockStyle.None;
+            _jumpGroup.Size = new Size(width, _jumpGroup.Height);
+            _jumpGroup.Margin = new Padding(3);
             modeGroup.Margin = new Padding(3);
             _sideGroup.Margin = new Padding(3);
             var top = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
@@ -166,13 +167,13 @@ namespace VerticalSheetTabs
             _tabs.Padding = new Point(16, 5); // (room around the titles of the tabs)
             // (the tabs other than "このブック" are kept for the whole PC)
             string pcNote = "このタブの設定は、このPCのすべてのブックに共通です。";
-            var basic = new List<Control> { Banner(pcNote, width), top, jumpGroup };
+            var basic = new List<Control> { Banner(pcNote, width), top };
             if (tabsHidden) basic.Add(Banner("このブックは、横タブが非表示のため、縦タブは表示されません。", width));
             _tabs.TabPages.Add(CreatePage("基本", width, basic.ToArray()));
             _tabs.TabPages.Add(CreatePage("デザイン", width, Banner(pcNote, width), _markerGroup, _styleGroup, _outlineGroup));
             _animPage = CreatePage("アニメーション", width, Banner(pcNote, width), _wobbleGroup, _animGroup);
             _tabs.TabPages.Add(_animPage);
-            _tabs.TabPages.Add(CreatePage("バッジ", width, Banner(pcNote, width), _badgeGroup));
+            _tabs.TabPages.Add(CreatePage("バッジ", width, Banner(pcNote, width), _badgeGroup, _jumpGroup));
             _tabs.TabPages.Add(CreatePage("このブック", width, Banner("このタブの設定は、開いているブックだけに保存されます。", width), _ruleGroup));
             // the tabs are as large as the largest page
             var inner = Size.Empty;
@@ -250,6 +251,8 @@ namespace VerticalSheetTabs
             _outlineLevel.ValueChanged += (s, e) => UpdateOutline();
             UpdateOutline();
 
+            _badgeMemo.CheckedChanged += (s, e) => UpdateJumpEnabled();
+            UpdateJumpEnabled();
             _modeHorizontal.CheckedChanged += (s, e) => UpdateSideEnabled();
             UpdateSideEnabled();
         }
@@ -701,6 +704,12 @@ namespace VerticalSheetTabs
         }
 
         // The side only matters while a vertical tab bar is shown.
+        // The jump is started from the badge: with the badge off its position cannot be chosen (the value is kept).
+        private void UpdateJumpEnabled()
+        {
+            _jumpGroup.Enabled = _badgeMemo.Checked;
+        }
+
         private void UpdateSideEnabled()
         {
             _sideGroup.Enabled = !_modeHorizontal.Checked;
