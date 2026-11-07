@@ -12,7 +12,7 @@
 | 対象 | Windows版 Excel (Microsoft 365、64bit) のみ |
 | 方式 | VSTO アドイン (.NET Framework 4.8、C# 7.3)。縦タブは、カスタムタスクペイン (`CustomTaskPane` + `UserControl`) の中に、自前描画 (GDI+) |
 | 開発環境 | Visual Studio 2026 (Office/SharePoint 開発ワークロード) |
-| 最新版 | v1.5.2 (`develop`、`master`、タグ `v1.5.1` は同じコミット) |
+| 最新版 | v1.5.2 (`develop`、`master`、タグ `v1.5.2` は同じコミット) |
 | 配布 | ClickOnce のインストーラ + 配布用zip (`配布用zip\VerticalSheetTabs_v1.5.2.zip`)。自己署名の証明書 |
 | ライセンス | BSD 3条項 (`license\`)。著作権表記: Copyright (c) 2026 nk_taka |
 | 確認済みの環境 | Windows 11、拡大率125%、Excel 365 (カラフルのテーマ) |
