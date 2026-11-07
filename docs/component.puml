@@ -33,12 +33,14 @@ package "縦並びシートタブ (VSTOアドイン)" as ADDIN {
 
   component "設定画面" as SETTINGS {
     component "SettingsForm" as SettingsForm
+    component "SettingsBackground\n(「背景」タブの部品)" as SettingsBackground
     component "AddInVersion" as AddInVersion
   }
 
   component "動き・音" as FX {
     component "Wobble\n(揺れの動き)" as Wobble
     component "WobbleSounds\n(効果音 / Sounds/*.wav)" as WobbleSounds
+    component "Wallpaper\n(壁紙の読み込み・配置・描画)" as Wallpaper
   }
 
   component "モデルと、ブックへの保存" as MODEL {
@@ -90,11 +92,14 @@ TabStrip --> TabTheme
 TabStrip --> DpiHelper
 TabStrip --> WobbleSounds
 TabStrip --> Wobble : WobbleMotion
+TabStrip --> Wallpaper : 壁紙の描画
 TabColorPalette --> DpiHelper
 CommentPopup --> DpiHelper
 
 ' --- 設定画面
 SettingsForm --> TabStrip : サンプルの描画
+SettingsForm --> SettingsBackground
+SettingsBackground --> Wallpaper : 読めるか確かめる
 SettingsForm --> TabTheme
 SettingsForm --> Wobble
 SettingsForm --> NameRule
