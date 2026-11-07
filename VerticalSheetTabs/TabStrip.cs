@@ -4358,6 +4358,12 @@ namespace VerticalSheetTabs
             Point p = PointToClient(new Point(e.X, e.Y));
             MoveGhost(p);
             ScrollNearEdge(p);
+            ResolveDrop(p);
+        }
+
+        // Works out where the dragged things would land at this point (the drop mark and what the drop does).
+        private void ResolveDrop(Point p)
+        {
             if (HasFolders) ResolveFolderDrop(p);
             else { _dropInside = false; _dropInto = _dropBeforeSheet = _dropBeforeFolder = null; SetDropIndex(InsertIndexAt(p)); }
         }
@@ -4372,6 +4378,9 @@ namespace VerticalSheetTabs
         protected override void OnDragDrop(DragEventArgs e)
         {
             base.OnDragDrop(e);
+            // Where the button was let go decides, not where the last DragOver found the pointer: on a slow PC the
+            // pointer moves on between the last DragOver and the drop, and the mark that was shown may be out of date.
+            if (_dragging && e.Data.GetDataPresent(typeof(string))) ResolveDrop(PointToClient(new Point(e.X, e.Y)));
             int target = _dropIndex;
             string into = _dropInto, beforeSheet = _dropBeforeSheet, beforeFolder = _dropBeforeFolder;
             // where the ghost settles: the drop mark; a row dragged down leaves its own place above the mark
