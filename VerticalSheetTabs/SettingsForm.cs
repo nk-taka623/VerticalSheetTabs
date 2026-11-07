@@ -755,6 +755,8 @@ namespace VerticalSheetTabs
             _widthChars.Text = "文字数";
             _widthPx.Text = "px";
             _widthChars.AutoSize = false; _widthPx.AutoSize = false;
+            // (the height of a slider is its own unless AutoSize is off: with visual styles it grew and covered the line below)
+            _widthCharsBar.AutoSize = false; _widthPxBar.AutoSize = false;
             _widthChars.Checked = mode != InitialWidthMode.Px;
             _widthPx.Checked = mode == InitialWidthMode.Px;
             _widthCharsBar.Minimum = 12; _widthCharsBar.Maximum = 64; _widthCharsBar.TickFrequency = 4; _widthCharsBar.SmallChange = 1; _widthCharsBar.LargeChange = 4; _widthCharsBar.Value = Math.Max(12, Math.Min(64, chars));
@@ -767,7 +769,7 @@ namespace VerticalSheetTabs
             _widthPxBox.ValueChanged += (s, e) => _widthPxBar.Value = (int)_widthPxBox.Value;
             _widthChars.CheckedChanged += (s, e) => UpdateWidthEnabled();
             UpdateWidthEnabled();
-            int rowH = 34;
+            int rowH = 38;
             int boxW = TextRenderer.MeasureText("20000", group.Font).Width + SystemInformation.VerticalScrollBarWidth + 10;
             int unitW = TextRenderer.MeasureText("文字分", group.Font).Width + 8;
             int radioW = TextRenderer.MeasureText("文字数", group.Font).Width + 30;
@@ -783,7 +785,7 @@ namespace VerticalSheetTabs
             {
                 int x = 8;
                 line[0].SetBounds(x, y + 4, radioW, 24); x += radioW;
-                line[1].SetBounds(x, y, barW, rowH - 4); x += barW + 4;
+                line[1].SetBounds(x, y, barW, rowH - 6); x += barW + 4;
                 line[2].SetBounds(x, y + 4, boxW, 24); x += boxW + 4;
                 line[3].SetBounds(x, y + 8, unitW, 20);
                 ((Label)line[3]).AutoSize = false;
