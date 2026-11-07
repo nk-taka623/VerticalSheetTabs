@@ -79,6 +79,9 @@ package "設定" {
     +Badges : BadgeKinds
     +Wobble : WobbleType
     +RowAnim / DoneAnim : bool
+    +Wallpaper : WallpaperOptions
+    +RowTransparency : int (0から90、5刻み)
+    +TextOutline : bool
     +Load(wb) {static}
     +Save(wb)
   }
@@ -123,6 +126,34 @@ package "設定" {
     Center
     TopLeft
     TopCenter
+  }
+  class WallpaperOptions {
+    +Path : string
+    +Fit : WallpaperFit
+    +KeepRatio : bool
+    +Tile : bool
+    +HAlign : WallpaperHAlign
+    +VAlign : WallpaperVAlign
+    +TileApplies(fit) {static}
+    +KeepRatioApplies(fit) {static}
+    +HAlignApplies(fit, keep) {static}
+    +VAlignApplies(fit, keep) {static}
+  }
+  enum WallpaperFit {
+    Original
+    FitWidth
+    FitHeight
+    FitBoth
+  }
+  enum WallpaperHAlign {
+    Left
+    Center
+    Right
+  }
+  enum WallpaperVAlign {
+    Top
+    Center
+    Bottom
   }
   enum WobbleType {
     None
@@ -191,5 +222,9 @@ WorkbookSettings --> SelectStyle
 WorkbookSettings --> ActiveMarker
 WorkbookSettings --> BadgeKinds
 WorkbookSettings --> WobbleType
+WorkbookSettings *-- WallpaperOptions
+WallpaperOptions --> WallpaperFit
+WallpaperOptions --> WallpaperHAlign
+WallpaperOptions --> WallpaperVAlign
 PcSettings ..> WorkbookSettings : 値を入れる / 取り出す
 @enduml

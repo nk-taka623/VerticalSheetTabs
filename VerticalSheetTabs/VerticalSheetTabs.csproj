@@ -254,6 +254,8 @@
     <Compile Include="TabStrip.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Wallpaper.cs" />
+    <Compile Include="SettingsBackground.cs" />
     <Compile Include="Wobble.cs" />
     <Compile Include="WobbleSounds.cs" />
     <Compile Include="WorkbookSettings.cs" />

@@ -126,6 +126,22 @@ namespace VerticalSheetTabs
         // The progress mark bursts when a sheet is marked as done (default: on).
         public bool DoneAnim { get; set; }
 
+        // The wallpaper of the vertical tabs (kept for the whole PC; no picture by default).
+        public WallpaperOptions Wallpaper { get; set; }
+
+        // How much the folder and sheet rows let the wallpaper show through: 0 (not at all) to 90 percent, in steps of 5.
+        public int RowTransparency { get; set; }
+
+        // The names of the rows get an outline (readable on the wallpaper); only used while the rows are transparent.
+        public bool TextOutline { get; set; }
+
+        public const int TransparencyMax = RowTransparencyScale.Max, TransparencyStep = RowTransparencyScale.Step;
+
+        public static int ClampTransparency(int v)
+        {
+            return RowTransparencyScale.Clamp(v);
+        }
+
         public WorkbookSettings()
         {
             Mode = TabMode.Both;
@@ -146,6 +162,9 @@ namespace VerticalSheetTabs
             WobbleSampleStyle = false;
             RowAnim = true;
             DoneAnim = true;
+            Wallpaper = new WallpaperOptions();
+            RowTransparency = 0;
+            TextOutline = true;
         }
 
         public static WorkbookSettings Load(Excel.Workbook wb)
