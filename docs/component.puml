@@ -29,6 +29,7 @@ package "縦並びシートタブ (VSTOアドイン)" as ADDIN {
     component "CommentPopup\n(メモ・コメントの表示)" as CommentPopup
     component "TabTheme\n(Officeテーマの配色)" as TabTheme
     component "DpiHelper\n(画面の拡大率)" as DpiHelper
+    component "Wallpaper\n(壁紙の読み込み・配置・描画)" as Wallpaper
   }
 
   component "設定画面" as SETTINGS {
@@ -40,7 +41,6 @@ package "縦並びシートタブ (VSTOアドイン)" as ADDIN {
   component "動き・音" as FX {
     component "Wobble\n(揺れの動き)" as Wobble
     component "WobbleSounds\n(効果音 / Sounds/*.wav)" as WobbleSounds
-    component "Wallpaper\n(壁紙の読み込み・配置・描画)" as Wallpaper
   }
 
   component "モデルと、ブックへの保存" as MODEL {
