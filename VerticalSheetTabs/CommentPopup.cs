@@ -129,20 +129,33 @@ namespace VerticalSheetTabs
                             g.DrawRectangle(pen, r);
                         }
                     }
-                    float u = _scale;
-                    float x0 = box.X + 3 * u, y0 = box.Y + 3.5f * u; // a 16 x 16 DIP icon inside the 22 box
-                    using (var pen = new Pen(ink, Math.Max(1f, 1.2f * u)))
+                    // The icon is drawn on a 24 x 24 grid (a table with an arrow at the lower left), shrunk to 16 DIP and centered in the box.
+                    float k = 16f / 24f * _scale;
+                    float ox = box.X + (box.Width - 24 * k) / 2f, oy = box.Y + (box.Height - 24 * k) / 2f;
+                    Func<float, float> X = v => ox + v * k;
+                    Func<float, float> Y = v => oy + v * k;
+                    using (var pen = new Pen(ink, Math.Max(1f, 2f * k)))
                     {
+                        pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                        pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
                         pen.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
-                        // the table: frame, header line, middle line
-                        g.DrawRectangle(pen, x0, y0, 13 * u, 11 * u);
-                        g.DrawLine(pen, x0, y0 + 3.7f * u, x0 + 13 * u, y0 + 3.7f * u);
-                        g.DrawLine(pen, x0 + 6 * u, y0, x0 + 6 * u, y0 + 11 * u);
-                        // the arrow at the bottom right, over the table
-                        float ay = y0 + 12.5f * u, ax = x0 + 8 * u;
-                        g.DrawLine(pen, ax, ay, ax + 7 * u, ay);
-                        g.DrawLine(pen, ax + 4.2f * u, ay - 2.6f * u, ax + 7 * u, ay);
-                        g.DrawLine(pen, ax + 4.2f * u, ay + 2.6f * u, ax + 7 * u, ay);
+                        // the frame: open at the lower left (from the left side up, round the corners, down the right side, back along the bottom)
+                        using (var frame = new System.Drawing.Drawing2D.GraphicsPath())
+                        {
+                            frame.AddLine(X(3), Y(13), X(3), Y(5));
+                            frame.AddArc(X(3), Y(3), 4 * k, 4 * k, 180, 90);
+                            frame.AddLine(X(5), Y(3), X(19), Y(3));
+                            frame.AddArc(X(17), Y(3), 4 * k, 4 * k, 270, 90);
+                            frame.AddLine(X(21), Y(5), X(21), Y(19));
+                            frame.AddArc(X(17), Y(17), 4 * k, 4 * k, 0, 90);
+                            frame.AddLine(X(19), Y(21), X(11), Y(21));
+                            g.DrawPath(pen, frame);
+                        }
+                        g.DrawLine(pen, X(3), Y(10), X(21), Y(10));   // the header line
+                        g.DrawLine(pen, X(10), Y(3), X(10), Y(14));   // the vertical line
+                        g.DrawLine(pen, X(2), Y(22), X(7), Y(17));    // the arrow: shaft
+                        g.DrawLine(pen, X(7), Y(21.5f), X(7), Y(17)); // the arrow: head
+                        g.DrawLine(pen, X(7), Y(17), X(2.5f), Y(17));
                     }
                 }
                 catch (Exception)
