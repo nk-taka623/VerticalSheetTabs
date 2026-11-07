@@ -3407,6 +3407,7 @@ namespace VerticalSheetTabs
 
         private void DrawSeparator(Graphics g, Rectangle row)
         {
+            if (Defer(g2 => DrawSeparator(g2, row))) return; // (a line of its own: not thinned with the row's color)
             int sepHalf = Px(SeparatorLength) / 2;
             int cx = row.Left + row.Width / 2;
             using (var pen = new Pen(Theme.Separator, 1))
