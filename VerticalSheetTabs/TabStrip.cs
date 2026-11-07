@@ -1100,7 +1100,7 @@ namespace VerticalSheetTabs
 
             // the tabs scroll inside the area above the pinned "+" row
             g.SetClip(new Rectangle(0, HeaderPx, ClientSize.Width, Math.Max(0, ViewHeight - HeaderPx)));
-            DrawFolderOutlines(g);
+            if (!Translucent) DrawFolderOutlines(g); // (with transparent rows, the line goes over them: under them, they would dim it)
             int first = Math.Max(0, _scrollY / Math.Max(1, RowPx));
             var wobbling = new List<int>();
             var comingIn = new List<int>();
@@ -1119,6 +1119,7 @@ namespace VerticalSheetTabs
                     if (IsFadedRow(_rows[i])) DrawFadedPlace(g, row);
                 }
             }
+            if (Translucent) DrawFolderOutlines(g);
             DrawRowAnim(g, comingIn);
             DrawDoneAnim(g);
             foreach (int index in wobbling)
