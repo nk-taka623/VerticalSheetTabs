@@ -31,7 +31,10 @@ opt 「そのセルへ移動」
   U -> W : ボタンを押す
   W -> P : goTo(comment)
   P -> P : Busy = true、CommitCellEdit
-  P -> XL : シートを Activate、Application.Goto(セル)
+  P -> XL : シートを Activate、Application.Goto(セル) (セルは左上に来る)
+  alt 設定 CommentJump が Center または TopCenter
+    P -> XL : CenterCell (列を中央に。Center のときは、行も中央に)
+  end
 end
 note over W : Esc、またはほかをクリックで閉じる
 @enduml
