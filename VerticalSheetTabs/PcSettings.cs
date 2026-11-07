@@ -46,6 +46,10 @@ namespace VerticalSheetTabs
             if (v.TryGetValue("Mode", out t)) s.Mode = t == "A" ? TabMode.HorizontalOnly : TabMode.Both;
             if (v.TryGetValue("Side", out t)) s.Side = t == "Right" ? TabSide.Right : TabSide.Left;
             if (v.TryGetValue("CommentJump", out t)) s.CommentJump = t == "Center" ? CommentJump.Center : t == "TopCenter" ? CommentJump.TopCenter : CommentJump.TopLeft;
+            if (v.TryGetValue("InitialWidthMode", out t)) s.InitialWidthMode = t == "Px" ? InitialWidthMode.Px : InitialWidthMode.Chars;
+            int iw;
+            if (v.TryGetValue("InitialWidthChars", out t) && int.TryParse(t, out iw)) s.InitialWidthChars = Math.Max(WorkbookSettings.InitialCharsMin, Math.Min(WorkbookSettings.InitialCharsMax, iw));
+            if (v.TryGetValue("InitialWidthPx", out t) && int.TryParse(t, out iw)) s.InitialWidthPx = Math.Max(0, Math.Min(WorkbookSettings.InitialPxMax, iw));
             if (v.TryGetValue("ActiveMarker", out t))
             {
                 s.ActiveMarker = t == "None" ? ActiveMarker.None : t == "Triangle" ? ActiveMarker.Triangle : t == "EdgeBars" ? ActiveMarker.EdgeBars : t == "CheckBadge" ? ActiveMarker.CheckBadge : ActiveMarker.Underline;
@@ -88,6 +92,9 @@ namespace VerticalSheetTabs
                 { "Mode", s.Mode == TabMode.HorizontalOnly ? "A" : "C" },
                 { "Side", s.Side == TabSide.Right ? "Right" : "Left" },
                 { "CommentJump", s.CommentJump == CommentJump.Center ? "Center" : s.CommentJump == CommentJump.TopCenter ? "TopCenter" : "TopLeft" },
+                { "InitialWidthMode", s.InitialWidthMode == InitialWidthMode.Px ? "Px" : "Chars" },
+                { "InitialWidthChars", s.InitialWidthChars.ToString() },
+                { "InitialWidthPx", s.InitialWidthPx.ToString() },
                 { "ActiveMarker", s.ActiveMarker.ToString() },
                 { "SelectStyle", WorkbookSettings.SelectStyleToString(s.SelectStyle) },
                 { "Outline", s.OutlineVisible ? "On" : "Off" },
