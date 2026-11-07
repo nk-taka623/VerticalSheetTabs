@@ -2795,7 +2795,7 @@ namespace VerticalSheetTabs
             };
             var names = new List<string> { "Sheet1", "Sheet2" };
             var colors = new Dictionary<string, int> { { "Sheet2", 0x3A80E9 } };
-            _rowBadges = new Dictionary<string, BadgeInfo> { { "Sheet1", new BadgeInfo { Errors = 2, Protected = true, Progress = 2 } }, { "Sheet2", new BadgeInfo { Memos = 1, Progress = 1 } } };
+            _rowBadges = new Dictionary<string, BadgeInfo> { { "Sheet1", new BadgeInfo { Errors = 2, Protected = true, Progress = 1 } }, { "Sheet2", new BadgeInfo { Memos = 1, Progress = 2 } } };
             string active = selection == "plain" ? "Sheet1" : selection == "colored" ? "Sheet2" : "";
             var selected = new List<string>();
             if (active != "") selected.Add(active);
