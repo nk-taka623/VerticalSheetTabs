@@ -1184,7 +1184,9 @@ namespace VerticalSheetTabs
                 var ws = entry.Workbook.Sheets[c.Sheet] as Excel.Worksheet;
                 if (ws == null) return;
                 ws.Activate();
-                _app.Goto(ws.Range[c.Address], true);
+                var cell = ws.Range[c.Address];
+                _app.Goto(cell, true);
+                CenterCell(entry.Window, ws, cell);
             }
             catch (Exception)
             {
@@ -1194,6 +1196,69 @@ namespace VerticalSheetTabs
             {
                 entry.Busy = busyBefore;
             }
+        }
+
+        // After Goto the cell sits at the top left of the window. Scrolls back so the cell is in the middle of the visible rows and columns
+        // (as far as the sheet allows). Frozen panes: only when the cell is in the scrolling pane. Hidden rows and columns are not counted.
+        private static void CenterCell(Excel.Window win, Excel.Worksheet ws, Excel.Range cell)
+        {
+            try
+            {
+                if (win == null) return;
+                int paneCount = win.Panes.Count;
+                var pane = win.ActivePane;
+                if (pane == null || pane.Index != paneCount) return;
+                Excel.Range vis = pane.VisibleRange;
+                int row = cell.Row, col = cell.Column;
+                int firstRow = vis.Row, firstCol = vis.Column;
+                if (row < firstRow || col < firstCol) return;
+                int minRow = 1, minCol = 1;
+                if (paneCount > 1)
+                {
+                    minRow = win.SplitRow + 1;
+                    minCol = win.SplitColumn + 1;
+                }
+
+                int rowsShown = CountVisible(ws, true, firstRow, vis.Rows.Count);
+                int colsShown = CountVisible(ws, false, firstCol, vis.Columns.Count);
+                int backRows = Math.Max(0, (rowsShown - 1) / 2);
+                int backCols = Math.Max(0, (colsShown - 1) / 2);
+
+                int targetRow = StepBack(ws, true, row, backRows, minRow);
+                int targetCol = StepBack(ws, false, col, backCols, minCol);
+                if (targetRow != firstRow) win.ScrollRow = targetRow;
+                if (targetCol != firstCol) win.ScrollColumn = targetCol;
+            }
+            catch (Exception)
+            {
+                // Leave the view as Goto made it.
+            }
+        }
+
+        private static int CountVisible(Excel.Worksheet ws, bool rows, int first, int count)
+        {
+            int n = 0;
+            int limit = Math.Min(count, 400);
+            for (int i = 0; i < limit; i++)
+            {
+                var r = rows ? (Excel.Range)ws.Rows[first + i] : (Excel.Range)ws.Columns[first + i];
+                if (!(bool)r.Hidden) n++;
+            }
+            return n;
+        }
+
+        private static int StepBack(Excel.Worksheet ws, bool rows, int from, int steps, int min)
+        {
+            int pos = from;
+            int guard = 0;
+            while (steps > 0 && pos > min && guard++ < 2000)
+            {
+                pos--;
+                var r = rows ? (Excel.Range)ws.Rows[pos] : (Excel.Range)ws.Columns[pos];
+                if (!(bool)r.Hidden) steps--;
+            }
+            // A hidden stretch at the top cannot be the first row of the window: move on to the next shown one.
+            return pos;
         }
 
         // Sets the progress of sheets (0 = none): the workbook is changed (it is asked to be saved), and the mark shows at once.
