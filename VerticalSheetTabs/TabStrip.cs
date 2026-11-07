@@ -1313,6 +1313,13 @@ namespace VerticalSheetTabs
             return _raAdded != null ? EaseOut(t / 0.5) : EaseOut((t - 0.35) / 0.6);
         }
 
+        // The color of the ring and the particles: the row's color, made darker or lighter when it is too near to the color of the bar
+        // behind it (a pale sheet color would be lost there), whatever color the sheet has.
+        private Color RowAnimVisibleColor(StripRow r)
+        {
+            return Visible(RowAnimColor(r), Theme.BarBack);
+        }
+
         private Color RowAnimColor(StripRow r)
         {
             if (r.IsFolder) return r.ColorBgr >= 0 ? Color.FromArgb(r.ColorBgr & 0xFF, (r.ColorBgr >> 8) & 0xFF, (r.ColorBgr >> 16) & 0xFF) : Underline;
@@ -1341,7 +1348,7 @@ namespace VerticalSheetTabs
                 // a picture only of a row the user sees now; the others go without being drawn
                 Rectangle rect = RowRect(i);
                 bool inView = rect.Bottom > HeaderPx && rect.Top < ViewHeight;
-                p.Ghosts.Add(new RowAnimGhost { Bmp = inView ? RenderRowBitmap(r, ContentWidth) : null, At = i - before, Color = RowAnimColor(r) });
+                p.Ghosts.Add(new RowAnimGhost { Bmp = inView ? RenderRowBitmap(r, ContentWidth) : null, At = i - before, Color = RowAnimVisibleColor(r) });
                 before++;
             }
             if (added.Count == 0 && p.Ghosts.Count == 0) return null;
@@ -1513,7 +1520,7 @@ namespace VerticalSheetTabs
                 {
                     double k = (t - 0.1) / 0.6;
                     int grow = (int)(Px(10) * k);
-                    Color c = RowAnimColor(_rows[index]);
+                    Color c = RowAnimVisibleColor(_rows[index]);
                     var ring = new Rectangle(row.Left + Px(InsetLeft) - grow, row.Top + Px(PlainTop) - grow, row.Width - Px(InsetLeft + InsetRight) + grow * 2, row.Height - Px(PlainTop + BottomInset) + grow * 2);
                     using (GraphicsPath path = RoundedRect(ring, Px(CornerRadius) + grow))
                     using (var pen = new Pen(Color.FromArgb((int)(130 * (1 - k)), c), Math.Max(1.5f, Px(2))))
