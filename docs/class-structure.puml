@@ -1,5 +1,5 @@
 @startuml
-title クラス図: 主なクラスと関係 (v1.4.8)
+title クラス図: 主なクラスと関係 (v1.4.9)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
