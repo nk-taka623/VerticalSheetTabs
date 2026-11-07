@@ -43,6 +43,13 @@ namespace VerticalSheetTabs
         Progress = 8 // the progress of the sheet (not started, in progress, done), set by the user
     }
 
+    // Where a sheet goes in the window when the comment list's "go to the cell" is used.
+    public enum CommentJump
+    {
+        Center,   // the cell is centered in the visible rows and columns (as far as possible)
+        TopLeft   // Excel's own: the cell is at the top left
+    }
+
     public enum TabSide
     {
         Left,
@@ -84,6 +91,7 @@ namespace VerticalSheetTabs
         // The display mode of this window: the PC's mode, or "horizontal only" for a window whose pane the user closed.
         public TabMode Mode { get; set; }
         public TabSide Side { get; set; }
+        public CommentJump CommentJump { get; set; }
         // 0 means "not stored": the caller uses the default (12 half-width characters).
         public int WidthDip { get; set; }
         // The dashed outline around an open folder: shown or not, and its color level (1..9, 5 = middle).
@@ -121,6 +129,7 @@ namespace VerticalSheetTabs
         {
             Mode = TabMode.Both;
             Side = TabSide.Left;
+            CommentJump = CommentJump.Center;
             WidthDip = 0;
             OutlineVisible = true;
             OutlineLevel = 5;
