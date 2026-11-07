@@ -16,7 +16,7 @@ T -> XL : SheetChange / SheetCalculate / SheetDeactivate を購読 (on)、また
 
 == 検出 (同期のたび。UpdateBadges) ==
 alt バッジを1つも選んでいない
-  P -> C : SetBadges(null) (何も調べない)
+  P -> C : SetBadges(null) (それまでの結果が残っているときだけ。何も調べない)
 else
   loop 同期の Tick
     P -> P : 1. アクティブなシートのメモと保護を読み直す (毎回)
@@ -24,7 +24,7 @@ else
     P -> P : 2. 変更・再計算・離れたシート (BadgeDirty) のうち、\n0.5秒静かだったものを、古い順に ScanOne
     P -> XL : ScanBadges (数式エラー: Evaluate(SUMPRODUCT) / メモ: Comments + CommentsThreaded / 保護)
     note right of XL : 1回は30msまで。重いシートは、かかった時間の20倍が\n過ぎるまで調べ直さない。ブックは変更しない
-    P -> P : 3. ほかのシートを、10秒に1回、古い順に調べる
+    P -> P : 3. ほかのシートを、10秒に1回、古い順に調べる\n(2 で使った時間が 15ms 未満のときだけ。全体で 30ms まで)
     P -> C : SetBadges(entry.Badges)
   end
 end
@@ -50,7 +50,7 @@ alt 完了 (done) の印
   end
 else なし > 未着手 > 作業中 > 完了
   C -> P : ProgressRequested(sheets, state)
-  P -> XL : VTab.Progress (カスタムプロパティ) を書く
+  P -> XL : VTab.Progress (カスタムプロパティ) を書く\n(いまと同じ状態のシートは飛ばす。なしのときは削除)
   P -> P : MarkChanged (ブックを「変更あり」にする)
   P -> C : SetBadges (印をすぐ出す)
   note right of C : 完了にしたとき、印がはじける

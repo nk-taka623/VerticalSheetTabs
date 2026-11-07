@@ -37,6 +37,7 @@ MODEL -0)- SETTINGS : I12 (シート名のルール)
 CONFIG -0)- CTRL : I13 設定の読み書き
 
 CTRL ..> BOOK : 保存時に書く
+MODEL ..> BOOK : XMLパート・VTab.Id\n(FolderStore・HistoryStore)
 CONFIG ..> BOOK : VTab.Width\nVTab.NameRule
 CONFIG ..> INI : 読み書き
 @enduml

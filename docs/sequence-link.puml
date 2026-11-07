@@ -23,9 +23,9 @@ P -> XL : WindowFromPhysicalPoint → GetAncestor
 alt このウィンドウの上ではない
   P --> P : 何もしない
 else このウィンドウの上
-  P -> P : CommitCellEdit
+  P -> P : Busy = true、CommitCellEdit
   P -> XL : Window.RangeFromPoint(x, y)
-  XL --> P : 落とした位置のセル
+  XL --> P : 落とした位置のセル (セルでなければ、何もしない)
   loop シートごとに、1セルずつ下へ
     alt 保護されたセル
       P --> P : 飛ばす

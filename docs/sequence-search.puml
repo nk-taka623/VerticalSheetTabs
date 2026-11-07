@@ -17,7 +17,7 @@ loop 入力するたび
   S -> S : OnQueryChanged (_query を更新)
   S -> S : ApplyFilter
   note right of S : 部分一致・大文字小文字と全角半角は区別しない。\nシート名の検索: 一致したシートのあるフォルダは開いた形で出す。\nフォルダ切り替えがON: フォルダ名を検索する。\n一致した文字を黄色で強調する。
-  S -> S : 結果の最初の行を選ぶ (_searchSel)、描き直し
+  S -> S : 選んでいた行が結果になければ、結果の最初の行を選ぶ (_searchSel)、描き直し
 end
 note over S : 検索中は、ドラッグでの移動を無効にする
 
@@ -37,7 +37,7 @@ else シートの行
   P -> P : CommitCellEdit
   P -> XL : シートを選ぶ
   S -> C : GridFocusForced
-  C -> P : FocusGrid (Excelにフォーカスを戻す)
+  C -> P : FocusGrid (F6 を送り、シートの窓にフォーカスを戻す)
 end
 
 == 終わる ==

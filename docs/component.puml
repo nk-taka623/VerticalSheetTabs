@@ -41,11 +41,11 @@ package "縦並びシートタブ (VSTOアドイン)" as ADDIN {
     component "WobbleSounds\n(効果音 / Sounds/*.wav)" as WobbleSounds
   }
 
-  component "モデル (Excelに依存しない)" as MODEL {
+  component "モデルと、ブックへの保存" as MODEL {
     component "FolderModel\n(フォルダの構造)" as FolderModel
-    component "FolderStore\n(XMLの読み書き・突き合わせ)" as FolderStore
+    component "FolderStore\n(ブックのXMLパート・VTab.Idの読み書き\nシート順との突き合わせ)" as FolderStore
     component "NameRule\n(シート名のルール)" as NameRule
-    component "SheetHistory\n(履歴)" as SheetHistory
+    component "SheetHistory\n(履歴。HistoryStore がブックのXMLを読み書き)" as SheetHistory
     component "SafeXml\n(安全なXMLの読み込み)" as SafeXml
   }
 
@@ -65,16 +65,17 @@ UIHOST ..> Ribbon : ボタン
 ' --- 入口 -> 制御
 ThisAddIn --> PaneManager
 ThisAddIn --> Ribbon
-Ribbon ..> PaneManager : 設定画面を開く
+ThisAddIn --> DpiHelper : Excelのウィンドウを渡す
+Ribbon ..> PaneManager : 設定画面を開く\n(ThisAddIn が渡すコールバック)
 
-' --- 制御 -> Excel (Excelに触れるのはここだけ)
+' --- 制御 -> Excel (Excelを呼ぶのは PaneManager。FolderStore・HistoryStore・WorkbookSettings は、PaneManager から呼ばれて、渡されたブックを読み書きする)
 PaneManager --> OM : 読み書き\n(0.3から3秒おきに同期)
 PaneManager ..> UIHOST : ペインを作る
-DialogPlacer ..> UIHOST : ダイアログの位置
+DialogPlacer ..> UIHOST : Excelのダイアログの位置\n(Win32)
 
 ' --- 制御 -> 画面
 PaneManager --> TabPaneControl : ウィンドウごとに1つ
-PaneManager --> TabStrip : 行・バッジ・設定を渡す
+PaneManager --> TabStrip : 渡すデータの型\n(StripRow・BadgeInfo・HistoryItem)
 PaneManager --> CommentPopup
 PaneManager --> SettingsForm
 PaneManager --> DialogPlacer
@@ -88,6 +89,7 @@ TabPaneControl ..> PaneManager : 操作の通知\n(イベント)
 TabStrip --> TabTheme
 TabStrip --> DpiHelper
 TabStrip --> WobbleSounds
+TabStrip --> Wobble : WobbleMotion
 TabColorPalette --> DpiHelper
 CommentPopup --> DpiHelper
 
@@ -107,17 +109,18 @@ PaneManager --> FolderModel
 PaneManager --> NameRule
 PaneManager --> SheetHistory
 PaneManager --> SafeXml
+PaneManager --> Wobble : 揺れの種類 (WobbleType)
+PaneManager --> DpiHelper
 FolderStore --> FolderModel
-FolderStore --> SafeXml
 FolderModel --> SafeXml
 NameRule --> FolderModel
-SheetHistory --> FolderStore
 SheetHistory --> SafeXml
 
 ' --- 設定
 PaneManager --> PcSettings
 PaneManager --> WorkbookSettings
 WorkbookSettings --> PcSettings
+PcSettings --> WorkbookSettings : 値の変換の部品
 WorkbookSettings --> Wobble
 WorkbookSettings --> WobbleSounds
 WorkbookSettings --> NameRule
@@ -126,4 +129,7 @@ PcSettings --> Wobble
 ' --- 保存先
 PcSettings --> INI : 読み書き
 PaneManager --> BOOK : 保存時に書く\n(WorkbookBeforeSave)
+FolderStore ..> BOOK : XMLパート・VTab.Id
+SheetHistory ..> BOOK : XMLパート (HistoryStore)
+WorkbookSettings ..> BOOK : VTab.Width・VTab.NameRule
 @enduml

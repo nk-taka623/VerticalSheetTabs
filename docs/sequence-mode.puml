@@ -31,7 +31,7 @@ end
 U -> XL : オプション「シート見出しを表示する」を切り替える
 note right of XL : Excelにはイベントがない
 loop 同期の Tick (ブックを開いた・ウィンドウを有効にした・シートを選んだときも、すぐ)
-  P -> P : CheckHorizontalTabs
+  P -> P : CheckHorizontalTabs (操作中・保護ダイアログ中・同期中は、読まない)
   P -> XL : DisplayWorkbookTabs を読む
   alt WantsVertical が、最後に決めた WantVisible と違う
     P -> P : ApplyMode (縦タブを出し入れする)
@@ -42,7 +42,7 @@ end
 U -> Pane : ×
 Pane -> P : VisibleChanged
 P -> P : OnPaneVisibleChanged
-alt アドインが隠した (WantVisible = false)、または IgnoreVisibleUntil の間
+alt ペインが見えている、アドインが隠した (WantVisible = false)、または IgnoreVisibleUntil の間
   P --> P : 何もしない
 else アクティブなウィンドウでない
   P --> P : 何もしない

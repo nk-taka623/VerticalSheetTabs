@@ -15,11 +15,11 @@ U -> S : 右クリック > 「シート見出しの色」
 S -> C : ThemeColorProvider
 C -> P : ThemeColors(entry)
 P -> XL : Workbook.Theme (保護されたシートがあると null)
-alt 読めない
+alt 読めない (null)
   P -> P : 保存済みファイルの theme1.xml (SafeXml)、なければ Office の既定
+  P -> XL : 組み込みのセルのスタイルから読めた9色で上書き (保護されていても読める)
 end
-P -> P : 組み込みのセルのスタイルから9色を上書き (保護されていても読める)
-P --> S : テーマの色 (5秒に1回、保護されたブックは30秒に1回まで読む)
+P --> S : テーマの色 (読んだ結果を、5秒間 (読めなかったときは30秒間) 使い回す)
 U -> S : 色を選ぶ (テーマの色 + 明るさ、または RGB、または色なし)
 S -> C : TabColorRequested(names, choice)
 C -> P : ApplyTabColor
@@ -33,8 +33,11 @@ C -> P : PickMoreColor(entry)
 P -> DP : new DialogPlacer(クリックした位置)
 P -> P : TryExcelColorDialog
 P -> P : CommitCellEdit (入力中なら確定)
+alt セルの入力中のまま
+  P --> P : false (Excelの画面は出せない)
+end
 P -> XL : Window.Activate (このブックをアクティブにする)
-alt アクティブなブックがこのブックではない、またはセルの入力中
+alt アクティブなブックがこのブックではない
   P --> P : false (Excelの画面は出せない)
 else
   P -> XL : 56番の色と Saved を控える

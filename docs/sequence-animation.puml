@@ -10,8 +10,8 @@ participant "Timer\n(15ms)" as T
 participant "WobbleMotion\nWobbleSounds" as W
 
 == シートを選んだ・フォルダを開閉した・選択した ==
-P -> S : SetRows / SetActive (同期の結果)
-S -> S : OnPaint: アクティブなシートが変わった、\nまたはフォルダの開閉・選択が変わった
+P -> S : SetSheets(names, activeName, selected, colors, rows) (同期の結果)
+S -> S : OnPaint: アクティブなシートが変わった、\nまたはフォルダの開閉・選択が変わった\n(最初に見た状態は揺れない。サンプルは、この経路を使わない)
 alt ゴーストが出ている (_ghostOn)
   S --> S : 揺れは始めない (落としたあとに始める)
 else
@@ -20,7 +20,7 @@ else
     S --> S : 何もしない
   else
     S -> W : Random なら PickRandom で種類を決める
-    opt 効果音が On (設定画面のサンプルの繰り返しは、鳴らす / 鳴らさないを指定)
+    opt 効果音が On (_soundOn) で、PlayWobble(false) の呼び出しではない
       S -> W : Play(種類, 音量) (同時に複数が揺れても1回)
     end
     S -> T : _animClock を開始、Start()
@@ -57,7 +57,7 @@ S -> S : StartWobble(ドラッグしたシート・フォルダ、\nドロップ
 == 追加・削除 ==
 P -> S : SetRows(新しい行)
 S -> S : PrepareRowAnim (古い状態のまま): 増えた行・減った行を調べる
-alt 増減が同時 (名前の変更など)、検索中、サンプル、行が無かった
+alt 増減が同時、または増減なし (名前の変更など)、\n検索中、サンプル、非表示、最初の表示 (それまでの行が無い)
   S --> S : null (動かない)
 else
   S -> S : 減る行の絵を作る (見えている行だけ)
@@ -73,9 +73,9 @@ T -> S : Tick (経過 >= 400ms)
 S -> T : EndRowAnim (Stop、絵を解放)
 
 == 完了のはじける動き ==
-U -> S : 進捗の印をクリック (「作業中」→「完了」)
-S -> P : ProgressClicked
-P -> P : SetProgress (シートのプロパティ VTab.Progress)
+U -> S : 進捗の印をクリック (なし → 未着手 → 作業中 → 完了と進む。\n完了の印のクリックは、Excelの「シートの保護」画面を開く)
+S -> P : ProgressRequested(シート, 状態) (TabPaneControl を経由)
+P -> P : SetProgress (シートのカスタムプロパティ VTab.Progress)
 P -> S : SetBadges(新しい進捗)
 S -> S : 進捗が 3 (完了) になった行を探す\n(最初に見たときは、はじけない。DoneAnimation が Off ならはじけない)
 S -> T : StartDoneAnim (500ms)
@@ -89,6 +89,7 @@ S -> T : EndDoneAnim
 == 設定画面のサンプル ==
 note over S, W
   サンプル (IsSample) は、行の追加削除・完了・ゴースト・コピーアイコンを動かさない。
-  揺れだけは、「アニメーション」のタブを開いている間、2.2秒おきに PlayWobble(true) で動く。
+  揺れだけは、「アニメーション」のタブを選んだとき、そして、そのタブを開いている間、2.2秒おきに PlayWobble(true) で動く。
+  (サンプルが見えていないときは動かず、300ms以内には、続けて動かさない)
 end note
 @enduml
