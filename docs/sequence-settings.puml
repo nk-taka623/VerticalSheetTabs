@@ -28,9 +28,6 @@ note right of D : いつも「基本」のタブから。\nサンプルは TabSt
 U -> D : OK
 D --> P : DialogResult.OK
 P -> P : 画面の値を entry.Settings に入れる\n(NameRule が false → true なら nameRuleTurnedOn)
-opt バッジの種類が変わった
-  P -> P : Badges / BadgeDirty / BadgeScanned を空にする (調べ直す)
-end
 P -> INI : Update(before, ToValues(entry.Settings))
 note right of INI : 変更のあった値だけを書く。\n一時ファイル (固有の名前) 経由で置き換える。\n書けなくても握りつぶす。
 opt NameRule が変わった
@@ -43,6 +40,9 @@ D --> P : DialogResult.Cancel
 note right of P : ファイルには何も書かない。\n読み直した値は、縦タブに反映する (設定と画面を食い違わせない)
 
 == 反映 (OK でもキャンセルでも) ==
+opt バッジの種類が、開く前と変わった (画面で選んだ、またはファイルから読み直した)
+  P -> P : Badges / BadgeDirty / BadgeScanned / BadgeCost を空にする (調べ直す)
+end
 P -> C : 見た目・バッジ・アニメーション・効果音の設定を渡す
 P -> XL : Pane.DockPosition = ToDock(Side)
 P -> P : ApplyMode (縦タブの表示 / 非表示)

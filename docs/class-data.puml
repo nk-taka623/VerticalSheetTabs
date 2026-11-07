@@ -1,5 +1,5 @@
 @startuml
-title クラス図: データ・モデル・設定 (v1.4.0)
+title クラス図: データ・モデル・設定 (v1.4.0。主なメンバーだけ)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
@@ -173,7 +173,6 @@ TabColorChoice --> TabColorKind
 StripRow o-- "0..*" StripRow : Children
 
 FolderStore ..> FolderModel : XMLの読み書き
-FolderStore ..> SafeXml
 FolderModel ..> SafeXml
 HistoryStore ..> SheetHistory
 HistoryStore ..> SafeXml

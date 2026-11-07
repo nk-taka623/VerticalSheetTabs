@@ -53,7 +53,8 @@ else 履歴をクリア
   U -> S : 「履歴をクリア」
   S -> C : HistoryClearRequested
   C -> P : ClearHistory
-  P -> H : Keys を空にする
+  P -> H : Keys を空にする、Cursor = 0
+  P -> C : SetNavigation(false, false)
   note right of H : いま見ているシートは、\n次の同期で入り直す
 end
 

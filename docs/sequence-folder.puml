@@ -35,9 +35,9 @@ else
     P -> XL : ApplyNamesFromModel (シート名を「フォルダ名 | シート名」にする)
     note right of XL : 付けられないとき (長さ・重複) は、\nモデルを元に戻してメッセージを出す
   end
-  P -> XL : ApplyExcelOrder (フォルダ内のシートを連続して並べる)
-  P -> XL : 選択を key から名前に直して選び直す
-  P -> P : MarkChanged、SyncSheets
+  P -> XL : 選択を key から名前に引き直す (シート名が変わっていることがある)
+  P -> XL : ApplyExcelOrder (フォルダ内のシートを連続して並べる。そのあと、選択を選び直す)
+  P -> P : MarkChanged、Busy を戻す、SyncSheets
   P -> C : BeginRenameFolder(createdId)
   C -> S : フォルダ名の入力欄を出す
 end
@@ -61,6 +61,7 @@ end
 U -> S : 右クリック > 「フォルダの色」
 S -> C : FolderColorRequested(folders, choice)
 C -> P : (色の変更)
+P -> XL : RefreshKeys
 P -> F : Color = choice
 opt 「フォルダと中のシートを同一色に設定」がON
   P -> XL : ApplyTabColor (中のシートのタブ色も変える)
@@ -73,15 +74,26 @@ alt フォルダだけ (中のシートは残す)
   S -> C : DeleteFoldersRequested(folders, false)
   C -> P : DeleteFoldersOnly
   P -> F : RemoveFolder (シート名のルールを使うときは、シート名から「フォルダ名 | 」を外す)
-else フォルダと中のシート
-  S -> C : DeleteFoldersRequested(folders, true) / DeleteKeyRequested
+  P -> P : MarkChanged、SyncSheets
+else フォルダと中のシート (Del キーも)
+  S -> C : DeleteFoldersRequested(folders, true) / DeleteKeyRequested(sheets, folders)
   C -> P : DeleteItems
-  P -> U : 確認 (アドイン自身の確認)
-  U -> P : OK
-  P -> XL : 選択中のシートと、フォルダの中のシートを削除 (Excelの確認は出さない)
-  P -> F : フォルダを取り除く
+  alt 選ばれたフォルダがない
+    P -> XL : ExecuteMso("SheetDelete") (Excelの削除と、Excelの確認)
+  else ブックの構造が保護されている
+    P -> U : メッセージ (削除しない)
+  else
+    P -> U : 確認 (アドイン自身の確認)
+    U -> P : OK
+    alt 削除すると、表示されているシートが残らない
+      P -> U : メッセージ (削除しない)
+    else
+      P -> XL : DisplayAlerts を止め、選択中のシートと、フォルダの中のシートを削除 (Excelの確認は出さない)
+      P -> F : シートとフォルダを取り除く
+      P -> P : SyncSheets
+    end
+  end
 end
-P -> P : MarkChanged、SyncSheets
 
 == 保存 ==
 note over P, F : ブックの保存時に、フォルダの構成をカスタムXMLパートに書く\n(「ブックの保存」の図)

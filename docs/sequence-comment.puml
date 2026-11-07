@@ -16,7 +16,9 @@ S -> C : MemoBadgeClicked(sheet, screen)
 C -> P : MemoBadgeClicked(sheet, screen)
 P -> XL : ReadComments (Comments と CommentsThreaded)
 XL --> P : メモ・コメントの内容 (セルの順)
-alt 1件
+alt 0件 (読めなかった)
+  P -> U : メッセージ
+else 1件
   P -> W : ShowContent(screen, comment)
 else 複数
   P -> W : ShowList(screen, comments)
@@ -28,7 +30,7 @@ W -> U : 内容 (読み取り専用。スレッドコメントは返信つき)
 opt 「そのセルへ移動」
   U -> W : ボタンを押す
   W -> P : goTo(comment)
-  P -> P : CommitCellEdit
+  P -> P : Busy = true、CommitCellEdit
   P -> XL : シートを Activate、Application.Goto(セル)
 end
 note over W : Esc、またはほかをクリックで閉じる

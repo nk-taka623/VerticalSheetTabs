@@ -38,6 +38,7 @@ note over P : 構造が保護されているときは、メッセージを出す
 U -> S : 右クリック > 「挿入」
 S -> C : InsertRequested
 C -> P : InsertSheet
+P -> P : CommitCellEdit、Busy にする (フォルダがあるブックは RefreshKeys)
 P -> XL : ExecuteMso("SheetInsert") (Excelの挿入。アクティブなシートの前)
 alt アクティブなシートがフォルダの中
   alt シート名のルールを使う
@@ -54,7 +55,7 @@ S -> S : 名前の編集欄 (31文字まで)
 U -> S : Enter
 S -> C : RenameRequested(古い名前, 新しい名前)
 C -> P : RenameSheet
-P -> P : CheckSheetName (空・31文字超・使えない文字・重複)
+P -> P : CheckSheetName (空・31文字超・使えない文字・先頭か末尾が '・重複)\n(シート名のルールを使うブックは、その前に「シート名のルール」の図の検査)
 alt 無効
   P -> U : メッセージ
 else
@@ -62,16 +63,20 @@ else
   note right of XL : 次の同期で、行に反映する
 end
 
-== 移動・コピー (フォルダの外へ。フォルダの出し入れは別の図) ==
+== 移動・コピー (フォルダのないブック。フォルダのあるブックは、フォルダの図) ==
 U -> S : ドラッグ (Ctrl+ドラッグでコピー)
 S -> C : MoveRequested(names, before, copy)
 C -> P : MoveOrCopySheets
 alt 複数のシート
   P -> XL : Sheets(配列).Move / Copy
-else 1枚
-  P -> XL : Move / Copy (移動は、移したシートをすぐ選んでアクティブにする)
+else 1枚のワークシートの移動
+  P -> P : Busy にする
+  P -> XL : Move、移したシートをすぐ選んでアクティブにする
+  P -> XL : SyncSheets
+else 1枚のコピー、またはグラフシート
+  P -> XL : Copy / Move
 end
-P -> XL : SyncSheets
+note right of P : 構造が保護されているときは、メッセージを出す
 
 == 非表示・再表示・コードの表示・保護など ==
 U -> S : 右クリックメニュー

@@ -22,7 +22,7 @@ class PaneManager {
   +BadgeEventsWanted : Action<bool>
   +EnsurePane(window, workbook)
   +EnsureAllPanes()
-  +SyncSheetOf(workbook)
+  +SyncSheetOf(sheet)
   +ShowSettings()
   +SaveSettings(workbook)
   +MarkBadgesDirty(sheet)
@@ -98,12 +98,11 @@ class WobbleSounds <<static>> {
 }
 
 ThisAddIn *-- PaneManager
-ThisAddIn ..> RibbonController : 作る
-RibbonController ..> PaneManager : 設定画面を開く\n(Action)
+ThisAddIn ..> RibbonController : 作る\n(設定画面を開く Action を渡す)
 PaneManager *-- "0..*" Entry : ウィンドウごとに1つ
 Entry o-- TabPaneControl : Control
 TabPaneControl *-- TabStrip
-TabPaneControl *-- TabColorPalette
+TabPaneControl ..> TabColorPalette : 作る
 TabStrip ..> TabPaneControl : イベント
 TabPaneControl ..> PaneManager : イベント
 PaneManager ..> SettingsForm : 開く
