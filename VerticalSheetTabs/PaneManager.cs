@@ -351,7 +351,7 @@ namespace VerticalSheetTabs
             bool tabsHidden = false;
             try { tabsHidden = !entry.Window.DisplayWorkbookTabs; }
             catch (Exception) { }
-            using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim, entry.Settings.CommentJump, entry.Settings.Wallpaper, entry.Settings.RowTransparency, entry.Settings.TextOutline))
+            using (var form = new SettingsForm(tabsHidden, entry.Settings.Mode, entry.Settings.Side, entry.Settings.OutlineVisible, entry.Settings.OutlineLevel, entry.Settings.NameRule, entry.Settings.SelectStyle, entry.Settings.ActiveMarker, entry.Settings.Wobble, entry.Settings.WobbleAmp, entry.Settings.WobbleDur, entry.Settings.WobbleSound, entry.Settings.WobbleVolume, entry.Settings.WobbleSampleStyle, entry.Settings.Badges, entry.Settings.RowAnim, entry.Settings.DoneAnim, entry.Settings.CommentJump, entry.Settings.Wallpaper, entry.Settings.RowTransparency, entry.Settings.TextOutline, entry.Settings.InitialWidthMode, entry.Settings.InitialWidthChars, entry.Settings.InitialWidthPx))
             {
                 // (when the dialog is cancelled the pane still takes what was read from the file: the settings and the pane agree)
                 accepted = form.ShowDialog(new ExcelWindowOwner(_app.Hwnd)) == System.Windows.Forms.DialogResult.OK;
@@ -360,6 +360,9 @@ namespace VerticalSheetTabs
                     entry.Settings.Mode = form.Mode;
                     entry.Settings.Side = form.Side;
                     entry.Settings.CommentJump = form.CommentJump;
+                    entry.Settings.InitialWidthMode = form.InitialWidthMode;
+                    entry.Settings.InitialWidthChars = form.InitialWidthChars;
+                    entry.Settings.InitialWidthPx = form.InitialWidthPx;
                     entry.Settings.OutlineVisible = form.OutlineVisible;
                     entry.Settings.OutlineLevel = form.OutlineLevel;
                     nameRuleTurnedOn = !entry.Settings.NameRule && form.NameRule;
@@ -426,7 +429,20 @@ namespace VerticalSheetTabs
                 : Office.MsoCTPDockPosition.msoCTPDockPositionLeft;
         }
 
-        // Applies the stored width, or 12 half-width characters on first open.
+        // The width of a workbook that has no stored width: the PC's setting "縦タブの初回幅" (characters or pixels).
+        private static int InitialContentWidth(WorkbookSettings s, int dpi)
+        {
+            int minPx = TabStrip.ContentWidthForChars(WorkbookSettings.InitialCharsMin, dpi);
+            if (s.InitialWidthMode == InitialWidthMode.Px)
+            {
+                int px = s.InitialWidthPx > 0 ? s.InitialWidthPx : minPx;
+                return Math.Max(minPx, Math.Min(WorkbookSettings.InitialPxMax, px));
+            }
+            int chars = Math.Max(WorkbookSettings.InitialCharsMin, Math.Min(WorkbookSettings.InitialCharsMax, s.InitialWidthChars));
+            return TabStrip.ContentWidthForChars(chars, dpi);
+        }
+
+        // Applies the stored width, or the PC's first width (12 half-width characters by default) on first open.
         private void InitializeWidth(Entry entry)
         {
             try
@@ -438,7 +454,7 @@ namespace VerticalSheetTabs
                 if (entry.Chrome < 0 || entry.Chrome > (int)Math.Round(60 * dpi / 96.0)) entry.Chrome = (int)Math.Round(16 * dpi / 96.0);
                 int contentPx = entry.Settings.WidthDip > 0
                     ? (int)Math.Round(entry.Settings.WidthDip * dpi / 96.0)
-                    : entry.Control.DefaultContentWidth();
+                    : InitialContentWidth(entry.Settings, dpi);
                 entry.Pane.Width = contentPx + entry.Chrome;
                 entry.Initialized = true;
                 VerifyWidth(entry, contentPx, 0);

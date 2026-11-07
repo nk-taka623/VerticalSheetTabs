@@ -247,6 +247,20 @@ namespace VerticalSheetTabs
             }
         }
 
+        // The content width (physical pixels at the given DPI) of a tab that holds the given number of half-width characters, with the tab's own paddings.
+        public static int ContentWidthForChars(int chars, int dpi)
+        {
+            double scale = dpi / 96.0;
+            FontFamily family;
+            try { family = new FontFamily(FontFamilyName); }
+            catch (ArgumentException) { family = SystemFonts.MessageBoxFont.FontFamily; }
+            using (var font = new Font(family, (float)(FontPixelsAt96 * scale), FontStyle.Regular, GraphicsUnit.Pixel))
+            {
+                Size text = TextRenderer.MeasureText(new string('0', chars), font, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding);
+                return text.Width + (int)Math.Round((InsetLeft + InsetRight + TextPadLeft + TextPadRight) * scale);
+            }
+        }
+
         // First-open width: 12 half-width characters plus the tab's own paddings.
         public int DefaultContentWidth()
         {
