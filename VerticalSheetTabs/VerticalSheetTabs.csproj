@@ -256,6 +256,7 @@
     </Compile>
     <Compile Include="Wallpaper.cs" />
     <Compile Include="WallpaperCrop.cs" />
+    <Compile Include="WallpaperRotation.cs" />
     <Compile Include="CropPreview.cs">
       <SubType>Component</SubType>
     </Compile>
