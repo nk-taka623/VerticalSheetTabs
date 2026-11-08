@@ -192,7 +192,7 @@ namespace VerticalSheetTabs
             // (the tabs other than "このブック" are kept for the whole PC)
             string pcNote = "このタブの設定は、このPCのすべてのブックに共通です。";
             _tabs.TabPages.Add(CreateBasicPage(width, leftW, pcNote, top, tabsHidden));
-            _tabs.TabPages.Add(CreatePage("背景", width, Banner(pcNote, width), _background.WallpaperGroup, _background.PairRow(width), _background.TransparencyGroup));
+            _tabs.TabPages.Add(CreatePage("背景", width, Banner(pcNote, width), _background.WallpaperGroup, _background.BodyRow(width)));
             _tabs.TabPages.Add(CreatePage("デザイン", width, Banner(pcNote, width), _markerGroup, _styleGroup, _outlineGroup));
             _animPage = CreatePage("アニメーション", width, Banner(pcNote, width), _wobbleGroup, _animGroup);
             _tabs.TabPages.Add(_animPage);
