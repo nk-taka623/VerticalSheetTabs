@@ -16,7 +16,8 @@ namespace VerticalSheetTabs
         private WallpaperRotation _rotation;    // how the picture is turned (not rounded while the pointer drags)
         private bool _hoverRotate;              // the pointer is near the dotted lines: the circle is shown
         private bool _rotateBlocked;            // the turn the pointer asks for is not taken (the frame would be too small)
-        private PointF _rotatePivot;            // the middle of the frame when the turn began (it does not move)
+        private PointF _rotatePivot;            // where the pointer goes round: the middle of the frame, and once the frame is brought to the middle of the preview, that
+        private bool _recentered;               // the frame was brought to the middle of the preview (when the turn began)
         private double _rotateAngle;            // the angle of the pointer at the last turn that was taken
         private bool _rotateAngleKnown;
         private double _pointerAngle;
@@ -55,7 +56,11 @@ namespace VerticalSheetTabs
 
         public WallpaperRotation Rotation
         {
-            get { return _rotation.Normalize(); }
+            get
+            {
+                RectangleF bounds = PictureBounds();
+                return bounds.IsEmpty ? _rotation.Normalize() : Live(bounds).Normalize();
+            }
             set
             {
                 WallpaperRotation n = value.Normalize();
@@ -111,6 +116,25 @@ namespace VerticalSheetTabs
             return CropPreviewMath.FitRect(ClientSize.Width, ClientSize.Height, _image.Width, _image.Height, Dip(12));
         }
 
+        // The largest area the preview can show (the whole control, less the margin): the turned picture is kept inside it.
+        private RectangleF PictureArea()
+        {
+            int m = Dip(12);
+            return new RectangleF(m, m, Math.Max(1, ClientSize.Width - 2 * m), Math.Max(1, ClientSize.Height - 2 * m));
+        }
+
+        private double ZoomFor(double degrees, RectangleF bounds)
+        {
+            RectangleF area = PictureArea();
+            return RotationMath.FitZoom(degrees, bounds.Width, bounds.Height, area.Width, area.Height);
+        }
+
+        // The turn as it is shown now: the angle, and the zoom that follows from it and the size of the preview.
+        private WallpaperRotation Live(RectangleF bounds)
+        {
+            return new WallpaperRotation(_rotation.Degrees, ZoomFor(_rotation.Degrees, bounds));
+        }
+
         // How near to a side of the turned picture a corner of the frame may come: two pixels of the picture, at least one of the preview.
         private double Inset(RectangleF bounds)
         {
@@ -128,6 +152,7 @@ namespace VerticalSheetTabs
             _hold = CropHandle.None;
             _rotateBlocked = false;
             _rotateAngleKnown = false;
+            _recentered = false;
             if (turning) Invalidate();
             if (Capture) Capture = false;
         }
@@ -150,6 +175,7 @@ namespace VerticalSheetTabs
                 if (h == CropHandle.Rotate)
                 {
                     _rotatePivot = new PointF(frame.Left + frame.Width / 2f, frame.Top + frame.Height / 2f);
+                    _recentered = false;
                     _rotateBlocked = false;
                     _rotateAngleKnown = false;
                     StartTurn(p);
@@ -178,8 +204,8 @@ namespace VerticalSheetTabs
                 if (_hold != CropHandle.None)
                 {
                     RectangleF frame = CropDrag.Drag(_hold, _holdFrame, _holdPoint, new PointF(e.X, e.Y), bounds, Dip(24), Dip(24));
-                    if (!_rotation.IsIdentity)
-                        frame = RotationMath.LimitFrame(Frame(bounds), frame, RotationMath.Corners(_rotation, bounds), Inset(bounds), _hold == CropHandle.Move);
+                    if (!Live(bounds).IsIdentity)
+                        frame = RotationMath.LimitFrame(Frame(bounds), frame, RotationMath.Corners(Live(bounds), bounds), Inset(bounds), _hold == CropHandle.Move);
                     WallpaperCrop crop = CropPreviewMath.FromFrame(frame, bounds);
                     if (!crop.SameAs(_crop))
                     {
@@ -261,14 +287,29 @@ namespace VerticalSheetTabs
                 Invalidate();
                 return;
             }
-            WallpaperRotation next = RotationMath.RotateAbout(_rotation, bounds, _rotatePivot, delta);
+            // the picture is turned round the middle of the preview; when the turn begins, the frame is brought to that middle too
+            double deg = WallpaperRotation.WrapDegrees(_rotation.Degrees + delta);
+            var next = new WallpaperRotation(deg, ZoomFor(deg, bounds));
+            RectangleF start = Frame(bounds);
+            PointF mid = RotationMath.Center(bounds);
+            if (!_recentered) start = new RectangleF(mid.X - start.Width / 2f, mid.Y - start.Height / 2f, start.Width, start.Height);
             RectangleF fitted;
             float minW = Math.Min(Dip(24), bounds.Width / 2f), minH = Math.Min(Dip(24), bounds.Height / 2f);
-            if (RotationMath.FitFrame(Frame(bounds), RotationMath.Corners(next, bounds), Inset(bounds), out fitted) && fitted.Width >= minW && fitted.Height >= minH)
+            if (RotationMath.FitFrame(start, RotationMath.Corners(next, bounds), Inset(bounds), out fitted) && fitted.Width >= minW && fitted.Height >= minH)
             {
                 _rotation = next;
                 _crop = CropPreviewMath.FromFrame(fitted, bounds);
-                _rotateAngle = angle;
+                if (!_recentered)
+                {
+                    // the circle is round the middle of the frame, which has moved: the pointer goes round the new middle from here
+                    _recentered = true;
+                    _rotatePivot = mid;
+                    _rotateAngle = _pointerAngle = RotationMath.AngleOf(mid, p);
+                }
+                else
+                {
+                    _rotateAngle = angle;
+                }
                 _rotateBlocked = false;
                 Invalidate();
                 RaiseChanged();
@@ -279,7 +320,6 @@ namespace VerticalSheetTabs
                 Invalidate();
             }
         }
-
         private static Cursor CursorFor(CropHandle h)
         {
             switch (h)
@@ -330,21 +370,28 @@ namespace VerticalSheetTabs
                         sg.DrawImage(_image, new Rectangle(0, 0, _scaled.Width, _scaled.Height), 0, 0, _image.Width, _image.Height, GraphicsUnit.Pixel);
                     }
                 }
-                if (_rotation.Degrees == 0 && _rotation.DX == 0 && _rotation.DY == 0)
+                WallpaperRotation live = Live(bounds);
+                RectangleF shaded = bounds;
+                if (live.IsIdentity)
                 {
                     g.DrawImageUnscaled(_scaled, pic.Location);
                 }
                 else
                 {
-                    // the turned picture, cut off at the edge of the preview; where it does not reach, a dark grey
+                    // the turned picture (made smaller if it would stick out of the area), cut off at the edge of the area; where
+                    // it does not reach inside the preview, a dark grey
+                    RectangleF area = PictureArea();
+                    shaded = area;
                     GraphicsState saved = g.Save();
-                    g.SetClip(bounds);
                     using (var grey = new SolidBrush(Color.FromArgb(96, 96, 96))) g.FillRectangle(grey, bounds);
+                    g.SetClip(area);
                     using (var m = new Matrix())
                     {
-                        PointF mid = new PointF(bounds.Left + bounds.Width / 2f, bounds.Top + bounds.Height / 2f);
-                        m.RotateAt((float)_rotation.Degrees, mid);
-                        m.Translate((float)(_rotation.DX * bounds.Width), (float)(_rotation.DY * bounds.Height), MatrixOrder.Append);
+                        PointF mid = RotationMath.Center(bounds);
+                        m.Translate(mid.X, mid.Y);
+                        m.Rotate((float)live.Degrees);
+                        m.Scale((float)live.Zoom, (float)live.Zoom);
+                        m.Translate(-mid.X, -mid.Y);
                         g.Transform = m;
                         g.InterpolationMode = InterpolationMode.HighQualityBilinear;
                         g.PixelOffsetMode = PixelOffsetMode.Half;
@@ -355,14 +402,14 @@ namespace VerticalSheetTabs
 
                 // what is outside the frame is not shown: darken it
                 Rectangle fr = Rectangle.Round(Frame(bounds));
+                Rectangle sh = Rectangle.Round(shaded);
                 using (var shade = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
                 {
-                    g.FillRectangle(shade, pic.Left, pic.Top, pic.Width, Math.Max(0, fr.Top - pic.Top));
-                    g.FillRectangle(shade, pic.Left, fr.Bottom, pic.Width, Math.Max(0, pic.Bottom - fr.Bottom));
-                    g.FillRectangle(shade, pic.Left, fr.Top, Math.Max(0, fr.Left - pic.Left), fr.Height);
-                    g.FillRectangle(shade, fr.Right, fr.Top, Math.Max(0, pic.Right - fr.Right), fr.Height);
+                    g.FillRectangle(shade, sh.Left, sh.Top, sh.Width, Math.Max(0, fr.Top - sh.Top));
+                    g.FillRectangle(shade, sh.Left, fr.Bottom, sh.Width, Math.Max(0, sh.Bottom - fr.Bottom));
+                    g.FillRectangle(shade, sh.Left, fr.Top, Math.Max(0, fr.Left - sh.Left), fr.Height);
+                    g.FillRectangle(shade, fr.Right, fr.Top, Math.Max(0, sh.Right - fr.Right), fr.Height);
                 }
-
                 // the frame: a dark line outside and a white one inside, so that it shows on any picture
                 using (var dark = new Pen(Color.FromArgb(200, 0, 0, 0), 1f))
                 using (var white = new Pen(Color.White, 1f))

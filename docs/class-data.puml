@@ -163,8 +163,7 @@ package "設定" {
   }
   class WallpaperRotation <<struct>> {
     +Degrees : double
-    +DX : double
-    +DY : double
+    +Zoom : double
     +IsIdentity : bool
   }
   enum WallpaperFit {

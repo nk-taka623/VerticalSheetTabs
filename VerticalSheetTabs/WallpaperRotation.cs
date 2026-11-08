@@ -4,23 +4,24 @@ using System.Globalization;
 
 namespace VerticalSheetTabs
 {
-    // How the picture of the wallpaper is turned in the preview of the settings dialog: the angle (clockwise is positive, in degrees)
-    // and where the middle of the picture lies (DX, DY: the shift from the middle of the preview, as fractions of its width and
-    // height). The picture is turned round its own middle by Degrees and then moved by (DX, DY). All zero (the default value of the
-    // struct) means "not turned". The shift is kept because the picture is turned round the middle of the frame, which is not
-    // always the middle of the picture.
+    // How the picture of the wallpaper is turned in the preview of the settings dialog: the angle (clockwise is positive, in degrees),
+    // and how much the turned picture is made smaller to stay inside the preview (Zoom, 1 = not smaller). The picture is always turned
+    // round its own middle, which is the middle of the preview. The zoom follows from the angle and the size of the preview; it is kept
+    // as well so that the wallpaper is cut from the picture as it was seen. Not turned (angle 0, zoom 1) is the default of the struct.
     public struct WallpaperRotation
     {
-        public readonly double Degrees, DX, DY;
+        public readonly double Degrees, Zoom;
 
-        public WallpaperRotation(double degrees, double dx, double dy)
+        public WallpaperRotation(double degrees, double zoom)
         {
             Degrees = degrees;
-            DX = dx;
-            DY = dy;
+            Zoom = zoom;
         }
 
-        public static WallpaperRotation None { get { return new WallpaperRotation(0, 0, 0); } }
+        public static WallpaperRotation None { get { return new WallpaperRotation(0, 1); } }
+
+        // The smallest zoom that is kept (a picture much longer than wide would otherwise be made too small to see).
+        public const double MinZoom = 0.1;
 
         // The angle in the range -180 (excluded) to 180 (included).
         public static double WrapDegrees(double d)
@@ -31,15 +32,15 @@ namespace VerticalSheetTabs
             return d;
         }
 
-        // What is saved: the angle in two decimals, the shift (-1 to 1) in four. Anything that is not a number is "not turned".
+        // What is saved: the angle in two decimals, the zoom (MinZoom to 1) in four. Anything that is not a number is "not turned"; a
+        // zoom that is not given (0, the default of the struct) is 1.
         public WallpaperRotation Normalize()
         {
-            if (IsBad(Degrees) || IsBad(DX) || IsBad(DY)) return None;
+            if (IsBad(Degrees) || IsBad(Zoom)) return None;
             double a = Math.Round(WrapDegrees(Degrees), 2, MidpointRounding.AwayFromZero);
             if (a <= -180.0) a = 180.0;
-            double x = Math.Round(Math.Max(-1, Math.Min(1, DX)), 4, MidpointRounding.AwayFromZero);
-            double y = Math.Round(Math.Max(-1, Math.Min(1, DY)), 4, MidpointRounding.AwayFromZero);
-            return new WallpaperRotation(a + 0.0, x + 0.0, y + 0.0);
+            double z = Zoom <= 0 ? 1.0 : Math.Round(Math.Max(MinZoom, Math.Min(1.0, Zoom)), 4, MidpointRounding.AwayFromZero);
+            return new WallpaperRotation(a + 0.0, z);
         }
 
         public bool IsIdentity
@@ -47,36 +48,35 @@ namespace VerticalSheetTabs
             get
             {
                 WallpaperRotation n = Normalize();
-                return n.Degrees == 0 && n.DX == 0 && n.DY == 0;
+                return n.Degrees == 0 && n.Zoom == 1.0;
             }
         }
 
         public bool SameAs(WallpaperRotation o)
         {
             WallpaperRotation a = Normalize(), b = o.Normalize();
-            return a.Degrees == b.Degrees && a.DX == b.DX && a.DY == b.DY;
+            return a.Degrees == b.Degrees && a.Zoom == b.Zoom;
         }
 
-        // "Degrees,DX,DY": the point is a period (the same in every culture).
+        // "Degrees,Zoom": the point is a period (the same in every culture).
         public string Format()
         {
             WallpaperRotation n = Normalize();
-            return n.Degrees.ToString("0.##", CultureInfo.InvariantCulture) + "," + n.DX.ToString("0.####", CultureInfo.InvariantCulture) + ","
-                + n.DY.ToString("0.####", CultureInfo.InvariantCulture);
+            return n.Degrees.ToString("0.##", CultureInfo.InvariantCulture) + "," + n.Zoom.ToString("0.####", CultureInfo.InvariantCulture);
         }
 
-        // Reads "Degrees,DX,DY". Anything that cannot be read (not three numbers) is "not turned".
+        // Reads "Degrees,Zoom" (or "Degrees" alone: zoom 1). Anything that cannot be read is "not turned".
         public static WallpaperRotation Parse(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return None;
             string[] parts = text.Split(',');
-            if (parts.Length != 3) return None;
-            var v = new double[3];
-            for (int i = 0; i < 3; i++)
+            if (parts.Length < 1 || parts.Length > 2) return None;
+            var v = new double[] { 0, 1 };
+            for (int i = 0; i < parts.Length; i++)
             {
                 if (!double.TryParse(parts[i].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out v[i])) return None;
             }
-            return new WallpaperRotation(v[0], v[1], v[2]).Normalize();
+            return new WallpaperRotation(v[0], v[1]).Normalize();
         }
 
         private static bool IsBad(double v) { return double.IsNaN(v) || double.IsInfinity(v); }
@@ -92,28 +92,39 @@ namespace VerticalSheetTabs
             return new PointF((float)(x * c - y * s), (float)(x * s + y * c));
         }
 
-        // The middle of the turned picture.
-        public static PointF Center(WallpaperRotation r, RectangleF bounds)
+        // The middle of the preview (the picture is turned round it).
+        public static PointF Center(RectangleF bounds)
         {
-            WallpaperRotation n = r;
-            return new PointF(bounds.Left + bounds.Width / 2f + (float)(n.DX * bounds.Width), bounds.Top + bounds.Height / 2f + (float)(n.DY * bounds.Height));
+            return new PointF(bounds.Left + bounds.Width / 2f, bounds.Top + bounds.Height / 2f);
         }
 
-        // The four corners of the turned picture, clockwise from the top left one.
+        // How much the picture (w x h, turned by degrees round its middle) is made smaller so that its four corners stay inside an area
+        // of the same middle (areaW x areaH): 1 when it fits as it is. It follows from the angle alone (it is the same again after 180
+        // degrees), so a picture that was made smaller grows again as the angle goes on, and is made smaller again when it would stick out.
+        public static double FitZoom(double degrees, double w, double h, double areaW, double areaH)
+        {
+            if (w < 1e-6 || h < 1e-6 || areaW < 1e-6 || areaH < 1e-6) return 1.0;
+            double a = degrees * Math.PI / 180.0, c = Math.Abs(Math.Cos(a)), s = Math.Abs(Math.Sin(a));
+            double z = Math.Min(1.0, Math.Min(areaW / (w * c + h * s), areaH / (w * s + h * c)));
+            if (z > 1.0 - 1e-9) return 1.0;
+            return Math.Max(WallpaperRotation.MinZoom, z);
+        }
+
+        // The four corners of the turned picture (made smaller by the zoom), clockwise from the top left one.
         public static PointF[] Corners(WallpaperRotation r, RectangleF bounds)
         {
-            PointF q = Center(r, bounds);
-            float hw = bounds.Width / 2f, hh = bounds.Height / 2f;
+            WallpaperRotation n = r.Normalize();
+            PointF q = Center(bounds);
+            float hw = (float)(bounds.Width / 2.0 * n.Zoom), hh = (float)(bounds.Height / 2.0 * n.Zoom);
             double[][] c = { new double[] { -hw, -hh }, new double[] { hw, -hh }, new double[] { hw, hh }, new double[] { -hw, hh } };
             var res = new PointF[4];
             for (int i = 0; i < 4; i++)
             {
-                PointF t = Turn(c[i][0], c[i][1], r.Degrees);
+                PointF t = Turn(c[i][0], c[i][1], n.Degrees);
                 res[i] = new PointF(q.X + t.X, q.Y + t.Y);
             }
             return res;
         }
-
         // Is the point inside the (convex, clockwise) corners, at least inset pixels away from every side?
         public static bool Inside(PointF[] corners, PointF p, double inset)
         {
@@ -133,17 +144,6 @@ namespace VerticalSheetTabs
         {
             return Inside(corners, new PointF(f.Left, f.Top), inset) && Inside(corners, new PointF(f.Right, f.Top), inset)
                 && Inside(corners, new PointF(f.Right, f.Bottom), inset) && Inside(corners, new PointF(f.Left, f.Bottom), inset);
-        }
-
-        // The picture turned further by delta degrees (clockwise is positive) round the point pivot. The angle is not rounded.
-        public static WallpaperRotation RotateAbout(WallpaperRotation r, RectangleF bounds, PointF pivot, double deltaDegrees)
-        {
-            PointF q = Center(r, bounds);
-            PointF t = Turn(q.X - pivot.X, q.Y - pivot.Y, deltaDegrees);
-            double nx = pivot.X + t.X, ny = pivot.Y + t.Y;
-            double mx = bounds.Left + bounds.Width / 2.0, my = bounds.Top + bounds.Height / 2.0;
-            double w = Math.Max(1e-6, bounds.Width), h = Math.Max(1e-6, bounds.Height);
-            return new WallpaperRotation(WallpaperRotation.WrapDegrees(r.Degrees + deltaDegrees), (nx - mx) / w, (ny - my) / h);
         }
 
         // The angle (degrees, clockwise is positive: right = 0, down = 90) of the point p seen from pivot.
