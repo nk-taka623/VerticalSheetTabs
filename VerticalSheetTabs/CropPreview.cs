@@ -420,9 +420,9 @@ namespace VerticalSheetTabs
                 }
                 else if (live.IsIdentity)
                 {
-                    // (the frame may reach outside the picture: the whole area is shown, grey where there is no picture)
+                    // (the frame may reach outside the picture: the whole area is shown, a chequer board where there is no picture: it is transparent in the wallpaper)
                     shaded = PictureArea();
-                    using (var grey = new SolidBrush(Wallpaper.NoPictureGrey)) g.FillRectangle(grey, shaded);
+                    FillChequer(g, shaded);
                     g.DrawImageUnscaled(_scaled, pic.Location);
                 }
                 else
@@ -432,7 +432,8 @@ namespace VerticalSheetTabs
                     RectangleF area = PictureArea();
                     shaded = area;
                     GraphicsState saved = g.Save();
-                    using (var grey = new SolidBrush(Wallpaper.NoPictureGrey)) g.FillRectangle(grey, _limit ? bounds : area);
+                    if (_limit) { using (var grey = new SolidBrush(Color.FromArgb(96, 96, 96))) g.FillRectangle(grey, bounds); }
+                    else FillChequer(g, area);
                     g.SetClip(area);
                     using (var m = new Matrix())
                     {
@@ -497,6 +498,13 @@ namespace VerticalSheetTabs
             {
                 // A preview that cannot be drawn is left plain: an exception here would break the whole dialog.
             }
+        }
+
+        // Where the frame reaches outside the picture the wallpaper is transparent: shown as a chequer board.
+        private static void FillChequer(Graphics g, RectangleF r)
+        {
+            using (var hatch = new HatchBrush(HatchStyle.LargeCheckerBoard, Color.FromArgb(205, 205, 205), Color.FromArgb(240, 240, 240)))
+                g.FillRectangle(hatch, r);
         }
 
         // The circle round the crossing of the dotted lines: it shows where the picture is turned from (a quarter of the short side

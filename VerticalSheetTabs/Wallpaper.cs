@@ -30,11 +30,11 @@ namespace VerticalSheetTabs
         public WallpaperVAlign VAlign = WallpaperVAlign.Center;
         public WallpaperCrop Crop = WallpaperCrop.Full; // the part of the picture that is used (the rest is left out)
         public WallpaperRotation Rotation;              // how the picture is turned before the part is cut out (default: not turned)
-        public bool LimitCrop = true;                   // the frame is kept inside the picture: where the frame reaches outside it, the wallpaper is transparent (on) or grey (off)
+        public bool LimitCrop = true;                   // the frame is kept inside the picture (the preview works so; the wallpaper is transparent where the frame reaches outside the picture either way)
 
         public bool SameAs(WallpaperOptions o)
         {
-            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign && Crop.SameAs(o.Crop) && Rotation.SameAs(o.Rotation) && LimitCrop == o.LimitCrop;
+            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign && Crop.SameAs(o.Crop) && Rotation.SameAs(o.Rotation);
         }
 
         public WallpaperOptions Clone()
@@ -71,9 +71,6 @@ namespace VerticalSheetTabs
 
     public static class Wallpaper
     {
-        // Where the frame reaches outside the picture ("limit the frame" off), the wallpaper and the preview show this grey.
-        public static readonly Color NoPictureGrey = Color.FromArgb(96, 96, 96);
-
         // Pictures larger than this (the longer side, pixels) are made smaller when they are read, to keep the memory in check.
         public const int MaxSide = 2560;
         private const long MaxFileBytes = 100L * 1024 * 1024;
@@ -255,7 +252,7 @@ namespace VerticalSheetTabs
             {
                 try
                 {
-                    picture = general ? RotatedPart(source, place, used, turn, o.LimitCrop ? Color.Transparent : NoPictureGrey) : source.Clone(src, PixelFormat.Format32bppPArgb);
+                    picture = general ? RotatedPart(source, place, used, turn, Color.Transparent) : source.Clone(src, PixelFormat.Format32bppPArgb);
                     if (picture == null) return null;
                     ownPicture = true;
                 }

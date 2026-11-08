@@ -594,18 +594,14 @@ namespace VerticalSheetTabs.Tests
                     {
                         True(r.GetPixel(10, 10).A > 250 && r.GetPixel(1, 1).A < 5, "zoom: the corner is outside the picture: " + r.GetPixel(1, 1));
                     }
-                    // a frame that reaches outside the picture: grey there when the frame is not limited, transparent when it is
+                    // a frame that reaches outside the picture: transparent there
                     var outside = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Crop = new WallpaperCrop(-0.5, 0, 1, 1), LimitCrop = false };
                     using (var r = Wallpaper.Render(src, 30, 20, outside))
                     {
                         System.Drawing.Color g0 = r.GetPixel(2, 10), c0 = r.GetPixel(25, 10);
-                        True(g0.A > 250 && g0.R == 96 && g0.G == 96 && g0.B == 96, "outside is grey: " + g0);
-                        True(c0.A > 250 && !(c0.R == 96 && c0.G == 96), "inside is the picture: " + c0);
+                        True(g0.A < 5, "outside is transparent: " + g0);
+                        True(c0.A > 250, "inside is the picture: " + c0);
                     }
-                    outside.LimitCrop = true;
-                    using (var r = Wallpaper.Render(src, 30, 20, outside))
-                        True(r.GetPixel(2, 10).A < 5, "outside is transparent when limited: " + r.GetPixel(2, 10));
-                    True(!outside.SameAs(new WallpaperOptions { Crop = outside.Crop, LimitCrop = false }), "options differ by the limit");
                 }
             });
             Test("Row transparency steps", () =>
