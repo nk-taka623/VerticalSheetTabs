@@ -60,9 +60,9 @@ namespace VerticalSheetTabs
             {
                 _path = "";
                 _pathBox.Text = "";
+                _limitCrop.Checked = true;   // (first: see Browse)
                 _cropValue = WallpaperCrop.Full;
                 _rotationValue = WallpaperRotation.None;
-                _limitCrop.Checked = true;
                 ShowPreview();
                 Refresh();
             };
@@ -307,13 +307,11 @@ namespace VerticalSheetTabs
                         MessageBox.Show("この画像は読み込めません。jpg か png の画像を選んでください。", "タブ表示の設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
-                    // a different file: the frame goes back to the whole picture (the same file keeps its frame)
-                    if (!string.Equals(_path, dialog.FileName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        _cropValue = WallpaperCrop.Full;
-                        _rotationValue = WallpaperRotation.None;
-                        _limitCrop.Checked = true;
-                    }
+                    // a file is chosen (the same one again too): the frame, the turn and the limit go back
+                    // (the box first: turning it on fits the old frame, which reports a change that must not undo the reset)
+                    _limitCrop.Checked = true;
+                    _cropValue = WallpaperCrop.Full;
+                    _rotationValue = WallpaperRotation.None;
                     _path = dialog.FileName;
                     _pathBox.Text = _path;
                     _previewLoaded = true;
