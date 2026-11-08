@@ -112,6 +112,7 @@ namespace VerticalSheetTabs
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
             _background = new BackgroundPanel(wallpaper, rowTransparency, textOutline);
+            _background.Stacked = rowLayout == RowLayout.Stacked;
             _rowAnim.Text = "フォルダ・シートの追加・削除を、動きで見せる";
             _rowAnim.Checked = rowAnim;
             _doneAnim.Text = "進捗を「完了」にしたとき、印をはじけさせる";
@@ -861,6 +862,7 @@ namespace VerticalSheetTabs
             _layoutHanging.Text = "吊り下げ方式 (標準)";
             _layoutStacked.Text = "積み上げ方式";
             _layoutHanging.AutoSize = true; _layoutStacked.AutoSize = true;
+            _layoutStacked.CheckedChanged += (s, e) => { if (_background != null) _background.Stacked = _layoutStacked.Checked; };
             _layoutHanging.Checked = layout != RowLayout.Stacked;
             _layoutStacked.Checked = layout == RowLayout.Stacked;
             var table = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Dock = DockStyle.Fill, Margin = Padding.Empty };

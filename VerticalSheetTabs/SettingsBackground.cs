@@ -230,6 +230,10 @@ namespace VerticalSheetTabs
         }
 
         // Enables what applies to the chosen way of fitting, and writes the notes.
+        // The rows are stacked from the bottom: the wallpaper's region differs, so does the note about it.
+        private bool _stacked;
+        public bool Stacked { get { return _stacked; } set { if (_stacked == value) return; _stacked = value; Refresh(); } }
+
         private void Refresh()
         {
             WallpaperFit fit = CurrentFit;
@@ -259,8 +263,8 @@ namespace VerticalSheetTabs
             int percent = RowTransparency;
             _transparencyText.Text = percent + " %";
             _transparencyNote.Text = percent == 0
-                ? "透過なし: 壁紙は、最後の行の下から「+」の上までに表示します。"
-                : "透過あり: 壁紙は、先頭の行の上から「+」の上までに表示し、行の色が " + percent + "% 透けます。";
+                ? (_stacked ? "透過なし: 壁紙は、縦タブの上端から、最初の行の上までに表示します。" : "透過なし: 壁紙は、最後の行の下から「+」の上までに表示します。")
+                : (_stacked ? "透過あり: 壁紙は、縦タブの上端から、「全開」「全閉」の帯の上までに表示し、行の色が " + percent + "% 透けます。" : "透過あり: 壁紙は、先頭の行の上から「+」の上までに表示し、行の色が " + percent + "% 透けます。");
             _outline.Enabled = percent > 0;
             _outlineNote.Text = percent > 0 ? "文字を、読みやすい色の縁で囲みます。" : "透過なしのときは、文字は読みやすいため、縁は付けません (選べません)。";
 
