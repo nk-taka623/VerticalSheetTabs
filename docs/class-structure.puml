@@ -93,7 +93,8 @@ class BackgroundPanel <<Control>> {
 class CropPreview <<Control>> {
   +Crop : WallpaperCrop
   +Rotation : WallpaperRotation
-  +SetImage(image, crop, rotation)
+  +LimitCrop : bool
+  +SetImage(image, crop, rotation, limit)
   +ResetCrop()
   +CropChanged : event
   -(頂点、辺、内側のドラッグ。枠の外は暗くする)

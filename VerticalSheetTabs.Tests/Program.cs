@@ -257,7 +257,10 @@ namespace VerticalSheetTabs.Tests
             {
                 True(default(WallpaperCrop).IsFull, "default");
                 True(WallpaperCrop.Full.IsFull, "full");
-                True(WallpaperCrop.Parse("-1,-1,2,2").IsFull, "out of the picture is fitted in");
+                True(!WallpaperCrop.Parse("-1,-1,2,2").IsFull, "a frame outside the picture is kept");
+                True(!WallpaperCrop.Parse("-1,-1,2,2").WithinPicture, "outside");
+                True(WallpaperCrop.Parse("0.1,0.1,0.9,0.9").WithinPicture, "inside");
+                Equal("-16,0,17,1", WallpaperCrop.Parse("-99,0,99,1").Format());
                 True(WallpaperCrop.Parse("0.5,0,0.51,1").IsFull, "too narrow");
                 True(WallpaperCrop.Parse("0,0.5,1,0.505").IsFull, "too low");
                 True(WallpaperCrop.Parse("0.5,0.5,0.4,0.9").IsFull, "turned inside out");
@@ -590,6 +593,14 @@ namespace VerticalSheetTabs.Tests
                     using (var r = Wallpaper.Render(src, 20, 20, wide))
                     {
                         True(r.GetPixel(10, 10).A > 250 && r.GetPixel(1, 1).A < 5, "zoom: the corner is outside the picture: " + r.GetPixel(1, 1));
+                    }
+                    // a frame that reaches outside the picture: transparent there
+                    var outside = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Crop = new WallpaperCrop(-0.5, 0, 1, 1), LimitCrop = false };
+                    using (var r = Wallpaper.Render(src, 30, 20, outside))
+                    {
+                        System.Drawing.Color g0 = r.GetPixel(2, 10), c0 = r.GetPixel(25, 10);
+                        True(g0.A < 5, "outside is transparent: " + g0);
+                        True(c0.A > 250, "inside is the picture: " + c0);
                     }
                 }
             });

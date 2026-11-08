@@ -21,6 +21,7 @@ namespace VerticalSheetTabs
         private double _rotateAngle;            // the angle of the pointer at the last turn that was taken
         private bool _rotateAngleKnown;
         private double _pointerAngle;
+        private bool _limit = true;             // the frame is kept inside the (turned) picture; off: it may reach outside, anywhere in the area
         private string _message = "";
         private CropHandle _hold = CropHandle.None;
         private RectangleF _holdFrame;
@@ -70,6 +71,19 @@ namespace VerticalSheetTabs
             }
         }
 
+        // The frame is kept inside the picture ("limit the frame" on). Turning it on brings a frame that reaches outside back in.
+        public bool LimitCrop
+        {
+            get { return _limit; }
+            set
+            {
+                if (_limit == value) return;
+                _limit = value;
+                if (value && _image != null) FitToPicture();
+                Invalidate();
+            }
+        }
+
         // What is written where there is no picture (none chosen, not found, cannot be read).
         public string Message
         {
@@ -78,9 +92,10 @@ namespace VerticalSheetTabs
         }
 
         // Takes the picture (null: no picture), the frame and the turn. The picture it had is disposed.
-        public void SetImage(Bitmap image, WallpaperCrop crop, WallpaperRotation rotation)
+        public void SetImage(Bitmap image, WallpaperCrop crop, WallpaperRotation rotation, bool limit = true)
         {
             EndHold();
+            _limit = limit;
             if (_scaled != null) { _scaled.Dispose(); _scaled = null; }
             if (_image != null && !ReferenceEquals(_image, image)) _image.Dispose();
             _image = image;
@@ -94,9 +109,34 @@ namespace VerticalSheetTabs
         // Puts the frame back to the whole picture, and the picture back to not turned.
         public void ResetCrop()
         {
-            if (_crop.IsFull && _rotation.IsIdentity) return;
+            if (_crop.IsFull && _rotation.IsIdentity && _limit) return;
+            _limit = true;
             _crop = WallpaperCrop.Full;
             _rotation = WallpaperRotation.None;
+            Invalidate();
+            RaiseChanged();
+        }
+
+        // The frame is made smaller (round its middle, with its ratio) until it lies inside the picture as it is shown (turned, and
+        // made smaller by the zoom) and inside the place of the picture; a frame whose middle is outside is first brought to the
+        // middle of the preview.
+        private void FitToPicture()
+        {
+            RectangleF bounds = PictureBounds();
+            if (bounds.IsEmpty) return;
+            RectangleF frame = Frame(bounds);
+            PointF[] corners = RotationMath.Corners(Live(bounds), bounds);
+            double inset = Inset(bounds);
+            PointF mid = RotationMath.Center(bounds);
+            if (!RotationMath.Inside(corners, new PointF(frame.Left + frame.Width / 2f, frame.Top + frame.Height / 2f), inset))
+                frame = new RectangleF(mid.X - frame.Width / 2f, mid.Y - frame.Height / 2f, frame.Width, frame.Height);
+            RectangleF fitted;
+            if (!RotationMath.FitFrame(frame, corners, inset, out fitted)) fitted = frame;
+            RectangleF plain = fitted;
+            if (RotationMath.FitFrame(fitted, RotationMath.Corners(WallpaperRotation.None, bounds), inset, out plain)) fitted = plain;
+            WallpaperCrop crop = CropPreviewMath.FromFrame(fitted, bounds);
+            if (crop.SameAs(_crop)) return;
+            _crop = crop;
             Invalidate();
             RaiseChanged();
         }
@@ -203,8 +243,8 @@ namespace VerticalSheetTabs
                 }
                 if (_hold != CropHandle.None)
                 {
-                    RectangleF frame = CropDrag.Drag(_hold, _holdFrame, _holdPoint, new PointF(e.X, e.Y), bounds, Dip(24), Dip(24));
-                    if (!Live(bounds).IsIdentity)
+                    RectangleF frame = CropDrag.Drag(_hold, _holdFrame, _holdPoint, new PointF(e.X, e.Y), _limit ? bounds : PictureArea(), Dip(24), Dip(24));
+                    if (_limit && !Live(bounds).IsIdentity)
                         frame = RotationMath.LimitFrame(Frame(bounds), frame, RotationMath.Corners(Live(bounds), bounds), Inset(bounds), _hold == CropHandle.Move);
                     WallpaperCrop crop = CropPreviewMath.FromFrame(frame, bounds);
                     if (!crop.SameAs(_crop))
@@ -295,7 +335,9 @@ namespace VerticalSheetTabs
             if (!_recentered) start = new RectangleF(mid.X - start.Width / 2f, mid.Y - start.Height / 2f, start.Width, start.Height);
             RectangleF fitted;
             float minW = Math.Min(Dip(24), bounds.Width / 2f), minH = Math.Min(Dip(24), bounds.Height / 2f);
-            if (RotationMath.FitFrame(start, RotationMath.Corners(next, bounds), Inset(bounds), out fitted) && fitted.Width >= minW && fitted.Height >= minH)
+            // (the frame is made smaller only when it is kept inside the picture; otherwise it stays as it is)
+            bool fits = _limit ? RotationMath.FitFrame(start, RotationMath.Corners(next, bounds), Inset(bounds), out fitted) : (fitted = start).Width > 0;
+            if (fits && fitted.Width >= minW && fitted.Height >= minH)
             {
                 _rotation = next;
                 _crop = CropPreviewMath.FromFrame(fitted, bounds);
@@ -372,8 +414,15 @@ namespace VerticalSheetTabs
                 }
                 WallpaperRotation live = Live(bounds);
                 RectangleF shaded = bounds;
-                if (live.IsIdentity)
+                if (live.IsIdentity && _limit)
                 {
+                    g.DrawImageUnscaled(_scaled, pic.Location);
+                }
+                else if (live.IsIdentity)
+                {
+                    // (the frame may reach outside the picture: the whole area is shown, a chequer board where there is no picture: it is transparent in the wallpaper)
+                    shaded = PictureArea();
+                    FillChequer(g, shaded);
                     g.DrawImageUnscaled(_scaled, pic.Location);
                 }
                 else
@@ -383,7 +432,8 @@ namespace VerticalSheetTabs
                     RectangleF area = PictureArea();
                     shaded = area;
                     GraphicsState saved = g.Save();
-                    using (var grey = new SolidBrush(Color.FromArgb(96, 96, 96))) g.FillRectangle(grey, bounds);
+                    if (_limit) { using (var grey = new SolidBrush(Color.FromArgb(96, 96, 96))) g.FillRectangle(grey, bounds); }
+                    else FillChequer(g, area);
                     g.SetClip(area);
                     using (var m = new Matrix())
                     {
@@ -448,6 +498,13 @@ namespace VerticalSheetTabs
             {
                 // A preview that cannot be drawn is left plain: an exception here would break the whole dialog.
             }
+        }
+
+        // Where the frame reaches outside the picture the wallpaper is transparent: shown as a chequer board.
+        private static void FillChequer(Graphics g, RectangleF r)
+        {
+            using (var hatch = new HatchBrush(HatchStyle.LargeCheckerBoard, Color.FromArgb(205, 205, 205), Color.FromArgb(240, 240, 240)))
+                g.FillRectangle(hatch, r);
         }
 
         // The circle round the crossing of the dotted lines: it shows where the picture is turned from (a quarter of the short side
