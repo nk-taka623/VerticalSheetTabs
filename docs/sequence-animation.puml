@@ -67,7 +67,7 @@ S -> S : FinishRowAnim: 動かす行、インデントが変わるシートを�
 S -> T : _raClock を開始、Start() (400ms。音は鳴らさない)
 loop 400ms
   T -> S : Tick → Invalidate
-  S -> S : 下の行がずれる (二分探索)、追加行はばねで現れる、\n削除行は膨らんで縮み、消える
+  S -> S : 増減した行より下 (積み上げ方式は上) の行がずれる (二分探索)、追加行はばねで現れる、\n削除行は膨らんで縮み、消える
 end
 T -> S : Tick (経過 >= 400ms)
 S -> T : EndRowAnim (Stop、絵を解放)

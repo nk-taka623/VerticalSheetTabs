@@ -1,5 +1,5 @@
 @startuml
-title クラス図: 主なクラスと関係 (v1.5.4)
+title クラス図: 主なクラスと関係 (v1.6.0)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
@@ -59,6 +59,16 @@ class TabStrip <<Control>> {
   +*Requested : event (操作の通知)
   +HistoryProvider : Func<List<HistoryItem>>
   +IsExcelEditing : Func<bool>
+  +Arrangement : RowLayout (吊り下げ / 積み上げ)
+  +SetLayoutPreview(layout, style, marker)
+}
+
+class RowPlacement <<static>> {
+  +StackOffset(stacked, areaH, rows, rowPx) : int
+  +RowTop(areaTop, offset, index, rowPx, scrollY) : int
+  +IndexFromY(y, areaTop, areaBottom, offset, scrollY, rowPx, rows) : int
+  +FromBottom(...) / ScrollFromBottom(...) : int
+  +WallpaperSpan(...)
 }
 
 class TabColorPalette <<Control>> {
@@ -68,6 +78,7 @@ class TabColorPalette <<Control>> {
 class SettingsForm <<Form>> {
   +ShowDialog(owner)
   -(6つのタブ。「背景」は BackgroundPanel)
+  -(「基本」は2列。右列は、TabStrip の配置の見本2つ)
 }
 
 class BackgroundPanel <<Control>> {
@@ -130,4 +141,6 @@ SettingsForm ..> WobbleMotion
 SettingsForm *-- BackgroundPanel : 「背景」タブ
 BackgroundPanel ..> Wallpaper : 読めるか確かめる
 TabStrip ..> Wallpaper : 壁紙の描画
+TabStrip ..> RowPlacement : 行の位置の計算
+SettingsForm ..> TabStrip : 配置の見本
 @enduml

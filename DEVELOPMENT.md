@@ -53,12 +53,13 @@ flowchart LR
 | `NameRule.cs` | シート名のルール (`フォルダ名 \| シート名`) の解析、並びの整理、名前からのフォルダ構成 |
 | `WorkbookSettings.cs` | 1つのウィンドウの設定。ブックのカスタムドキュメントプロパティ (`VTab.Width`、`VTab.NameRule`) の読み書きと、古い `VTab.*` の削除 |
 | `PcSettings.cs` | PCの設定ファイル (`%LocalAppData%\VerticalSheetTabs\settings.ini`。表示モード、位置、壁紙、見た目、アニメーション、バッジ) の読み書き |
+| `RowPlacement.cs` | 行の並べ方 (`RowLayout`: 吊り下げ方式 / 積み上げ方式) と、行の位置の計算 (画面に依存しない。テストでも使う) |
 | `Wallpaper.cs` | 壁紙の設定 (`WallpaperOptions`)、画像の読み込み、配置の計算 (画面に依存しない。テストでも使う)、領域への描画 |
 | `CommentPopup.cs` | メモ・コメントのバッジの表示 (一覧と内容の窓) |
 | `SettingsBackground.cs` | 設定画面の「背景」タブの部品 (壁紙、表示方法、表示位置、透過率、文字の縁) |
 | `SettingsForm.cs`、`RibbonController.cs`、`RibbonIcon.cs` | 設定画面、リボンのボタンと横タブのメニュー項目、アイコン |
 | `AddInVersion.cs` | 表示用のバージョン、著作権、ライセンス |
-| `VerticalSheetTabs.Tests\` | Excel を使わない部分 (`NameRule`、`FolderModel`、`SafeXml`、`Wallpaper` の配置の計算) のテスト。ソースを参照で取り込む、フレームワーク不要のコンソールプログラム。`tools\run-tests.ps1` で実行 |
+| `VerticalSheetTabs.Tests\` | Excel を使わない部分 (`NameRule`、`FolderModel`、`SafeXml`、`Wallpaper` の配置の計算、`RowPlacement` の行の位置の計算) のテスト。ソースを参照で取り込む、フレームワーク不要のコンソールプログラム。`tools\run-tests.ps1` で実行 |
 | `tools\dist\` | 配布用zipに入れる、証明書を信頼する / 取り消すスクリプトと、手順書の雛形 |
 | `tools\make-dist-zip.ps1`、`tools\make-readme-pdf.ps1` | 配布用zipの作成、README.pdf の作成 |
 | `.github\workflows\release.yml` | タグの push で、配布用zipを添付した GitHub リリースを作る |
@@ -357,7 +358,7 @@ Release ビルドには、`PathMap` を設定してあり、DLL に、開発PC�
 ### 配布用zipを作る
 
 ```powershell
-powershell -File tools\make-dist-zip.ps1 -Version 1.5.4
+powershell -File tools\make-dist-zip.ps1 -Version 1.6.0
 ```
 
 - 公開済みのインストーラの DLL の版数が、指定した版数と同じことを確かめてから、`配布用zip\VerticalSheetTabs_vX.Y.Z.zip` を作り、古いzipを削除する

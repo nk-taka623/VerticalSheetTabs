@@ -1,5 +1,5 @@
 @startuml
-title クラス図: データ・モデル・設定 (v1.5.4。主なメンバーだけ)
+title クラス図: データ・モデル・設定 (v1.6.0。主なメンバーだけ)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
@@ -72,6 +72,7 @@ package "設定" {
     +Mode : TabMode
     +Side : TabSide
     +CommentJump : CommentJump
+    +RowLayout : RowLayout
     +InitialWidthMode : InitialWidthMode
     +InitialWidthChars : int
     +InitialWidthPx : int
@@ -124,6 +125,10 @@ package "設定" {
   enum TabSide {
     Left
     Right
+  }
+  enum RowLayout {
+    Hanging
+    Stacked
   }
   enum InitialWidthMode {
     Chars
@@ -225,6 +230,7 @@ NameRule ..> FolderModel : 名前から作る
 WorkbookSettings --> TabMode
 WorkbookSettings --> TabSide
 WorkbookSettings --> CommentJump
+WorkbookSettings --> RowLayout
 WorkbookSettings --> InitialWidthMode
 WorkbookSettings --> SelectStyle
 WorkbookSettings --> ActiveMarker

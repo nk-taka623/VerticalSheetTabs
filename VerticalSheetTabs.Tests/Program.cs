@@ -239,6 +239,95 @@ namespace VerticalSheetTabs.Tests
                 Equal(0, RowTransparencyScale.Clamp(-5)); Equal(45, RowTransparencyScale.Clamp(47)); Equal(90, RowTransparencyScale.Clamp(200));
             });
 
+            // ---- RowPlacement (area 100 px high, rows 32 px)
+            Test("StackOffset is 0 when hanging", () => Equal(0, RowPlacement.StackOffset(false, 100, 1, 32)));
+            Test("StackOffset pushes the rows to the bottom", () =>
+            {
+                Equal(68, RowPlacement.StackOffset(true, 100, 1, 32));
+                Equal(4, RowPlacement.StackOffset(true, 100, 3, 32));
+                Equal(100, RowPlacement.StackOffset(true, 100, 0, 32));
+            });
+            Test("StackOffset is 0 when the rows fill or exceed the area", () =>
+            {
+                Equal(0, RowPlacement.StackOffset(true, 96, 3, 32));
+                Equal(0, RowPlacement.StackOffset(true, 100, 4, 32));
+                Equal(0, RowPlacement.StackOffset(true, 0, 1, 32));
+            });
+            Test("RowTop adds the offset and subtracts the scroll", () =>
+            {
+                Equal(0 + 4 + 64, RowPlacement.RowTop(0, 4, 2, 32, 0));
+                Equal(62 + 0 + 64 - 10, RowPlacement.RowTop(62, 0, 2, 32, 10));
+            });
+            Test("stacked: the last row ends where the area ends", () =>
+            {
+                int off = RowPlacement.StackOffset(true, 100, 3, 32);
+                Equal(100, RowPlacement.RowTop(0, off, 2, 32, 0) + 32);
+            });
+            Test("IndexFromY inside the rows", () =>
+            {
+                Equal(0, RowPlacement.IndexFromY(62, 62, 300, 0, 0, 32, 5));
+                Equal(1, RowPlacement.IndexFromY(94, 62, 300, 0, 0, 32, 5));
+                Equal(2, RowPlacement.IndexFromY(94, 62, 300, 0, 32, 32, 5));
+            });
+            Test("IndexFromY: the space above the first stacked row is not a row", () =>
+            {
+                // 3 rows at the bottom of an area 0..100 (offset 4): y 0..3 is empty, y 4 is the first row
+                Equal(-1, RowPlacement.IndexFromY(0, 0, 100, 4, 0, 32, 3));
+                Equal(-1, RowPlacement.IndexFromY(3, 0, 100, 4, 0, 32, 3));
+                Equal(0, RowPlacement.IndexFromY(4, 0, 100, 4, 0, 32, 3));
+                Equal(2, RowPlacement.IndexFromY(99, 0, 100, 4, 0, 32, 3));
+                Equal(-1, RowPlacement.IndexFromY(-1, 0, 100, 4, 0, 32, 3));
+                Equal(-1, RowPlacement.IndexFromY(10, 0, 100, 40, 0, 32, 2)); // a gap of 40 above: y 10 is in it, not in row 0 (a division on -30 would give 0)
+            });
+            Test("IndexFromY: below the area, below the last row, no rows", () =>
+            {
+                Equal(-1, RowPlacement.IndexFromY(100, 0, 100, 4, 0, 32, 3));
+                Equal(-1, RowPlacement.IndexFromY(150, 62, 300, 0, 0, 32, 2));
+                Equal(-1, RowPlacement.IndexFromY(70, 62, 300, 0, 0, 32, 0));
+                Equal(-1, RowPlacement.IndexFromY(70, 62, 300, 0, 0, 0, 3));
+            });
+            Test("MaxScroll", () =>
+            {
+                Equal(0, RowPlacement.MaxScroll(3, 32, 100));
+                Equal(28, RowPlacement.MaxScroll(4, 32, 100));
+                Equal(0, RowPlacement.MaxScroll(0, 32, 100));
+            });
+            Test("FromBottom and ScrollFromBottom go back and forth", () =>
+            {
+                // 10 rows, area 100: max scroll 220
+                Equal(0, RowPlacement.FromBottom(220, 10, 32, 100));
+                Equal(220, RowPlacement.FromBottom(0, 10, 32, 100));
+                Equal(100, RowPlacement.FromBottom(120, 10, 32, 100));
+                Equal(120, RowPlacement.ScrollFromBottom(100, 10, 32, 100));
+                // one row more: the same distance from the bottom keeps the view of the bottom rows
+                Equal(152, RowPlacement.ScrollFromBottom(100, 11, 32, 100));
+                // clamps
+                Equal(0, RowPlacement.ScrollFromBottom(9999, 10, 32, 100));
+                Equal(220, RowPlacement.ScrollFromBottom(-5, 10, 32, 100));
+                Equal(0, RowPlacement.ScrollFromBottom(0, 2, 32, 100));
+            });
+            Test("OldRowTop", () => Equal(10 + 3 * 32, RowPlacement.OldRowTop(10, 3, 32)));
+            Test("WallpaperSpan hanging", () =>
+            {
+                int t, b;
+                RowPlacement.WallpaperSpan(false, false, 62, 300, 62, 3, 32, 0, out t, out b);
+                Equal(62 + 96, t); Equal(300, b);
+                RowPlacement.WallpaperSpan(false, true, 62, 300, 62, 3, 32, 0, out t, out b);
+                Equal(62, t); Equal(300, b);
+                RowPlacement.WallpaperSpan(false, false, 62, 300, 62 - 500, 30, 32, 500, out t, out b);
+                True(b <= t, "no wallpaper when the rows fill the area");
+            });
+            Test("WallpaperSpan stacked", () =>
+            {
+                int t, b;
+                RowPlacement.WallpaperSpan(true, false, 0, 200, 104, 3, 32, 0, out t, out b);
+                Equal(0, t); Equal(104, b);
+                RowPlacement.WallpaperSpan(true, true, 0, 200, 104, 3, 32, 0, out t, out b);
+                Equal(0, t); Equal(200, b);
+                RowPlacement.WallpaperSpan(true, false, 0, 200, -50, 10, 32, 0, out t, out b);
+                True(b <= t, "no wallpaper when the rows fill the area");
+            });
+
             Console.WriteLine(_run + " tests, " + _failed + " failed");
             return _failed;
         }

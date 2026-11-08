@@ -340,6 +340,7 @@ namespace VerticalSheetTabs
         public event Action<System.Collections.Generic.List<string>, System.Drawing.Point> LinkDropRequested;
         public event Action<string, System.Drawing.Point> MemoBadgeClicked;
         public bool RowAnimation { get { return _strip.RowAnimation; } set { _strip.RowAnimation = value; } }
+        public RowLayout Arrangement { get { return _strip.Arrangement; } set { _strip.Arrangement = value; } }
         public BadgeKinds ShownBadges { get { return _strip.ShownBadges; } set { _strip.ShownBadges = value; } }
         public void SetBadges(System.Collections.Generic.IDictionary<string, BadgeInfo> info) { _strip.SetBadges(info); }
 
