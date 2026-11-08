@@ -382,59 +382,46 @@ namespace VerticalSheetTabs.Tests
             // ---- Wallpaper rotation
             Test("WallpaperRotation reads and writes the text", () =>
             {
-                Equal("28.5,0.0123,-0.0456", WallpaperRotation.Parse("28.5, 0.0123, -0.0456").Format());
-                Equal("0,0,0", WallpaperRotation.Parse("abc").Format());
-                Equal("0,0,0", WallpaperRotation.Parse("1,2").Format());
-                Equal("0,0,0", WallpaperRotation.Parse("1,2,3,4").Format());
-                Equal("0,0,0", WallpaperRotation.Parse("").Format());
-                Equal("0,0,0", WallpaperRotation.Parse(null).Format());
-                Equal("0.13,0,0", WallpaperRotation.Parse("0.12999,0,0").Format());
+                Equal("28.5,0.6", WallpaperRotation.Parse("28.5, 0.6").Format());
+                Equal("28.5,1", WallpaperRotation.Parse("28.5").Format());
+                Equal("0,1", WallpaperRotation.Parse("abc").Format());
+                Equal("0,1", WallpaperRotation.Parse("1,2,3").Format());
+                Equal("0,1", WallpaperRotation.Parse("").Format());
+                Equal("0,1", WallpaperRotation.Parse(null).Format());
+                Equal("0.13,1", WallpaperRotation.Parse("0.12999,1").Format());
+                Equal("10,0.1", WallpaperRotation.Parse("10,0.01").Format());
                 var old = System.Threading.Thread.CurrentThread.CurrentCulture;
                 try
                 {
                     System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
-                    Equal("12.5,0.25,-0.5", new WallpaperRotation(12.5, 0.25, -0.5).Format());
-                    Equal("12.5,0.25,-0.5", WallpaperRotation.Parse("12.5,0.25,-0.5").Format());
+                    Equal("12.5,0.5", new WallpaperRotation(12.5, 0.5).Format());
+                    Equal("12.5,0.5", WallpaperRotation.Parse("12.5,0.5").Format());
                 }
                 finally { System.Threading.Thread.CurrentThread.CurrentCulture = old; }
             });
-            Test("WallpaperRotation normalizes the angle and the shift", () =>
+            Test("WallpaperRotation normalizes the angle and the zoom", () =>
             {
                 True(default(WallpaperRotation).IsIdentity, "default");
                 True(WallpaperRotation.None.IsIdentity, "none");
-                Equal(0.0, new WallpaperRotation(360, 0, 0).Normalize().Degrees);
-                Equal(179.0, new WallpaperRotation(-181, 0, 0).Normalize().Degrees);
-                Equal(180.0, new WallpaperRotation(180, 0, 0).Normalize().Degrees);
-                Equal(180.0, new WallpaperRotation(-180, 0, 0).Normalize().Degrees);
-                Equal(-90.0, new WallpaperRotation(270, 0, 0).Normalize().Degrees);
-                Equal(1.0, new WallpaperRotation(0, 5, 0).Normalize().DX);
-                True(new WallpaperRotation(double.NaN, 0, 0).IsIdentity, "NaN");
-                True(new WallpaperRotation(720, 0, 0).IsIdentity, "two turns");
-                True(!new WallpaperRotation(0, 0.1, 0).IsIdentity, "moved only");
-                True(!new WallpaperRotation(10, 0, 0).IsIdentity, "turned");
-                True(new WallpaperRotation(10.001, 0, 0).SameAs(new WallpaperRotation(10, 0, 0)), "same after rounding");
-                True(!new WallpaperRotation(10.5, 0, 0).SameAs(new WallpaperRotation(10, 0, 0)), "different");
+                Equal(0.0, new WallpaperRotation(360, 1).Normalize().Degrees);
+                Equal(179.0, new WallpaperRotation(-181, 1).Normalize().Degrees);
+                Equal(180.0, new WallpaperRotation(180, 1).Normalize().Degrees);
+                Equal(180.0, new WallpaperRotation(-180, 1).Normalize().Degrees);
+                Equal(-90.0, new WallpaperRotation(270, 1).Normalize().Degrees);
+                Equal(1.0, new WallpaperRotation(0, 5).Normalize().Zoom);
+                Equal(WallpaperRotation.MinZoom, new WallpaperRotation(0, 0.001).Normalize().Zoom);
+                Equal(1.0, new WallpaperRotation(30, 0).Normalize().Zoom);
+                True(new WallpaperRotation(double.NaN, 1).IsIdentity, "NaN");
+                True(new WallpaperRotation(720, 1).IsIdentity, "two turns");
+                True(!new WallpaperRotation(0, 0.8).IsIdentity, "smaller only");
+                True(!new WallpaperRotation(10, 1).IsIdentity, "turned");
+                True(new WallpaperRotation(10.001, 1).SameAs(new WallpaperRotation(10, 1)), "same after rounding");
+                True(!new WallpaperRotation(10.5, 1).SameAs(new WallpaperRotation(10, 1)), "different");
+                True(!new WallpaperRotation(10, 0.9).SameAs(new WallpaperRotation(10, 1)), "different zoom");
             });
-            Test("RotationMath turns the picture round a point", () =>
+            Test("RotationMath angles", () =>
             {
-                var bounds = new System.Drawing.RectangleF(100, 50, 400, 200);
                 var mid = new System.Drawing.PointF(300, 150);
-                // round the middle of the picture: only the angle changes
-                WallpaperRotation r = RotationMath.RotateAbout(WallpaperRotation.None, bounds, mid, 30);
-                True(Math.Abs(r.Degrees - 30) < 1e-9 && Math.Abs(r.DX) < 1e-9 && Math.Abs(r.DY) < 1e-9, "round the middle");
-                // round another point: that point stays where it is (the point of the picture that lies under it)
-                var pivot = new System.Drawing.PointF(400, 100);
-                r = RotationMath.RotateAbout(WallpaperRotation.None, bounds, pivot, 90);
-                System.Drawing.PointF q = RotationMath.Center(r, bounds);
-                // the middle (300,150) is 100 left and 50 below the pivot; turned 90 degrees clockwise it is 50 left and 100 above... (x,y)=(-100,50) -> (-50,-100)
-                True(Math.Abs(q.X - 350) < 0.01 && Math.Abs(q.Y - 0) < 0.01, "the middle moved to " + q.X + "," + q.Y);
-                // turning back and forth round the same point gives the start
-                WallpaperRotation back = RotationMath.RotateAbout(r, bounds, pivot, -90);
-                True(Math.Abs(back.Degrees) < 1e-9 && Math.Abs(back.DX) < 1e-9 && Math.Abs(back.DY) < 1e-9, "back");
-                // four quarter turns
-                WallpaperRotation t = WallpaperRotation.None;
-                for (int i = 0; i < 4; i++) t = RotationMath.RotateAbout(t, bounds, pivot, 90);
-                True(Math.Abs(t.Degrees) < 1e-9 && Math.Abs(t.DX) < 1e-6 && Math.Abs(t.DY) < 1e-6, "one turn");
                 // the angle of a point: right = 0, down = 90 (clockwise is positive)
                 True(Math.Abs(RotationMath.AngleOf(mid, new System.Drawing.PointF(400, 150))) < 1e-9, "right");
                 True(Math.Abs(RotationMath.AngleOf(mid, new System.Drawing.PointF(300, 250)) - 90) < 1e-9, "down");
@@ -443,21 +430,49 @@ namespace VerticalSheetTabs.Tests
                 True(Math.Abs(RotationMath.Delta(170, -170) - 20) < 1e-9, "over 180");
                 True(Math.Abs(RotationMath.Delta(-170, 170) + 20) < 1e-9, "over -180");
             });
-            Test("RotationMath finds the corners and what is inside", () =>
+            Test("RotationMath.FitZoom keeps the corners of the turned picture inside the area", () =>
+            {
+                // the picture 400 x 200 in an area 600 x 200: the picture is as high as the area
+                Equal(1.0, RotationMath.FitZoom(0, 400, 200, 600, 200));
+                Equal(1.0, RotationMath.FitZoom(180, 400, 200, 600, 200));
+                // a little turn sticks out at the top and bottom: smaller
+                double z10 = RotationMath.FitZoom(10, 400, 200, 600, 200);
+                True(z10 < 1.0 && z10 > 0.7, "10 degrees: " + z10);
+                // the corners are inside (they touch a side)
+                for (int d = -360; d <= 360; d += 7)
+                {
+                    double z = RotationMath.FitZoom(d, 400, 200, 600, 200);
+                    System.Drawing.PointF[] c = RotationMath.Corners(new WallpaperRotation(d, z), new System.Drawing.RectangleF(100, 0, 400, 200));
+                    foreach (System.Drawing.PointF q in c) True(q.X >= -0.05 && q.X <= 600.05 && q.Y >= -0.05 && q.Y <= 200.05, "inside at " + d + ": " + q.X + "," + q.Y);
+                }
+                // a quarter turn: 200 wide, 400 high, so it is made 0.5 times
+                Equal(0.5, Math.Round(RotationMath.FitZoom(90, 400, 200, 600, 200), 6));
+                // it is the same again every 180 degrees, and it grows again when the angle goes on (and is smaller again after that)
+                True(Math.Abs(RotationMath.FitZoom(30, 400, 200, 600, 200) - RotationMath.FitZoom(210, 400, 200, 600, 200)) < 1e-9, "every 180 degrees");
+                True(Math.Abs(RotationMath.FitZoom(-30, 400, 200, 600, 200) - RotationMath.FitZoom(30, 400, 200, 600, 200)) < 1e-9, "the same both ways");
+                True(RotationMath.FitZoom(120, 400, 200, 600, 200) < RotationMath.FitZoom(160, 400, 200, 600, 200), "grows again after 120");
+                Equal(1.0, RotationMath.FitZoom(180, 400, 200, 600, 200));
+                True(RotationMath.FitZoom(170, 400, 200, 600, 200) < 1.0, "smaller again before 180");
+                // a picture that is not wider than the area (the area is wide): the same rule, and a limit
+                Equal(WallpaperRotation.MinZoom, RotationMath.FitZoom(90, 4000, 10, 100, 10));
+                Equal(1.0, RotationMath.FitZoom(33, 0, 0, 100, 100));
+            });            Test("RotationMath finds the corners and what is inside", () =>
             {
                 var bounds = new System.Drawing.RectangleF(100, 50, 400, 200);
                 System.Drawing.PointF[] c = RotationMath.Corners(WallpaperRotation.None, bounds);
                 True(Math.Abs(c[0].X - 100) < 1e-3 && Math.Abs(c[0].Y - 50) < 1e-3 && Math.Abs(c[2].X - 500) < 1e-3 && Math.Abs(c[2].Y - 250) < 1e-3, "not turned");
-                c = RotationMath.Corners(new WallpaperRotation(90, 0, 0), bounds);
+                c = RotationMath.Corners(new WallpaperRotation(90, 1), bounds);
                 // a quarter turn: the top left corner goes to the top right, and the picture is 200 wide and 400 high
                 True(Math.Abs(c[0].X - 400) < 1e-3 && Math.Abs(c[0].Y - (-50)) < 1e-3 && Math.Abs(c[2].X - 200) < 1e-3 && Math.Abs(c[2].Y - 350) < 1e-3, "quarter turn " + c[0].X + "," + c[0].Y);
                 True(RotationMath.Inside(c, new System.Drawing.PointF(300, 150), 0), "middle");
                 True(!RotationMath.Inside(c, new System.Drawing.PointF(150, 150), 0), "left of the turned picture");
                 True(RotationMath.Inside(c, new System.Drawing.PointF(250, 150), 0), "just inside");
                 True(!RotationMath.Inside(c, new System.Drawing.PointF(201, 150), 2), "inset");
-                // a shift moves the middle
-                System.Drawing.PointF q = RotationMath.Center(new WallpaperRotation(0, 0.25, -0.5), bounds);
-                True(Math.Abs(q.X - 400) < 1e-3 && Math.Abs(q.Y - 50) < 1e-3, "shift");
+                // the middle is the middle of the preview, and a zoom makes the picture smaller round it
+                System.Drawing.PointF q = RotationMath.Center(bounds);
+                True(Math.Abs(q.X - 300) < 1e-3 && Math.Abs(q.Y - 150) < 1e-3, "middle");
+                c = RotationMath.Corners(new WallpaperRotation(0, 0.5), bounds);
+                True(Math.Abs(c[0].X - 200) < 1e-3 && Math.Abs(c[0].Y - 100) < 1e-3 && Math.Abs(c[2].X - 400) < 1e-3 && Math.Abs(c[2].Y - 200) < 1e-3, "zoom");
             });
             Test("RotationMath.FitFrame makes a frame smaller until it is inside", () =>
             {
@@ -466,7 +481,7 @@ namespace VerticalSheetTabs.Tests
                 System.Drawing.RectangleF res;
                 System.Drawing.PointF[] none = RotationMath.Corners(WallpaperRotation.None, bounds);
                 True(RotationMath.FitFrame(frame, none, 0, out res) && res == frame, "inside: not changed");
-                System.Drawing.PointF[] turned = RotationMath.Corners(RotationMath.RotateAbout(WallpaperRotation.None, bounds, new System.Drawing.PointF(200, 100), 30), bounds);
+                System.Drawing.PointF[] turned = RotationMath.Corners(new WallpaperRotation(30, 1), bounds);
                 True(RotationMath.FitFrame(frame, turned, 0, out res), "fits");
                 True(res.Width < frame.Width && res.Height < frame.Height, "smaller");
                 True(Math.Abs(res.Width / res.Height - frame.Width / frame.Height) < 1e-3, "same ratio");
@@ -484,7 +499,7 @@ namespace VerticalSheetTabs.Tests
             Test("RotationMath.LimitFrame keeps a frame inside and lets it slide", () =>
             {
                 var bounds = new System.Drawing.RectangleF(0, 0, 400, 200);
-                System.Drawing.PointF[] turned = RotationMath.Corners(new WallpaperRotation(20, 0, 0), bounds);
+                System.Drawing.PointF[] turned = RotationMath.Corners(new WallpaperRotation(20, 1), bounds);
                 var valid = new System.Drawing.RectangleF(160, 80, 80, 40);
                 True(RotationMath.FrameInside(turned, valid, 0), "valid to begin with");
                 // far outside: the result is inside, and it is not the start
@@ -493,13 +508,13 @@ namespace VerticalSheetTabs.Tests
                 True(moved.Left > valid.Left + 10, "moved: went on to the side");
                 True(Math.Abs(moved.Width - 80) < 1e-3 && Math.Abs(moved.Height - 40) < 1e-3, "moved: the size is kept");
                 // slides: a frame that touches the right side, asked to go right and down, goes down but not right
-                System.Drawing.PointF[] shifted = RotationMath.Corners(new WallpaperRotation(0, 0.1, 0), bounds); // x from 40 to 440
-                var atSide = new System.Drawing.RectangleF(360, 80, 80, 40);
-                System.Drawing.RectangleF slid = RotationMath.LimitFrame(atSide, new System.Drawing.RectangleF(860, 110, 80, 40), shifted, 0, true);
-                True(Math.Abs(slid.Left - 360) < 0.5 && Math.Abs(slid.Top - 110) < 0.5, "slid: " + slid);
+                System.Drawing.PointF[] shifted = RotationMath.Corners(new WallpaperRotation(0, 0.5), bounds); // x from 100 to 300, y from 50 to 150
+                var atSide = new System.Drawing.RectangleF(220, 70, 80, 40);
+                System.Drawing.RectangleF slid = RotationMath.LimitFrame(atSide, new System.Drawing.RectangleF(860, 100, 80, 40), shifted, 0, true);
+                True(Math.Abs(slid.Left - 220) < 0.5 && Math.Abs(slid.Top - 100) < 0.5, "slid: " + slid);
                 // a frame a hair outside (it was rounded) is still limited, not set free
-                System.Drawing.RectangleF hair = RotationMath.LimitFrame(new System.Drawing.RectangleF(360.5f, 80, 80, 40), new System.Drawing.RectangleF(860, 110, 80, 40), shifted, 0, true);
-                True(hair.Left < 361 && Math.Abs(hair.Top - 110) < 0.5, "hair: " + hair);
+                System.Drawing.RectangleF hair = RotationMath.LimitFrame(new System.Drawing.RectangleF(220.5f, 70, 80, 40), new System.Drawing.RectangleF(860, 100, 80, 40), shifted, 0, true);
+                True(hair.Left < 221 && Math.Abs(hair.Top - 100) < 0.5, "hair: " + hair);
                 // a corner pulled out stops at the side
                 System.Drawing.RectangleF grown = RotationMath.LimitFrame(valid, new System.Drawing.RectangleF(0, 0, 400, 200), turned, 0, false);
                 True(RotationMath.FrameInside(turned, grown, -0.3), "grown: inside");
@@ -533,7 +548,7 @@ namespace VerticalSheetTabs.Tests
                             src.SetPixel(x, y, x < 20 ? System.Drawing.Color.FromArgb(255, 0, 0) : System.Drawing.Color.FromArgb(0, 0, 255));
                     // not turned: the same as before
                     var plain = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false };
-                    var zero = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Rotation = new WallpaperRotation(0, 0, 0) };
+                    var zero = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Rotation = new WallpaperRotation(0, 1) };
                     using (var a = Wallpaper.Render(src, 20, 20, plain))
                     using (var b = Wallpaper.Render(src, 20, 20, zero))
                     {
@@ -543,7 +558,7 @@ namespace VerticalSheetTabs.Tests
                         True(same, "not turned: the same pixels");
                     }
                     // a quarter turn clockwise: the left half (red) goes to the top
-                    var o = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Rotation = new WallpaperRotation(90, 0, 0) };
+                    var o = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Rotation = new WallpaperRotation(90, 1) };
                     using (var r = Wallpaper.Render(src, 20, 20, o))
                     {
                         True(r.GetPixel(10, 3).R > 200 && r.GetPixel(10, 3).B < 60, "top is red: " + r.GetPixel(10, 3));
@@ -554,7 +569,7 @@ namespace VerticalSheetTabs.Tests
                         True(opaque, "no transparent pixel");
                     }
                     // a part of the turned picture: the top left quarter of the turned picture is red
-                    var p = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Rotation = new WallpaperRotation(90, 0, 0), Crop = new WallpaperCrop(0, 0, 0.5, 0.5) };
+                    var p = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Rotation = new WallpaperRotation(90, 1), Crop = new WallpaperCrop(0, 0, 0.5, 0.5) };
                     using (var r = Wallpaper.Render(src, 10, 10, p))
                     {
                         bool allRed = true;
@@ -562,7 +577,20 @@ namespace VerticalSheetTabs.Tests
                             for (int x = 0; x < 10; x++) { var c = r.GetPixel(x, y); if (c.R < 245 || c.B > 10) allRed = false; }
                         True(allRed, "the part is red");
                     }
-                    True(!new WallpaperOptions().SameAs(new WallpaperOptions { Rotation = new WallpaperRotation(5, 0, 0) }), "options differ by the rotation");
+                    True(!new WallpaperOptions().SameAs(new WallpaperOptions { Rotation = new WallpaperRotation(5, 1) }), "options differ by the rotation");
+                    // the picture was made smaller in the preview (zoom 0.5): the frame in the middle half of the preview is the whole picture
+                    var zoomed = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Rotation = new WallpaperRotation(90, 0.5), Crop = new WallpaperCrop(0.25, 0.25, 0.75, 0.75) };
+                    using (var r = Wallpaper.Render(src, 20, 20, zoomed))
+                    {
+                        True(r.GetPixel(10, 3).R > 200 && r.GetPixel(10, 3).B < 60, "zoom: top is red: " + r.GetPixel(10, 3));
+                        True(r.GetPixel(10, 16).B > 200 && r.GetPixel(10, 16).R < 60, "zoom: bottom is blue: " + r.GetPixel(10, 16));
+                    }
+                    // the frame is the whole preview: with the zoom the picture is 40 px (the middle half), the rest is transparent
+                    var wide = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Rotation = new WallpaperRotation(90, 0.5) };
+                    using (var r = Wallpaper.Render(src, 20, 20, wide))
+                    {
+                        True(r.GetPixel(10, 10).A > 250 && r.GetPixel(1, 1).A < 5, "zoom: the corner is outside the picture: " + r.GetPixel(1, 1));
+                    }
                 }
             });
             Test("Row transparency steps", () =>

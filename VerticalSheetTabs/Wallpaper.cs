@@ -186,12 +186,23 @@ namespace VerticalSheetTabs
             return attrs;
         }
 
-        // The part src of the picture after it is turned: the picture is turned round its middle and moved (see WallpaperRotation),
-        // and the part is cut out of the result. Null when it cannot be drawn.
-        private static Bitmap RotatedPart(Bitmap source, Rectangle src, WallpaperRotation rotation)
+        // The part of the picture that is used when it is turned: the frame (src, in the pixels of the picture, as the preview shows it)
+        // lies on the turned picture that was made smaller by the zoom, so it is a part (1 / zoom as large, round the middle of the
+        // picture) of the picture turned as it is. Returns that part's place; the picture is not made smaller for the wallpaper.
+        private static RectangleF TurnedPartPlace(Rectangle src, Size pic, WallpaperRotation n)
+        {
+            double k = n.Zoom <= 0 ? 1.0 : n.Zoom;
+            double cx = pic.Width / 2.0, cy = pic.Height / 2.0;
+            return new RectangleF((float)(cx + (src.X - cx) / k), (float)(cy + (src.Y - cy) / k), (float)(src.Width / k), (float)(src.Height / k));
+        }
+
+        // The part place of the picture after it is turned round its middle (see WallpaperRotation), cut out of the result into a
+        // bitmap of the size size. Null when it cannot be drawn.
+        private static Bitmap RotatedPart(Bitmap source, RectangleF place, Size size, WallpaperRotation rotation)
         {
             WallpaperRotation n = rotation.Normalize();
-            var part = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppPArgb);
+            if (size.Width < 1 || size.Height < 1 || (long)size.Width * size.Height > 64L * 1024 * 1024) return null;
+            var part = new Bitmap(size.Width, size.Height, PixelFormat.Format32bppPArgb);
             try
             {
                 using (Graphics g = Graphics.FromImage(part))
@@ -203,7 +214,7 @@ namespace VerticalSheetTabs
                     g.PixelOffsetMode = PixelOffsetMode.HighQuality;
                     attrs.SetWrapMode(WrapMode.TileFlipXY);
                     m.RotateAt((float)n.Degrees, new PointF(source.Width / 2f, source.Height / 2f));
-                    m.Translate((float)(n.DX * source.Width - src.X), (float)(n.DY * source.Height - src.Y), MatrixOrder.Append);
+                    m.Translate(-place.X, -place.Y, MatrixOrder.Append);
                     g.Transform = m;
                     g.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height), 0, 0, source.Width, source.Height, GraphicsUnit.Pixel, attrs);
                 }
@@ -224,7 +235,12 @@ namespace VerticalSheetTabs
             Rectangle src = o.Crop.ToPixels(source.Width, source.Height);
             bool rotated = !o.Rotation.IsIdentity;
             bool cropped = rotated || src.X != 0 || src.Y != 0 || src.Width != source.Width || src.Height != source.Height;
-            WallpaperLayout lay = Layout(src.Width, src.Height, areaW, areaH, o);
+            // (turned: the part is cut from the turned picture, and its size can differ from the frame's by the zoom)
+            WallpaperRotation turn = o.Rotation.Normalize();
+            RectangleF place = rotated ? TurnedPartPlace(src, source.Size, turn) : RectangleF.Empty;
+            Size used = rotated ? new Size((int)Math.Ceiling(place.Width - 1e-3), (int)Math.Ceiling(place.Height - 1e-3)) : src.Size;
+            if (used.Width < 1 || used.Height < 1) return null;
+            WallpaperLayout lay = Layout(used.Width, used.Height, areaW, areaH, o);
             // The smoothing looks at the neighbours of a pixel, even outside the part that is drawn: the part is cut out into a bitmap
             // of its own (drawn whole, with its edge pixels mirrored), so that nothing from outside it bleeds into its edges.
             Bitmap picture = source;
@@ -233,7 +249,7 @@ namespace VerticalSheetTabs
             {
                 try
                 {
-                    picture = rotated ? RotatedPart(source, src, o.Rotation) : source.Clone(src, PixelFormat.Format32bppPArgb);
+                    picture = rotated ? RotatedPart(source, place, used, turn) : source.Clone(src, PixelFormat.Format32bppPArgb);
                     if (picture == null) return null;
                     ownPicture = true;
                 }
