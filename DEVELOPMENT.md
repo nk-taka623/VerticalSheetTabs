@@ -534,6 +534,12 @@ picture = トリミングなし ? source : source.Clone(src)        // 切り出
 - `Wallpaper.Render`: `outside = !Crop.WithinPicture` のとき、画素の範囲は `ToPixelsOpen` (画像の外へ出る)。`general = rotated || outside` のとき、`RotatedPart` で描く。空きの色は、On も Off も透明 (`Wallpaper.NoPictureGrey` は、なくした。`LimitCrop` は、`SameAs` に含めない)
 - `WallpaperOptions.SameAs` に `LimitCrop` を含める
 
+### 設計の変更 (ファイルを選び直したとき)
+
+「参照...」でファイルを選ぶと、**同じファイルでも**、枠、回転、範囲制限を初期値へ戻す。上の設計の表の「同じファイルを選び直したとき: そのまま」は、この変更で読み替える。
+
+実装の注意: 範囲制限のチェックを On にすると、古い画像の枠を縮めて変更を知らせ、その通知が、戻した値を上書きする。そのため、`_limitCrop.Checked = true` は、枠と回転を戻す**前**に置く (「参照...」と「解除」)。実機で、ファイルを選んでも、枠と回転が戻らない不具合として見つけた。
+
 ### 実機の確認 (トリミング枠の範囲制限)
 
 Windows 11、拡大率125%、Excel 365 (カラフル)。設定ファイルは、控えを取り、後で戻した。
