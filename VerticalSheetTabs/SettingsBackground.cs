@@ -34,10 +34,17 @@ namespace VerticalSheetTabs
         private readonly CheckBox _outline = new CheckBox { Text = "文字に縁を付ける" };
         private readonly Label _outlineNote = new Label { AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(3, 2, 3, 0) };
 
+        public readonly GroupBox PreviewGroup;
+        private readonly CropPreview _preview = new CropPreview { Dock = DockStyle.Fill, Margin = new Padding(3, 4, 3, 3) };
+        private readonly Button _resetCrop = new Button { Text = "リセット", AutoSize = true, MinimumSize = new Size(88, 0), Anchor = AnchorStyles.Right };
+        private WallpaperCrop _cropValue = WallpaperCrop.Full;   // the frame that OK would keep
+        private bool _previewLoaded;                              // the picture is read when the preview is first shown (or a file is chosen)
+
         public BackgroundPanel(WallpaperOptions options, int rowTransparency, bool textOutline)
         {
             options = options ?? new WallpaperOptions();
             _path = options.Path ?? "";
+            _cropValue = options.Crop.Normalize();
             Font font = SystemFonts.MessageBoxFont;
 
             // 壁紙
@@ -45,7 +52,14 @@ namespace VerticalSheetTabs
             var browse = new Button { Text = "参照...", AutoSize = true, MinimumSize = new Size(88, 0) };
             var clear = new Button { Text = "解除", AutoSize = true, MinimumSize = new Size(88, 0) };
             browse.Click += (s, e) => Browse();
-            clear.Click += (s, e) => { _path = ""; _pathBox.Text = ""; Refresh(); };
+            clear.Click += (s, e) =>
+            {
+                _path = "";
+                _pathBox.Text = "";
+                _cropValue = WallpaperCrop.Full;
+                ShowPreview();
+                Refresh();
+            };
             var table = new TableLayoutPanel { ColumnCount = 3, RowCount = 2, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Top };
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             table.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -135,6 +149,25 @@ namespace VerticalSheetTabs
             transPanel.Controls.Add(_outlineNote);
             TransparencyGroup = Group("フォルダ・シートの透過率", font, transPanel, false);
 
+            // プレビュー画面
+            var caption = new Label { Text = "壁紙として表示したい範囲を指定して下さい。", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 0, 3, 0) };
+            _resetCrop.Margin = new Padding(3, 0, 3, 0);
+            var previewTable = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Dock = DockStyle.Fill, Margin = Padding.Empty };
+            previewTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            previewTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            previewTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            previewTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            previewTable.Controls.Add(caption, 0, 0);
+            previewTable.Controls.Add(_resetCrop, 1, 0);
+            previewTable.Controls.Add(_preview, 0, 1);
+            previewTable.SetColumnSpan(_preview, 2);
+            PreviewGroup = new GroupBox { Text = "プレビュー画面", Font = font, Padding = new Padding(8, 4, 8, 6) };
+            PreviewGroup.Controls.Add(previewTable);
+            _resetCrop.Click += (s, e) => _preview.ResetCrop();
+            _preview.CropChanged += (s, e) => _cropValue = _preview.Crop;
+            _preview.VisibleChanged += (s, e) => EnsurePreview();
+            ShowPreviewState(false, "");
+
             foreach (RadioButton r in _fit) r.CheckedChanged += (s, e) => Refresh();
             _keep.CheckedChanged += (s, e) => Refresh();
             _tile.CheckedChanged += (s, e) => Refresh();
@@ -144,28 +177,80 @@ namespace VerticalSheetTabs
             Refresh();
         }
 
-        // "表示方法" and "表示位置" side by side, in two columns of the same width (the whole row is width pixels wide).
-        public Control PairRow(int width)
+        // The lower part of the tab (the whole row is width pixels wide): on the left 表示方法, 表示位置 and 透過率 one below the other,
+        // on the right the preview, as high as the three together.
+        public Control BodyRow(int width)
         {
-            int half = (width - 6) / 2;
-            int height = Math.Max(FitGroup.Height, PositionGroup.Height);
-            foreach (GroupBox g in new[] { FitGroup, PositionGroup })
+            int leftW = Math.Max(FitGroup.Width, Math.Max(PositionGroup.Width, TransparencyGroup.Width));
+            leftW = Math.Min(leftW, (width - 12) * 6 / 10);
+            var left = Stack();
+            GroupBox[] groups = { FitGroup, PositionGroup, TransparencyGroup };
+            for (int i = 0; i < groups.Length; i++)
             {
-                g.Dock = DockStyle.None;
-                g.Size = new Size(half, height);
-                g.Margin = new Padding(3);
+                groups[i].Dock = DockStyle.None;
+                groups[i].Width = leftW;
+                groups[i].Margin = new Padding(3, i == 0 ? 3 : 8, 3, 3);
+                left.Controls.Add(groups[i]);
             }
+            int height = left.PreferredSize.Height - 6;
+            PreviewGroup.Dock = DockStyle.None;
+            PreviewGroup.Size = new Size(Math.Max(200, width - leftW - 12), height);
+            PreviewGroup.Margin = new Padding(3);
             var row = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
-            row.Controls.Add(FitGroup);
-            row.Controls.Add(PositionGroup);
+            row.Controls.Add(left);
+            row.Controls.Add(PreviewGroup);
             return row;
+        }
+
+        // Reads the picture for the preview if that has not been done (the first time the preview is shown).
+        public void EnsurePreview()
+        {
+            if (_previewLoaded || !_preview.Visible) return;
+            ShowPreview();
+        }
+
+        // Shows the picture of the chosen file in the preview (with the frame in _cropValue).
+        private void ShowPreview()
+        {
+            _previewLoaded = true;
+            Bitmap picture = null;
+            string message = "";
+            try
+            {
+                if (string.IsNullOrEmpty(_path)) message = "壁紙の画像を選ぶと、ここに表示します。";
+                else if (!File.Exists(_path)) message = "ファイルが見つかりません。";
+                else
+                {
+                    picture = Wallpaper_Load(_path);
+                    if (picture == null) message = "この画像は読み込めません。";
+                }
+            }
+            catch (Exception)
+            {
+                if (picture != null) { picture.Dispose(); picture = null; }
+                message = "この画像は読み込めません。";
+            }
+            SetPicture(picture, message);
+        }
+
+        private void SetPicture(Bitmap picture, string message)
+        {
+            _preview.Message = message;
+            _preview.SetImage(picture, _cropValue);
+            ShowPreviewState(picture != null, message);
+        }
+
+        private void ShowPreviewState(bool hasPicture, string message)
+        {
+            _resetCrop.Enabled = hasPicture;
+            if (!hasPicture) _preview.Message = message;
         }
 
         public WallpaperOptions Wallpaper
         {
             get
             {
-                var o = new WallpaperOptions { Path = _path, KeepRatio = _keep.Checked, Tile = _tile.Checked };
+                var o = new WallpaperOptions { Path = _path, KeepRatio = _keep.Checked, Tile = _tile.Checked, Crop = _cropValue };
                 for (int i = 0; i < 4; i++) if (_fit[i].Checked) o.Fit = (WallpaperFit)i;
                 for (int i = 0; i < 3; i++)
                 {
@@ -205,16 +290,18 @@ namespace VerticalSheetTabs
                     }
                     catch (Exception) { }
                     if (dialog.ShowDialog() != DialogResult.OK) return;
-                    using (Bitmap test = Wallpaper_Load(dialog.FileName))
+                    Bitmap picture = Wallpaper_Load(dialog.FileName);
+                    if (picture == null)
                     {
-                        if (test == null)
-                        {
-                            MessageBox.Show("この画像は読み込めません。jpg か png の画像を選んでください。", "タブ表示の設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                            return;
-                        }
+                        MessageBox.Show("この画像は読み込めません。jpg か png の画像を選んでください。", "タブ表示の設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
                     }
+                    // a different file: the frame goes back to the whole picture (the same file keeps its frame)
+                    if (!string.Equals(_path, dialog.FileName, StringComparison.OrdinalIgnoreCase)) _cropValue = WallpaperCrop.Full;
                     _path = dialog.FileName;
                     _pathBox.Text = _path;
+                    _previewLoaded = true;
+                    SetPicture(picture, ""); // (the preview keeps the picture)
                     Refresh();
                 }
             }

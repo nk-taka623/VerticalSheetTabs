@@ -58,7 +58,7 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.6.0.0</ApplicationVersion>
+    <ApplicationVersion>1.7.0.0</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <CreateDesktopShortcut>false</CreateDesktopShortcut>
     <CreateWebPageOnPublish>false</CreateWebPageOnPublish>
@@ -255,6 +255,10 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="Wallpaper.cs" />
+    <Compile Include="WallpaperCrop.cs" />
+    <Compile Include="CropPreview.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="RowPlacement.cs" />
     <Compile Include="SettingsBackground.cs" />
     <Compile Include="Wobble.cs" />

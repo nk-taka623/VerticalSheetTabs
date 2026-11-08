@@ -234,6 +234,149 @@ namespace VerticalSheetTabs.Tests
                 True(!Wallpaper.IsSupportedFile("d.gif") && !Wallpaper.IsSupportedFile("") && !Wallpaper.IsSupportedFile(null), "unsupported");
                 True(Wallpaper.Load(@"C:\no\such\file.png") == null, "missing file");
             });
+            // ---- Wallpaper cropping
+            Test("WallpaperCrop reads and writes the text", () =>
+            {
+                Equal("0.1,0.2,0.9,0.8", WallpaperCrop.Parse("0.1,0.2,0.9,0.8").Format());
+                Equal("0.1235,0,1,1", WallpaperCrop.Parse("0.12346, 0, 1, 1").Format());
+                Equal("0,0,1,1", WallpaperCrop.Parse("abc").Format());
+                Equal("0,0,1,1", WallpaperCrop.Parse("0,0,1").Format());
+                Equal("0,0,1,1", WallpaperCrop.Parse("").Format());
+                Equal("0,0,1,1", WallpaperCrop.Parse(null).Format());
+                Equal("0,0,1,1", WallpaperCrop.Parse("0,0,1,1,1").Format());
+                var old = System.Threading.Thread.CurrentThread.CurrentCulture;
+                try
+                {
+                    System.Threading.Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+                    Equal("0.25,0.5,0.75,1", new WallpaperCrop(0.25, 0.5, 0.75, 1).Format());
+                    Equal("0.25,0.5,0.75,1", WallpaperCrop.Parse("0.25,0.5,0.75,1").Format());
+                }
+                finally { System.Threading.Thread.CurrentThread.CurrentCulture = old; }
+            });
+            Test("WallpaperCrop treats a value that is not a part as no cropping", () =>
+            {
+                True(default(WallpaperCrop).IsFull, "default");
+                True(WallpaperCrop.Full.IsFull, "full");
+                True(WallpaperCrop.Parse("-1,-1,2,2").IsFull, "out of the picture is fitted in");
+                True(WallpaperCrop.Parse("0.5,0,0.51,1").IsFull, "too narrow");
+                True(WallpaperCrop.Parse("0,0.5,1,0.505").IsFull, "too low");
+                True(WallpaperCrop.Parse("0.5,0.5,0.4,0.9").IsFull, "turned inside out");
+                True(new WallpaperCrop(double.NaN, 0, 1, 1).IsFull, "NaN");
+                True(!WallpaperCrop.Parse("0.1,0,1,1").IsFull, "a real part");
+                True(new WallpaperCrop(0.1, 0.1, 0.9, 0.9).SameAs(WallpaperCrop.Parse("0.1,0.1,0.9,0.9")), "same");
+                True(!new WallpaperCrop(0.1, 0.1, 0.9, 0.9).SameAs(WallpaperCrop.Full), "different");
+            });
+            Test("WallpaperCrop pixels are rounded outwards and stay in the picture", () =>
+            {
+                Equal(new System.Drawing.Rectangle(0, 0, 100, 50), default(WallpaperCrop).ToPixels(100, 50));
+                Equal(new System.Drawing.Rectangle(10, 5, 80, 40), new WallpaperCrop(0.1, 0.1, 0.9, 0.9).ToPixels(100, 50));
+                Equal(new System.Drawing.Rectangle(33, 0, 34, 50), new WallpaperCrop(0.333, 0, 0.667, 1).ToPixels(100, 50));
+                Equal(new System.Drawing.Rectangle(0, 0, 1, 1), new WallpaperCrop(0.1, 0.1, 0.9, 0.9).ToPixels(1, 1));
+                System.Drawing.Rectangle r = new WallpaperCrop(0.98, 0.98, 1, 1).ToPixels(7, 7);
+                True(r.Right <= 7 && r.Bottom <= 7 && r.Width >= 1 && r.Height >= 1, "inside");
+            });
+            Test("CropDrag finds what the pointer holds", () =>
+            {
+                var f = new System.Drawing.RectangleF(100, 100, 200, 100);
+                Func<float, float, CropHandle> hit = (x, y) => CropDrag.HitTest(f, new System.Drawing.PointF(x, y), 8, true);
+                Equal(CropHandle.NW, hit(100, 100)); Equal(CropHandle.NW, hit(104, 96));
+                Equal(CropHandle.NE, hit(300, 100)); Equal(CropHandle.SW, hit(100, 200)); Equal(CropHandle.SE, hit(300, 200));
+                Equal(CropHandle.N, hit(200, 100)); Equal(CropHandle.S, hit(200, 204)); Equal(CropHandle.W, hit(96, 150)); Equal(CropHandle.E, hit(300, 150));
+                Equal(CropHandle.Move, hit(200, 150));
+                Equal(CropHandle.None, hit(50, 50)); Equal(CropHandle.None, hit(200, 250)); Equal(CropHandle.None, hit(320, 150));
+                Equal(CropHandle.None, CropDrag.HitTest(f, new System.Drawing.PointF(200, 150), 8, false));
+                Equal(CropHandle.NW, CropDrag.HitTest(f, new System.Drawing.PointF(100, 100), 8, false));
+                // a small frame: the grab is narrowed, so that the inside can be held
+                var small = new System.Drawing.RectangleF(0, 0, 12, 12);
+                Equal(CropHandle.Move, CropDrag.HitTest(small, new System.Drawing.PointF(6, 6), 8, true));
+                Equal(CropHandle.NW, CropDrag.HitTest(small, new System.Drawing.PointF(1, 1), 8, true));
+            });
+            Test("CropDrag moves and sizes the frame inside the picture", () =>
+            {
+                var bounds = new System.Drawing.RectangleF(0, 0, 400, 300);
+                var start = new System.Drawing.RectangleF(100, 100, 200, 100);
+                Func<CropHandle, float, float, System.Drawing.RectangleF> drag = (h, x, y) => CropDrag.Drag(h, start, new System.Drawing.PointF(0, 0), new System.Drawing.PointF(x, y), bounds, 24, 24);
+                Equal(new System.Drawing.RectangleF(50, 60, 250, 140), drag(CropHandle.NW, -50, -40));
+                Equal(new System.Drawing.RectangleF(0, 0, 300, 200), drag(CropHandle.NW, -500, -500));
+                Equal(new System.Drawing.RectangleF(100, 100, 300, 200), drag(CropHandle.SE, 500, 500));
+                Equal(new System.Drawing.RectangleF(100, 100, 220, 100), drag(CropHandle.E, 20, 99));
+                Equal(new System.Drawing.RectangleF(100, 80, 200, 120), drag(CropHandle.N, 99, -20));
+                Equal(new System.Drawing.RectangleF(100, 100, 200, 120), drag(CropHandle.S, 99, 20));
+                Equal(new System.Drawing.RectangleF(120, 100, 180, 100), drag(CropHandle.W, 20, 99));
+                // it does not turn inside out: the least size stays
+                Equal(new System.Drawing.RectangleF(276, 176, 24, 24), drag(CropHandle.NW, 900, 900));
+                Equal(new System.Drawing.RectangleF(100, 100, 24, 24), drag(CropHandle.SE, -900, -900));
+                // moving keeps the size and stays in the picture
+                Equal(new System.Drawing.RectangleF(150, 130, 200, 100), drag(CropHandle.Move, 50, 30));
+                Equal(new System.Drawing.RectangleF(200, 0, 200, 100), drag(CropHandle.Move, 500, -500));
+                // a small picture: the least size is at most half of it
+                System.Drawing.RectangleF tiny = CropDrag.Drag(CropHandle.SE, new System.Drawing.RectangleF(0, 0, 30, 30), new System.Drawing.PointF(0, 0), new System.Drawing.PointF(-50, -50), new System.Drawing.RectangleF(0, 0, 30, 30), 24, 24);
+                Equal(new System.Drawing.RectangleF(0, 0, 15, 15), tiny);
+            });
+            Test("CropPreviewMath fits the picture and converts the frame", () =>
+            {
+                System.Drawing.RectangleF r = CropPreviewMath.FitRect(400, 300, 100, 200, 12);
+                True(Math.Abs(r.Height - 276) < 0.01 && Math.Abs(r.Width - 138) < 0.01 && Math.Abs(r.X - 131) < 0.01 && Math.Abs(r.Y - 12) < 0.01, "tall picture");
+                r = CropPreviewMath.FitRect(400, 300, 10, 10, 12);
+                True(Math.Abs(r.Width - 276) < 0.01 && Math.Abs(r.Height - 276) < 0.01, "a small picture is enlarged");
+                r = CropPreviewMath.FitRect(400, 300, 800, 100, 12);
+                True(Math.Abs(r.Width - 376) < 0.01 && Math.Abs(r.Height - 47) < 0.01 && Math.Abs(r.X - 12) < 0.01, "wide picture");
+                True(CropPreviewMath.FitRect(400, 300, 0, 10, 12).IsEmpty && CropPreviewMath.FitRect(20, 20, 10, 10, 12).IsEmpty, "nothing to show");
+                var bounds = new System.Drawing.RectangleF(131, 12, 138, 276);
+                var crop = new WallpaperCrop(0.25, 0.1, 0.75, 0.6);
+                System.Drawing.RectangleF f = CropPreviewMath.ToFrame(crop, bounds);
+                True(Math.Abs(f.Left - (131 + 34.5)) < 0.01 && Math.Abs(f.Top - (12 + 27.6)) < 0.01 && Math.Abs(f.Width - 69) < 0.01 && Math.Abs(f.Height - 138) < 0.01, "frame in pixels");
+                True(CropPreviewMath.FromFrame(f, bounds).SameAs(crop), "and back");
+                True(CropPreviewMath.FromFrame(bounds, bounds).IsFull, "whole picture");
+            });
+            Test("Wallpaper.Render draws only the part that is used", () =>
+            {
+                using (var src = new System.Drawing.Bitmap(4, 2))
+                {
+                    for (int y = 0; y < 2; y++)
+                        for (int x = 0; x < 4; x++)
+                            src.SetPixel(x, y, x < 2 ? System.Drawing.Color.FromArgb(255, 0, 0) : System.Drawing.Color.FromArgb(0, 0, 255));
+                    var o = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false };
+                    using (var whole = Wallpaper.Render(src, 8, 4, o))
+                    {
+                        True(whole.GetPixel(1, 2).R > 200 && whole.GetPixel(6, 2).B > 200, "no cropping: red on the left, blue on the right");
+                    }
+                    o.Crop = new WallpaperCrop(0.5, 0, 1, 1);
+                    using (var right = Wallpaper.Render(src, 8, 4, o))
+                    {
+                        bool allBlue = true;
+                        string bad = "";
+                        for (int y = 0; y < 4; y++)
+                            for (int x = 0; x < 8; x++)
+                            {
+                                System.Drawing.Color c = right.GetPixel(x, y);
+                                if (c.R > 8 || c.B < 247) { allBlue = false; bad += " (" + x + "," + y + ")=" + c.R + "," + c.G + "," + c.B + "," + c.A; }
+                            }
+                        True(allBlue, "the right half only, with no red on the edges:" + bad);
+                    }
+                    // tiles and the original size use the part too
+                    var t = new WallpaperOptions { Fit = WallpaperFit.Original, Tile = true, Crop = new WallpaperCrop(0.5, 0, 1, 1) };
+                    using (var tiled = Wallpaper.Render(src, 6, 4, t))
+                    {
+                        bool allBlue = true;
+                        for (int y = 0; y < 4; y++)
+                            for (int x = 0; x < 6; x++) if (tiled.GetPixel(x, y).B < 247 || tiled.GetPixel(x, y).R > 8) allBlue = false;
+                        True(allBlue, "tiles of the part");
+                    }
+                    // a whole-picture frame draws what no frame draws
+                    var a = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = true };
+                    var b = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = true, Crop = WallpaperCrop.Full };
+                    using (var ra = Wallpaper.Render(src, 9, 7, a))
+                    using (var rb = Wallpaper.Render(src, 9, 7, b))
+                    {
+                        bool same = true;
+                        for (int y = 0; y < 7; y++)
+                            for (int x = 0; x < 9; x++) if (ra.GetPixel(x, y) != rb.GetPixel(x, y)) same = false;
+                        True(same, "the same pixels");
+                    }
+                    True(!new WallpaperOptions().SameAs(new WallpaperOptions { Crop = new WallpaperCrop(0.1, 0.1, 0.9, 0.9) }), "options differ by the part");
+                }
+            });
             Test("Row transparency steps", () =>
             {
                 Equal(0, RowTransparencyScale.Clamp(-5)); Equal(45, RowTransparencyScale.Clamp(47)); Equal(90, RowTransparencyScale.Clamp(200));
