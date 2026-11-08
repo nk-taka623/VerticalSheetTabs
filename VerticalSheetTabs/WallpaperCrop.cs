@@ -13,6 +13,10 @@ namespace VerticalSheetTabs
         // The smallest width and height of the part (a fraction of the picture).
         public const double MinSide = 0.02;
 
+        // How far outside the picture the frame can lie (a fraction of the picture, to either side). Only a frame that is not kept
+        // inside the preview picture ("limit the frame" off) goes outside it; the preview area can be larger than the picture.
+        public const double Reach = 16.0;
+
         public readonly double L, T, R, B;
 
         public WallpaperCrop(double l, double t, double r, double b)
@@ -25,7 +29,7 @@ namespace VerticalSheetTabs
 
         public static WallpaperCrop Full { get { return new WallpaperCrop(0, 0, 1, 1); } }
 
-        // Fits the values into the picture (0 to 1), rounds them to four decimals (what is saved and what is shown are the same
+        // Fits the values into the reach (-Reach to 1 + Reach; a frame inside the picture is 0 to 1), rounds them to four decimals (what is saved and what is shown are the same
         // values) and returns "no cropping" for a part that is too small or not a part at all.
         public WallpaperCrop Normalize()
         {
@@ -33,6 +37,16 @@ namespace VerticalSheetTabs
             double l = Round(L), t = Round(T), r = Round(R), b = Round(B);
             if (r - l < MinSide - 1e-9 || b - t < MinSide - 1e-9) return Full;
             return new WallpaperCrop(l, t, r, b);
+        }
+
+        // Does the frame lie inside the picture?
+        public bool WithinPicture
+        {
+            get
+            {
+                WallpaperCrop n = Normalize();
+                return n.L >= 0 && n.T >= 0 && n.R <= 1 && n.B <= 1;
+            }
         }
 
         public bool IsFull
@@ -60,6 +74,17 @@ namespace VerticalSheetTabs
             int y0 = Math.Max(0, Math.Min(h - 1, (int)Math.Floor(n.T * h + 1e-9)));
             int x1 = Math.Max(x0 + 1, Math.Min(w, (int)Math.Ceiling(n.R * w - 1e-9)));
             int y1 = Math.Max(y0 + 1, Math.Min(h, (int)Math.Ceiling(n.B * h - 1e-9)));
+            return new Rectangle(x0, y0, x1 - x0, y1 - y0);
+        }
+
+        // The pixels of the frame on a picture of w x h, rounded outwards, where the frame may lie (partly) outside the picture.
+        public Rectangle ToPixelsOpen(int w, int h)
+        {
+            w = Math.Max(1, w);
+            h = Math.Max(1, h);
+            WallpaperCrop n = Normalize();
+            int x0 = (int)Math.Floor(n.L * w + 1e-9), y0 = (int)Math.Floor(n.T * h + 1e-9);
+            int x1 = Math.Max(x0 + 1, (int)Math.Ceiling(n.R * w - 1e-9)), y1 = Math.Max(y0 + 1, (int)Math.Ceiling(n.B * h - 1e-9));
             return new Rectangle(x0, y0, x1 - x0, y1 - y0);
         }
 
@@ -97,7 +122,7 @@ namespace VerticalSheetTabs
 
         private static double Round(double v)
         {
-            return Math.Round(Math.Max(0, Math.Min(1, v)), 4, MidpointRounding.AwayFromZero);
+            return Math.Round(Math.Max(-Reach, Math.Min(1 + Reach, v)), 4, MidpointRounding.AwayFromZero);
         }
     }
 

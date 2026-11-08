@@ -82,6 +82,7 @@ namespace VerticalSheetTabs
             if (v.TryGetValue("WallpaperVAlign", out t)) w2.VAlign = t == "Top" ? WallpaperVAlign.Top : t == "Bottom" ? WallpaperVAlign.Bottom : WallpaperVAlign.Center;
             if (v.TryGetValue("WallpaperCrop", out t)) w2.Crop = WallpaperCrop.Parse(t);
             if (v.TryGetValue("WallpaperRotation", out t)) w2.Rotation = WallpaperRotation.Parse(t);
+            if (v.TryGetValue("WallpaperCropLimit", out t)) w2.LimitCrop = t != "Off";
             s.Wallpaper = w2;
             if (v.TryGetValue("RowTransparency", out t) && int.TryParse(t, out n)) s.RowTransparency = WorkbookSettings.ClampTransparency(n);
             if (v.TryGetValue("TextOutline", out t)) s.TextOutline = t != "Off";
@@ -120,6 +121,7 @@ namespace VerticalSheetTabs
                 { "WallpaperVAlign", s.Wallpaper.VAlign.ToString() },
                 { "WallpaperCrop", s.Wallpaper.Crop.Format() },
                 { "WallpaperRotation", s.Wallpaper.Rotation.Format() },
+                { "WallpaperCropLimit", s.Wallpaper.LimitCrop ? "On" : "Off" },
                 { "RowTransparency", s.RowTransparency.ToString() },
                 { "TextOutline", s.TextOutline ? "On" : "Off" }
             };
