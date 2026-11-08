@@ -85,7 +85,36 @@ class BackgroundPanel <<Control>> {
   +Wallpaper : WallpaperOptions
   +RowTransparency : int
   +TextOutline : bool
+  +BodyRow(width) : Control
+  +EnsurePreview()
   +Refresh()
+}
+
+class CropPreview <<Control>> {
+  +Crop : WallpaperCrop
+  +SetImage(image, crop)
+  +ResetCrop()
+  +CropChanged : event
+  -(頂点、辺、内側のドラッグ。枠の外は暗くする)
+}
+
+class WallpaperCrop <<struct>> {
+  +L, T, R, B : double
+  +Normalize() : WallpaperCrop
+  +ToPixels(w, h) : Rectangle
+  +Format() : string
+  +Parse(text) {static}
+}
+
+class CropDrag <<static>> {
+  +HitTest(frame, point, grab, canMove) : CropHandle
+  +Drag(handle, start, startPt, pt, bounds, minW, minH) : RectangleF
+}
+
+class CropPreviewMath <<static>> {
+  +FitRect(clientW, clientH, imgW, imgH, margin) : RectangleF
+  +ToFrame(crop, bounds) : RectangleF
+  +FromFrame(frame, bounds) : WallpaperCrop
 }
 
 class Wallpaper <<static>> {
@@ -140,6 +169,11 @@ TabStrip ..> WobbleSounds
 SettingsForm ..> WobbleMotion
 SettingsForm *-- BackgroundPanel : 「背景」タブ
 BackgroundPanel ..> Wallpaper : 読めるか確かめる
+BackgroundPanel *-- CropPreview : 「プレビュー画面」
+CropPreview ..> CropDrag : 枠のつかみ方、ドラッグ
+CropPreview ..> CropPreviewMath : 画像と枠の位置
+CropPreview ..> WallpaperCrop : 枠 (割合)
+Wallpaper ..> WallpaperCrop : 使う範囲
 TabStrip ..> Wallpaper : 壁紙の描画
 TabStrip ..> RowPlacement : 行の位置の計算
 SettingsForm ..> TabStrip : 配置の見本

@@ -28,10 +28,11 @@ namespace VerticalSheetTabs
         public bool Tile;               // repeat the picture (not with FitBoth)
         public WallpaperHAlign HAlign = WallpaperHAlign.Center;
         public WallpaperVAlign VAlign = WallpaperVAlign.Center;
+        public WallpaperCrop Crop = WallpaperCrop.Full; // the part of the picture that is used (the rest is left out)
 
         public bool SameAs(WallpaperOptions o)
         {
-            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign;
+            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign && Crop.SameAs(o.Crop);
         }
 
         public WallpaperOptions Clone()
@@ -175,11 +176,39 @@ namespace VerticalSheetTabs
             return r;
         }
 
+        // A part cut out of a picture is drawn with its edge pixels mirrored (see Render). Null when the whole picture is drawn.
+        private static ImageAttributes EdgeAttributes(bool cropped)
+        {
+            if (!cropped) return null;
+            var attrs = new ImageAttributes();
+            attrs.SetWrapMode(WrapMode.TileFlipXY);
+            return attrs;
+        }
+
         // Draws the wallpaper into a transparent bitmap of the size of the area. The caller draws it where the area is.
         public static Bitmap Render(Bitmap source, int areaW, int areaH, WallpaperOptions o)
         {
             if (source == null || areaW < 1 || areaH < 1) return null;
-            WallpaperLayout lay = Layout(source.Width, source.Height, areaW, areaH, o);
+            // The part of the picture that is used: the layout works with its size, the drawing takes its pixels.
+            Rectangle src = o.Crop.ToPixels(source.Width, source.Height);
+            bool cropped = src.X != 0 || src.Y != 0 || src.Width != source.Width || src.Height != source.Height;
+            WallpaperLayout lay = Layout(src.Width, src.Height, areaW, areaH, o);
+            // The smoothing looks at the neighbours of a pixel, even outside the part that is drawn: the part is cut out into a bitmap
+            // of its own (drawn whole, with its edge pixels mirrored), so that nothing from outside it bleeds into its edges.
+            Bitmap picture = source;
+            bool ownPicture = false;
+            if (cropped)
+            {
+                try
+                {
+                    picture = source.Clone(src, PixelFormat.Format32bppPArgb);
+                    ownPicture = true;
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            }
             var bmp = new Bitmap(areaW, areaH, PixelFormat.Format32bppPArgb);
             try
             {
@@ -190,17 +219,18 @@ namespace VerticalSheetTabs
                     g.PixelOffsetMode = PixelOffsetMode.HighQuality;
                     if (lay.Tile && (long)lay.Width * lay.Height <= 8L * 1024 * 1024)
                     {
-                        Bitmap tile = source;
+                        Bitmap tile = picture;
                         bool own = false;
-                        if (lay.Width != source.Width || lay.Height != source.Height)
+                        if (lay.Width != picture.Width || lay.Height != picture.Height)
                         {
                             tile = new Bitmap(lay.Width, lay.Height, PixelFormat.Format32bppPArgb);
                             own = true;
                             using (Graphics tg = Graphics.FromImage(tile))
+                            using (ImageAttributes attrs = EdgeAttributes(cropped))
                             {
                                 tg.InterpolationMode = InterpolationMode.HighQualityBicubic;
                                 tg.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                                tg.DrawImage(source, new Rectangle(0, 0, lay.Width, lay.Height), 0, 0, source.Width, source.Height, GraphicsUnit.Pixel);
+                                tg.DrawImage(picture, new Rectangle(0, 0, lay.Width, lay.Height), 0, 0, picture.Width, picture.Height, GraphicsUnit.Pixel, attrs);
                             }
                         }
                         try
@@ -218,7 +248,10 @@ namespace VerticalSheetTabs
                     }
                     else
                     {
-                        g.DrawImage(source, new Rectangle(lay.X, lay.Y, lay.Width, lay.Height), 0, 0, source.Width, source.Height, GraphicsUnit.Pixel);
+                        using (ImageAttributes attrs = EdgeAttributes(cropped))
+                        {
+                            g.DrawImage(picture, new Rectangle(lay.X, lay.Y, lay.Width, lay.Height), 0, 0, picture.Width, picture.Height, GraphicsUnit.Pixel, attrs);
+                        }
                     }
                 }
                 return bmp;
@@ -227,6 +260,10 @@ namespace VerticalSheetTabs
             {
                 bmp.Dispose();
                 return null;
+            }
+            finally
+            {
+                if (ownPicture) picture.Dispose();
             }
         }
     }
