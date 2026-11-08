@@ -22,6 +22,11 @@ namespace VerticalSheetTabs
         private readonly TrackBar _widthPxBar = new TrackBar();
         private readonly NumericUpDown _widthPxBox = new NumericUpDown();
         private GroupBox _widthGroup;
+        // How the rows are laid out: two radio buttons, each with a preview drawn by the tab strip itself.
+        private readonly RadioButton _layoutHanging = new RadioButton();
+        private readonly RadioButton _layoutStacked = new RadioButton();
+        private GroupBox _layoutGroup;
+        private readonly List<TabStrip> _layoutPreviews = new List<TabStrip>();
         private readonly BackgroundPanel _background;
         private GroupBox _jumpGroup; // the position of the comment jump: only used while the note / comment badge is shown
         private readonly RadioButton _jumpCenter = new RadioButton();
@@ -77,7 +82,7 @@ namespace VerticalSheetTabs
         // The samples of the looks: they show the active-sheet mark that is chosen above them.
         private readonly System.Collections.Generic.List<TabStrip> _samples = new System.Collections.Generic.List<TabStrip>();
 
-        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim, CommentJump commentJump = CommentJump.TopLeft, WallpaperOptions wallpaper = null, int rowTransparency = 0, bool textOutline = true, InitialWidthMode initialWidthMode = InitialWidthMode.Chars, int initialWidthChars = 12, int initialWidthPx = 0)
+        public SettingsForm(bool tabsHidden, TabMode mode, TabSide side, bool outlineVisible, int outlineLevel, bool nameRule, SelectStyle selectStyle, ActiveMarker activeMarker, WobbleType wobble, int wobbleAmp, int wobbleDur, bool wobbleSound, int wobbleVolume, bool wobbleSampleStyle, BadgeKinds badges, bool rowAnim, bool doneAnim, CommentJump commentJump = CommentJump.TopLeft, WallpaperOptions wallpaper = null, int rowTransparency = 0, bool textOutline = true, InitialWidthMode initialWidthMode = InitialWidthMode.Chars, int initialWidthChars = 12, int initialWidthPx = 0, RowLayout rowLayout = RowLayout.Hanging)
         {
             _initialPx = initialWidthPx;
             Text = "タブ表示の設定";
@@ -107,6 +112,7 @@ namespace VerticalSheetTabs
             _outlineGroup = CreateOutlineGroup();
             _ruleGroup = CreateRuleGroup();
             _background = new BackgroundPanel(wallpaper, rowTransparency, textOutline);
+            _background.Stacked = rowLayout == RowLayout.Stacked;
             _rowAnim.Text = "フォルダ・シートの追加・削除を、動きで見せる";
             _rowAnim.Checked = rowAnim;
             _doneAnim.Text = "進捗を「完了」にしたとき、印をはじけさせる";
@@ -164,10 +170,16 @@ namespace VerticalSheetTabs
             modeGroup.Dock = DockStyle.None;
             _sideGroup.Dock = DockStyle.None;
             int topHeight = Math.Max(modeGroup.Height, _sideGroup.Height);
-            int sideWidth = (width - 12) * 34 / 100;
-            modeGroup.Size = new Size(width - sideWidth - 6, topHeight);
+            // 基本 has two columns: the mode, the side and the first width on the left, the layout of the rows (with previews) on the right
+            int dpiNow = DpiHelper.GetDpi(IntPtr.Zero);
+            int previewW = 190 * dpiNow / 96;
+            int rightW = 2 * previewW + 3 * 12 + 24;
+            int leftW = width - rightW - 12;
+            int sideWidth = (leftW - 12) * 30 / 100;
+            modeGroup.Size = new Size(leftW - sideWidth - 6 - 6, topHeight);
             _sideGroup.Size = new Size(sideWidth, topHeight);
-            _widthGroup = CreateWidthGroup(width, initialWidthMode, initialWidthChars, initialWidthPx);
+            _widthGroup = CreateWidthGroup(leftW - 6, initialWidthMode, initialWidthChars, initialWidthPx);
+            _layoutGroup = CreateLayoutGroup(rightW, previewW, rowLayout, selectStyle, activeMarker);
             _jumpGroup.Dock = DockStyle.None;
             _jumpGroup.Size = new Size(width, _jumpGroup.Height);
             _jumpGroup.Margin = new Padding(3);
@@ -179,9 +191,7 @@ namespace VerticalSheetTabs
             _tabs.Padding = new Point(16, 5); // (room around the titles of the tabs)
             // (the tabs other than "このブック" are kept for the whole PC)
             string pcNote = "このタブの設定は、このPCのすべてのブックに共通です。";
-            var basic = new List<Control> { Banner(pcNote, width), top, _widthGroup };
-            if (tabsHidden) basic.Add(Banner("このブックは、横タブが非表示のため、縦タブは表示されません。", width));
-            _tabs.TabPages.Add(CreatePage("基本", width, basic.ToArray()));
+            _tabs.TabPages.Add(CreateBasicPage(width, leftW, pcNote, top, tabsHidden));
             _tabs.TabPages.Add(CreatePage("背景", width, Banner(pcNote, width), _background.WallpaperGroup, _background.PairRow(width), _background.TransparencyGroup));
             _tabs.TabPages.Add(CreatePage("デザイン", width, Banner(pcNote, width), _markerGroup, _styleGroup, _outlineGroup));
             _animPage = CreatePage("アニメーション", width, Banner(pcNote, width), _wobbleGroup, _animGroup);
@@ -200,6 +210,13 @@ namespace VerticalSheetTabs
             Rectangle shown = _tabs.DisplayRectangle;
             _tabs.Size = new Size(inner.Width + 1000 - shown.Width, inner.Height + 1000 - shown.Height);
             _tabs.Margin = new Padding(3);
+            // the right column of the basic page is as high as the tabs: the previews take what the left column does not use
+            if (_basicLayout != null)
+            {
+                TabPage basicPage = _tabs.TabPages[0];
+                _basicLayout.AutoSize = false;
+                _basicLayout.Size = new Size(inner.Width - basicPage.Padding.Horizontal, inner.Height - basicPage.Padding.Vertical);
+            }
             // the sample of the animation moves (and sounds) while its tab is shown; it plays at once when the tab is chosen
             _tabs.SelectedIndexChanged += (s, e) =>
             {
@@ -256,6 +273,7 @@ namespace VerticalSheetTabs
                     if (!self.Checked) return;
                     foreach (RadioButton other in styles) if (other != self) other.Checked = false;
                     RefreshWobbleSample();
+                    foreach (TabStrip pv in _layoutPreviews) pv.SelectionStyle = SelectStyle;
                 };
             }
             _outlineShow.Checked = outlineVisible;
@@ -282,6 +300,8 @@ namespace VerticalSheetTabs
         private int _minPx = 0;
 
         public InitialWidthMode InitialWidthMode { get { return _widthPx.Checked ? InitialWidthMode.Px : InitialWidthMode.Chars; } }
+
+        public RowLayout RowLayout { get { return _layoutStacked.Checked ? RowLayout.Stacked : RowLayout.Hanging; } }
 
         public int InitialWidthChars { get { return (int)_widthCharsBox.Value; } }
 
@@ -743,6 +763,7 @@ namespace VerticalSheetTabs
         {
             _sideGroup.Enabled = !_modeHorizontal.Checked;
             if (_widthGroup != null) _widthGroup.Enabled = !_modeHorizontal.Checked;
+            if (_layoutGroup != null) _layoutGroup.Enabled = !_modeHorizontal.Checked;
         }
 
         // 縦タブの初回幅: a radio button, a slider, a number box and a unit on each of two lines (characters, pixels).
@@ -780,7 +801,10 @@ namespace VerticalSheetTabs
                 new Control[] { _widthChars, _widthCharsBar, _widthCharsBox, new Label { Text = "文字分" } },
                 new Control[] { _widthPx, _widthPxBar, _widthPxBox, new Label { Text = "px" } },
             };
-            int y = 20;
+            var caption = new Label { Text = "新しいブックを初めて開いたときの縦タブ幅の設定です。", AutoSize = false, ForeColor = SystemColors.GrayText };
+            caption.SetBounds(8, 20, inner, 20);
+            group.Controls.Add(caption);
+            int y = 20 + 22;
             foreach (Control[] line in lines)
             {
                 int x = 8;
@@ -794,12 +818,77 @@ namespace VerticalSheetTabs
             }
             var hint = new Label
             {
-                Text = "文字数は半角で 12 ～ 64 文字、px は半角12文字分 (" + minPx + " px) ～ 2000 px。ブックを初めて開いたときの幅で、保存したブックは保存した幅で開きます。",
+                Text = "・文字数は、半角で 12 ～ 64 文字。\r\n・px は、半角12文字分 (" + minPx + " px) から 2000 px まで。",
                 AutoSize = false, ForeColor = SystemColors.GrayText
             };
             hint.SetBounds(8, y + 2, inner, TextRenderer.MeasureText(hint.Text, group.Font, new Size(inner, 0), TextFormatFlags.WordBreak).Height + 2);
             group.Controls.Add(hint);
             group.Size = new Size(width, hint.Bottom + group.Padding.Bottom + 4);
+            return group;
+        }
+
+        private TableLayoutPanel _basicLayout;
+
+        // 基本: two columns. Left: the note, the mode and the side, the first width. Right: the layout of the rows.
+        private TabPage CreateBasicPage(int width, int leftW, string note, Control top, bool tabsHidden)
+        {
+            var page = new TabPage("基本") { Padding = new Padding(6), UseVisualStyleBackColor = true };
+            var left = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = Padding.Empty };
+            left.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            Label banner = Banner(note, leftW);
+            left.Controls.Add(banner);
+            left.Controls.Add(top);
+            _widthGroup.Dock = DockStyle.None;
+            _widthGroup.Margin = new Padding(3, 8, 3, 3);
+            left.Controls.Add(_widthGroup);
+            if (tabsHidden) left.Controls.Add(Banner("このブックは、横タブが非表示のため、縦タブは表示されません。", leftW));
+            // the group on the right begins at the height of the mode and the side
+            _layoutGroup.Margin = new Padding(3, banner.PreferredSize.Height + banner.Margin.Vertical + 8, 3, 3);
+            _basicLayout = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Location = new Point(6, 6), Margin = Padding.Empty };
+            _basicLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            _basicLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            _basicLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            left.Dock = DockStyle.Top;
+            _basicLayout.Controls.Add(left, 0, 0);
+            _basicLayout.Controls.Add(_layoutGroup, 1, 0);
+            page.Controls.Add(_basicLayout);
+            return page;
+        }
+
+        // フォルダ＆シートの表示方法: the two ways, each with a preview that the tab strip draws (a tool row, a band, rows, the "+").
+        private GroupBox CreateLayoutGroup(int groupWidth, int previewW, RowLayout layout, SelectStyle style, ActiveMarker marker)
+        {
+            var group = new GroupBox { Text = "フォルダ＆シートの表示方法", Font = SystemFonts.MessageBoxFont, AutoSize = false, Padding = new Padding(8, 4, 8, 6), Dock = DockStyle.Fill };
+            _layoutHanging.Text = "吊り下げ方式 (標準)";
+            _layoutStacked.Text = "積み上げ方式";
+            _layoutHanging.AutoSize = true; _layoutStacked.AutoSize = true;
+            _layoutStacked.CheckedChanged += (s, e) => { if (_background != null) _background.Stacked = _layoutStacked.Checked; };
+            _layoutHanging.Checked = layout != RowLayout.Stacked;
+            _layoutStacked.Checked = layout == RowLayout.Stacked;
+            var table = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Dock = DockStyle.Fill, Margin = Padding.Empty };
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            RadioButton[] radios = { _layoutHanging, _layoutStacked };
+            RowLayout[] kinds = { RowLayout.Hanging, RowLayout.Stacked };
+            for (int i = 0; i < 2; i++)
+            {
+                RadioButton radio = radios[i];
+                radio.Margin = new Padding(12, 6, 3, 6);
+                table.Controls.Add(radio, i, 0);
+                var strip = new TabStrip { Dock = DockStyle.Fill, Margin = new Padding(12, 0, 12, 6), MinimumSize = new Size(previewW, 0) };
+                strip.SetLayoutPreview(kinds[i], style, marker);
+                strip.SampleClicked += () => radio.Checked = true;
+                _layoutPreviews.Add(strip);
+                _samples.Add(strip);
+                table.Controls.Add(strip, i, 1);
+            }
+            group.Controls.Add(table);
+            // (as high as it needs to show the preview with the tool row, the band, four rows and the "+")
+            int need = (38 + 24 + 4 * 32 + 32 + 40) * DpiHelper.GetDpi(IntPtr.Zero) / 96;
+            group.MinimumSize = new Size(groupWidth, need + 40);
+            group.Size = new Size(groupWidth, need + 40);
             return group;
         }
 
