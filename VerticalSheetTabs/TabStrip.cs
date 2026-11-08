@@ -986,6 +986,48 @@ namespace VerticalSheetTabs
             return Px(InsetLeft + TextPadLeft + FolderMarkWidth + 4);
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool GetPhysicalCursorPos(out Point point);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetPhysicalCursorPos(int x, int y);
+
+        // Stacked: the rows rise from the bottom, so a folder that was opened or closed with its mark moves (up when it opens, down when it
+        // closes). The pointer is moved by as much, so that it stays on the mark and the folder can be clicked again at once.
+        // (The pointer is read and set in real pixels; the rows are laid out in the pixels of this window, which are real ones.)
+        private void FollowFolder(string folderId, int oldTop, int inRow)
+        {
+            try
+            {
+                if (!Stacked || IsSample || folderId == null) return;
+                int i = _rows.FindIndex(r => r.IsFolder && r.FolderId == folderId);
+                if (i < 0) return;
+                int delta = RowRect(i).Top - oldTop;
+                if (delta == 0) return;
+                Point p;
+                if (!GetPhysicalCursorPos(out p)) return;
+                // (kept inside the pane: a folder that has gone out of the view is followed as far as the pane's edge)
+                int top = PointToScreenPhysicalTop();
+                int y = p.Y + delta;
+                int limitTop = top, limitBottom = top + ClientSize.Height - 1;
+                if (limitTop <= limitBottom) y = Math.Max(limitTop, Math.Min(limitBottom, y));
+                SetPhysicalCursorPos(p.X, y);
+            }
+            catch (Exception)
+            {
+                // The pointer stays where it is.
+            }
+        }
+
+        // The top of this window on the screen, in real pixels: the pointer's real position less its place in the window.
+        private int PointToScreenPhysicalTop()
+        {
+            Point p;
+            if (!GetPhysicalCursorPos(out p)) return int.MinValue / 2;
+            Point client = PointToClient(Cursor.Position);
+            return p.Y - client.Y;
+        }
+
         public int IndexFromPoint(Point p)
         {
             return RowPlacement.IndexFromY(p.Y, AreaTop, AreaBottom, StackOffset, _scrollY, RowPx, _rows.Count);
@@ -4237,7 +4279,9 @@ namespace VerticalSheetTabs
                 if (e.Button == MouseButtons.Left && e.X <= FolderMarkRight())
                 {
                     // the mark opens and closes the folder
+                    int oldTop = RowRect(index).Top;
                     if (FolderToggleRequested != null) FolderToggleRequested(row.FolderId);
+                    FollowFolder(row.FolderId, oldTop, e.Y - oldTop);
                     return;
                 }
                 if (e.Button == MouseButtons.Left)
