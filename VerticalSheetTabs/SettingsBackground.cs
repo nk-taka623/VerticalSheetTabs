@@ -37,6 +37,7 @@ namespace VerticalSheetTabs
         public readonly GroupBox PreviewGroup;
         private readonly CropPreview _preview = new CropPreview { Dock = DockStyle.Fill, Margin = new Padding(3, 4, 3, 3) };
         private readonly Button _resetCrop = new Button { Text = "リセット", AutoSize = true, MinimumSize = new Size(88, 0), Anchor = AnchorStyles.Right };
+        private readonly CheckBox _limitCrop = new CheckBox { Text = "トリミング枠の範囲制限", AutoSize = true, Checked = true, Anchor = AnchorStyles.Right };
         private WallpaperCrop _cropValue = WallpaperCrop.Full;   // the frame that OK would keep
         private WallpaperRotation _rotationValue;                 // how the picture is turned, that OK would keep
         private bool _previewLoaded;                              // the picture is read when the preview is first shown (or a file is chosen)
@@ -47,6 +48,7 @@ namespace VerticalSheetTabs
             _path = options.Path ?? "";
             _cropValue = options.Crop.Normalize();
             _rotationValue = options.Rotation.Normalize();
+            _limitCrop.Checked = options.LimitCrop;
             Font font = SystemFonts.MessageBoxFont;
 
             // 壁紙
@@ -60,6 +62,7 @@ namespace VerticalSheetTabs
                 _pathBox.Text = "";
                 _cropValue = WallpaperCrop.Full;
                 _rotationValue = WallpaperRotation.None;
+                _limitCrop.Checked = true;
                 ShowPreview();
                 Refresh();
             };
@@ -155,18 +158,22 @@ namespace VerticalSheetTabs
             // プレビュー画面
             var caption = new Label { Text = "壁紙として表示したい範囲を指定して下さい。", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 0, 3, 0) };
             _resetCrop.Margin = new Padding(3, 0, 3, 0);
-            var previewTable = new TableLayoutPanel { ColumnCount = 2, RowCount = 2, Dock = DockStyle.Fill, Margin = Padding.Empty };
+            _limitCrop.Margin = new Padding(3, 0, 3, 0);
+            var previewTable = new TableLayoutPanel { ColumnCount = 3, RowCount = 2, Dock = DockStyle.Fill, Margin = Padding.Empty };
             previewTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            previewTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             previewTable.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             previewTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             previewTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             previewTable.Controls.Add(caption, 0, 0);
-            previewTable.Controls.Add(_resetCrop, 1, 0);
+            previewTable.Controls.Add(_limitCrop, 1, 0);
+            previewTable.Controls.Add(_resetCrop, 2, 0);
             previewTable.Controls.Add(_preview, 0, 1);
-            previewTable.SetColumnSpan(_preview, 2);
+            previewTable.SetColumnSpan(_preview, 3);
             PreviewGroup = new GroupBox { Text = "プレビュー画面", Font = font, Padding = new Padding(8, 4, 8, 6) };
             PreviewGroup.Controls.Add(previewTable);
-            _resetCrop.Click += (s, e) => _preview.ResetCrop();
+            _resetCrop.Click += (s, e) => { _limitCrop.Checked = true; _preview.ResetCrop(); };
+            _limitCrop.CheckedChanged += (s, e) => { _preview.LimitCrop = _limitCrop.Checked; };
             _preview.CropChanged += (s, e) => { _cropValue = _preview.Crop; _rotationValue = _preview.Rotation; };
             _preview.VisibleChanged += (s, e) => EnsurePreview();
             ShowPreviewState(false, "");
@@ -239,13 +246,14 @@ namespace VerticalSheetTabs
         private void SetPicture(Bitmap picture, string message)
         {
             _preview.Message = message;
-            _preview.SetImage(picture, _cropValue, _rotationValue);
+            _preview.SetImage(picture, _cropValue, _rotationValue, _limitCrop.Checked);
             ShowPreviewState(picture != null, message);
         }
 
         private void ShowPreviewState(bool hasPicture, string message)
         {
             _resetCrop.Enabled = hasPicture;
+            _limitCrop.Enabled = hasPicture;
             if (!hasPicture) _preview.Message = message;
         }
 
@@ -253,7 +261,7 @@ namespace VerticalSheetTabs
         {
             get
             {
-                var o = new WallpaperOptions { Path = _path, KeepRatio = _keep.Checked, Tile = _tile.Checked, Crop = _cropValue, Rotation = _rotationValue };
+                var o = new WallpaperOptions { Path = _path, KeepRatio = _keep.Checked, Tile = _tile.Checked, Crop = _cropValue, Rotation = _rotationValue, LimitCrop = _limitCrop.Checked };
                 for (int i = 0; i < 4; i++) if (_fit[i].Checked) o.Fit = (WallpaperFit)i;
                 for (int i = 0; i < 3; i++)
                 {
@@ -304,6 +312,7 @@ namespace VerticalSheetTabs
                     {
                         _cropValue = WallpaperCrop.Full;
                         _rotationValue = WallpaperRotation.None;
+                        _limitCrop.Checked = true;
                     }
                     _path = dialog.FileName;
                     _pathBox.Text = _path;

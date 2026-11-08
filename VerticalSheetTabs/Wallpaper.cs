@@ -30,10 +30,11 @@ namespace VerticalSheetTabs
         public WallpaperVAlign VAlign = WallpaperVAlign.Center;
         public WallpaperCrop Crop = WallpaperCrop.Full; // the part of the picture that is used (the rest is left out)
         public WallpaperRotation Rotation;              // how the picture is turned before the part is cut out (default: not turned)
+        public bool LimitCrop = true;                   // the frame is kept inside the picture: where the frame reaches outside it, the wallpaper is transparent (on) or grey (off)
 
         public bool SameAs(WallpaperOptions o)
         {
-            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign && Crop.SameAs(o.Crop) && Rotation.SameAs(o.Rotation);
+            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign && Crop.SameAs(o.Crop) && Rotation.SameAs(o.Rotation) && LimitCrop == o.LimitCrop;
         }
 
         public WallpaperOptions Clone()
@@ -70,6 +71,9 @@ namespace VerticalSheetTabs
 
     public static class Wallpaper
     {
+        // Where the frame reaches outside the picture ("limit the frame" off), the wallpaper and the preview show this grey.
+        public static readonly Color NoPictureGrey = Color.FromArgb(96, 96, 96);
+
         // Pictures larger than this (the longer side, pixels) are made smaller when they are read, to keep the memory in check.
         public const int MaxSide = 2560;
         private const long MaxFileBytes = 100L * 1024 * 1024;
@@ -198,7 +202,7 @@ namespace VerticalSheetTabs
 
         // The part place of the picture after it is turned round its middle (see WallpaperRotation), cut out of the result into a
         // bitmap of the size size. Null when it cannot be drawn.
-        private static Bitmap RotatedPart(Bitmap source, RectangleF place, Size size, WallpaperRotation rotation)
+        private static Bitmap RotatedPart(Bitmap source, RectangleF place, Size size, WallpaperRotation rotation, Color empty)
         {
             WallpaperRotation n = rotation.Normalize();
             if (size.Width < 1 || size.Height < 1 || (long)size.Width * size.Height > 64L * 1024 * 1024) return null;
@@ -209,7 +213,7 @@ namespace VerticalSheetTabs
                 using (var m = new Matrix())
                 using (var attrs = new ImageAttributes())
                 {
-                    g.Clear(Color.Transparent);
+                    g.Clear(empty);
                     g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                     g.PixelOffsetMode = PixelOffsetMode.HighQuality;
                     attrs.SetWrapMode(WrapMode.TileFlipXY);
@@ -232,13 +236,15 @@ namespace VerticalSheetTabs
         {
             if (source == null || areaW < 1 || areaH < 1) return null;
             // The part of the picture that is used: the layout works with its size, the drawing takes its pixels.
-            Rectangle src = o.Crop.ToPixels(source.Width, source.Height);
+            bool outside = !o.Crop.WithinPicture;
+            Rectangle src = outside ? o.Crop.ToPixelsOpen(source.Width, source.Height) : o.Crop.ToPixels(source.Width, source.Height);
             bool rotated = !o.Rotation.IsIdentity;
-            bool cropped = rotated || src.X != 0 || src.Y != 0 || src.Width != source.Width || src.Height != source.Height;
+            bool general = rotated || outside;   // (the part is drawn from the picture with a transform: turned, or reaching outside it)
+            bool cropped = general || src.X != 0 || src.Y != 0 || src.Width != source.Width || src.Height != source.Height;
             // (turned: the part is cut from the turned picture, and its size can differ from the frame's by the zoom)
             WallpaperRotation turn = o.Rotation.Normalize();
-            RectangleF place = rotated ? TurnedPartPlace(src, source.Size, turn) : RectangleF.Empty;
-            Size used = rotated ? new Size((int)Math.Ceiling(place.Width - 1e-3), (int)Math.Ceiling(place.Height - 1e-3)) : src.Size;
+            RectangleF place = general ? TurnedPartPlace(src, source.Size, turn) : RectangleF.Empty;
+            Size used = general ? new Size((int)Math.Ceiling(place.Width - 1e-3), (int)Math.Ceiling(place.Height - 1e-3)) : src.Size;
             if (used.Width < 1 || used.Height < 1) return null;
             WallpaperLayout lay = Layout(used.Width, used.Height, areaW, areaH, o);
             // The smoothing looks at the neighbours of a pixel, even outside the part that is drawn: the part is cut out into a bitmap
@@ -249,7 +255,7 @@ namespace VerticalSheetTabs
             {
                 try
                 {
-                    picture = rotated ? RotatedPart(source, place, used, turn) : source.Clone(src, PixelFormat.Format32bppPArgb);
+                    picture = general ? RotatedPart(source, place, used, turn, o.LimitCrop ? Color.Transparent : NoPictureGrey) : source.Clone(src, PixelFormat.Format32bppPArgb);
                     if (picture == null) return null;
                     ownPicture = true;
                 }
