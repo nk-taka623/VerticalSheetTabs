@@ -101,7 +101,7 @@ class CropPreview <<Control>> {
 }
 
 class WallpaperRotation <<struct>> {
-  +Degrees, DX, DY : double
+  +Degrees, Zoom : double
   +Normalize() : WallpaperRotation
   +IsIdentity : bool
   +Format() : string
@@ -110,7 +110,7 @@ class WallpaperRotation <<struct>> {
 
 class RotationMath <<static>> {
   +Corners(rotation, bounds) : PointF[]
-  +RotateAbout(rotation, bounds, pivot, delta) : WallpaperRotation
+  +FitZoom(degrees, w, h, areaW, areaH) : double
   +FitFrame(frame, corners, inset) : bool
   +LimitFrame(valid, candidate, corners, inset, move) : RectangleF
 }
