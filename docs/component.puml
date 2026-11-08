@@ -35,7 +35,7 @@ package "縦並びシートタブ (VSTOアドイン)" as ADDIN {
   component "設定画面" as SETTINGS {
     component "SettingsForm" as SettingsForm
     component "SettingsBackground\n(「背景」タブの部品)" as SettingsBackground
-    component "CropPreview\n(壁紙のプレビューとトリミング枠)" as CropPreview
+    component "CropPreview\n(壁紙のプレビュー、トリミング枠、回転)" as CropPreview
     component "AddInVersion" as AddInVersion
   }
 

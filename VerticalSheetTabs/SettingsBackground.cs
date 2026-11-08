@@ -38,6 +38,7 @@ namespace VerticalSheetTabs
         private readonly CropPreview _preview = new CropPreview { Dock = DockStyle.Fill, Margin = new Padding(3, 4, 3, 3) };
         private readonly Button _resetCrop = new Button { Text = "リセット", AutoSize = true, MinimumSize = new Size(88, 0), Anchor = AnchorStyles.Right };
         private WallpaperCrop _cropValue = WallpaperCrop.Full;   // the frame that OK would keep
+        private WallpaperRotation _rotationValue;                 // how the picture is turned, that OK would keep
         private bool _previewLoaded;                              // the picture is read when the preview is first shown (or a file is chosen)
 
         public BackgroundPanel(WallpaperOptions options, int rowTransparency, bool textOutline)
@@ -45,6 +46,7 @@ namespace VerticalSheetTabs
             options = options ?? new WallpaperOptions();
             _path = options.Path ?? "";
             _cropValue = options.Crop.Normalize();
+            _rotationValue = options.Rotation.Normalize();
             Font font = SystemFonts.MessageBoxFont;
 
             // 壁紙
@@ -57,6 +59,7 @@ namespace VerticalSheetTabs
                 _path = "";
                 _pathBox.Text = "";
                 _cropValue = WallpaperCrop.Full;
+                _rotationValue = WallpaperRotation.None;
                 ShowPreview();
                 Refresh();
             };
@@ -164,7 +167,7 @@ namespace VerticalSheetTabs
             PreviewGroup = new GroupBox { Text = "プレビュー画面", Font = font, Padding = new Padding(8, 4, 8, 6) };
             PreviewGroup.Controls.Add(previewTable);
             _resetCrop.Click += (s, e) => _preview.ResetCrop();
-            _preview.CropChanged += (s, e) => _cropValue = _preview.Crop;
+            _preview.CropChanged += (s, e) => { _cropValue = _preview.Crop; _rotationValue = _preview.Rotation; };
             _preview.VisibleChanged += (s, e) => EnsurePreview();
             ShowPreviewState(false, "");
 
@@ -209,7 +212,7 @@ namespace VerticalSheetTabs
             ShowPreview();
         }
 
-        // Shows the picture of the chosen file in the preview (with the frame in _cropValue).
+        // Shows the picture of the chosen file in the preview (with the frame in _cropValue and the turn in _rotationValue).
         private void ShowPreview()
         {
             _previewLoaded = true;
@@ -236,7 +239,7 @@ namespace VerticalSheetTabs
         private void SetPicture(Bitmap picture, string message)
         {
             _preview.Message = message;
-            _preview.SetImage(picture, _cropValue);
+            _preview.SetImage(picture, _cropValue, _rotationValue);
             ShowPreviewState(picture != null, message);
         }
 
@@ -250,7 +253,7 @@ namespace VerticalSheetTabs
         {
             get
             {
-                var o = new WallpaperOptions { Path = _path, KeepRatio = _keep.Checked, Tile = _tile.Checked, Crop = _cropValue };
+                var o = new WallpaperOptions { Path = _path, KeepRatio = _keep.Checked, Tile = _tile.Checked, Crop = _cropValue, Rotation = _rotationValue };
                 for (int i = 0; i < 4; i++) if (_fit[i].Checked) o.Fit = (WallpaperFit)i;
                 for (int i = 0; i < 3; i++)
                 {
@@ -297,7 +300,11 @@ namespace VerticalSheetTabs
                         return;
                     }
                     // a different file: the frame goes back to the whole picture (the same file keeps its frame)
-                    if (!string.Equals(_path, dialog.FileName, StringComparison.OrdinalIgnoreCase)) _cropValue = WallpaperCrop.Full;
+                    if (!string.Equals(_path, dialog.FileName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _cropValue = WallpaperCrop.Full;
+                        _rotationValue = WallpaperRotation.None;
+                    }
                     _path = dialog.FileName;
                     _pathBox.Text = _path;
                     _previewLoaded = true;

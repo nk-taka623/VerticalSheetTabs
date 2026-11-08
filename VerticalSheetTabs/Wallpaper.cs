@@ -29,10 +29,11 @@ namespace VerticalSheetTabs
         public WallpaperHAlign HAlign = WallpaperHAlign.Center;
         public WallpaperVAlign VAlign = WallpaperVAlign.Center;
         public WallpaperCrop Crop = WallpaperCrop.Full; // the part of the picture that is used (the rest is left out)
+        public WallpaperRotation Rotation;              // how the picture is turned before the part is cut out (default: not turned)
 
         public bool SameAs(WallpaperOptions o)
         {
-            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign && Crop.SameAs(o.Crop);
+            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign && Crop.SameAs(o.Crop) && Rotation.SameAs(o.Rotation);
         }
 
         public WallpaperOptions Clone()
@@ -185,13 +186,44 @@ namespace VerticalSheetTabs
             return attrs;
         }
 
+        // The part src of the picture after it is turned: the picture is turned round its middle and moved (see WallpaperRotation),
+        // and the part is cut out of the result. Null when it cannot be drawn.
+        private static Bitmap RotatedPart(Bitmap source, Rectangle src, WallpaperRotation rotation)
+        {
+            WallpaperRotation n = rotation.Normalize();
+            var part = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppPArgb);
+            try
+            {
+                using (Graphics g = Graphics.FromImage(part))
+                using (var m = new Matrix())
+                using (var attrs = new ImageAttributes())
+                {
+                    g.Clear(Color.Transparent);
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    attrs.SetWrapMode(WrapMode.TileFlipXY);
+                    m.RotateAt((float)n.Degrees, new PointF(source.Width / 2f, source.Height / 2f));
+                    m.Translate((float)(n.DX * source.Width - src.X), (float)(n.DY * source.Height - src.Y), MatrixOrder.Append);
+                    g.Transform = m;
+                    g.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height), 0, 0, source.Width, source.Height, GraphicsUnit.Pixel, attrs);
+                }
+                return part;
+            }
+            catch (Exception)
+            {
+                part.Dispose();
+                return null;
+            }
+        }
+
         // Draws the wallpaper into a transparent bitmap of the size of the area. The caller draws it where the area is.
         public static Bitmap Render(Bitmap source, int areaW, int areaH, WallpaperOptions o)
         {
             if (source == null || areaW < 1 || areaH < 1) return null;
             // The part of the picture that is used: the layout works with its size, the drawing takes its pixels.
             Rectangle src = o.Crop.ToPixels(source.Width, source.Height);
-            bool cropped = src.X != 0 || src.Y != 0 || src.Width != source.Width || src.Height != source.Height;
+            bool rotated = !o.Rotation.IsIdentity;
+            bool cropped = rotated || src.X != 0 || src.Y != 0 || src.Width != source.Width || src.Height != source.Height;
             WallpaperLayout lay = Layout(src.Width, src.Height, areaW, areaH, o);
             // The smoothing looks at the neighbours of a pixel, even outside the part that is drawn: the part is cut out into a bitmap
             // of its own (drawn whole, with its edge pixels mirrored), so that nothing from outside it bleeds into its edges.
@@ -201,7 +233,8 @@ namespace VerticalSheetTabs
             {
                 try
                 {
-                    picture = source.Clone(src, PixelFormat.Format32bppPArgb);
+                    picture = rotated ? RotatedPart(source, src, o.Rotation) : source.Clone(src, PixelFormat.Format32bppPArgb);
+                    if (picture == null) return null;
                     ownPicture = true;
                 }
                 catch (Exception)
