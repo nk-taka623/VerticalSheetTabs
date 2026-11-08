@@ -1,5 +1,5 @@
 @startuml
-title コンポーネント図: インターフェースのつながり (v1.7.0)
+title コンポーネント図: インターフェースのつながり (v1.7.1)
 left to right direction
 skinparam componentStyle uml2
 skinparam shadowing false
