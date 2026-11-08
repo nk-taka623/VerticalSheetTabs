@@ -1,5 +1,5 @@
 @startuml
-title クラス図: 主なクラスと関係 (v1.7.0)
+title クラス図: 主なクラスと関係 (v1.7.1)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
@@ -92,10 +92,27 @@ class BackgroundPanel <<Control>> {
 
 class CropPreview <<Control>> {
   +Crop : WallpaperCrop
-  +SetImage(image, crop)
+  +Rotation : WallpaperRotation
+  +SetImage(image, crop, rotation)
   +ResetCrop()
   +CropChanged : event
   -(頂点、辺、内側のドラッグ。枠の外は暗くする)
+  -(点線の近くの円、ドラッグで画像を回す)
+}
+
+class WallpaperRotation <<struct>> {
+  +Degrees, DX, DY : double
+  +Normalize() : WallpaperRotation
+  +IsIdentity : bool
+  +Format() : string
+  +Parse(text) {static}
+}
+
+class RotationMath <<static>> {
+  +Corners(rotation, bounds) : PointF[]
+  +RotateAbout(rotation, bounds, pivot, delta) : WallpaperRotation
+  +FitFrame(frame, corners, inset) : bool
+  +LimitFrame(valid, candidate, corners, inset, move) : RectangleF
 }
 
 class WallpaperCrop <<struct>> {
@@ -173,6 +190,9 @@ BackgroundPanel *-- CropPreview : 「プレビュー画面」
 CropPreview ..> CropDrag : 枠のつかみ方、ドラッグ
 CropPreview ..> CropPreviewMath : 画像と枠の位置
 CropPreview ..> WallpaperCrop : 枠 (割合)
+CropPreview ..> WallpaperRotation : 画像の向きと位置
+CropPreview ..> RotationMath : 回転、枠の制限
+Wallpaper ..> WallpaperRotation : 回した画像の枠の範囲
 Wallpaper ..> WallpaperCrop : 使う範囲
 TabStrip ..> Wallpaper : 壁紙の描画
 TabStrip ..> RowPlacement : 行の位置の計算

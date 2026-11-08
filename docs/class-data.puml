@@ -1,5 +1,5 @@
 @startuml
-title クラス図: データ・モデル・設定 (v1.7.0。主なメンバーだけ)
+title クラス図: データ・モデル・設定 (v1.7.1。主なメンバーだけ)
 skinparam shadowing false
 skinparam classAttributeIconSize 0
 skinparam linetype polyline
@@ -147,6 +147,7 @@ package "設定" {
     +HAlign : WallpaperHAlign
     +VAlign : WallpaperVAlign
     +Crop : WallpaperCrop
+    +Rotation : WallpaperRotation
     +TileApplies(fit) {static}
     +KeepRatioApplies(fit) {static}
     +HAlignApplies(fit, keep) {static}
@@ -159,6 +160,12 @@ package "設定" {
     +B : double
     +MinSide : double {static}
     +IsFull : bool
+  }
+  class WallpaperRotation <<struct>> {
+    +Degrees : double
+    +DX : double
+    +DY : double
+    +IsIdentity : bool
   }
   enum WallpaperFit {
     Original
@@ -250,5 +257,6 @@ WallpaperOptions --> WallpaperFit
 WallpaperOptions --> WallpaperHAlign
 WallpaperOptions --> WallpaperVAlign
 WallpaperOptions *-- WallpaperCrop : 使う範囲
+WallpaperOptions *-- WallpaperRotation : 画像の向きと位置
 PcSettings ..> WorkbookSettings : 値を入れる / 取り出す
 @enduml

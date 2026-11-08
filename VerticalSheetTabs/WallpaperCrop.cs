@@ -102,12 +102,13 @@ namespace VerticalSheetTabs
     }
 
     // What the pointer holds of the cropping frame.
-    public enum CropHandle { None, Move, N, S, W, E, NW, NE, SW, SE }
+    public enum CropHandle { None, Move, N, S, W, E, NW, NE, SW, SE, Rotate }
 
     // What the pointer does to the cropping frame (pure arithmetic in the pixels of the preview: no drawing).
     public static class CropDrag
     {
-        // What is under the point p: a corner, an edge, the inside, or nothing. grab = how far from the line of the frame the frame
+        // What is under the point p: a corner, an edge, the dotted lines through the middle of the frame (the picture is turned there),
+        // the inside, or nothing. grab = how far from the line of the frame the frame
         // can be held; it is made narrower for a small frame, so that the inside can still be held. canMove = false when the frame
         // fills the whole picture (the inside cannot be moved).
         public static CropHandle HitTest(RectangleF frame, PointF p, float grab, bool canMove)
@@ -126,6 +127,11 @@ namespace VerticalSheetTabs
             if (nearB) return CropHandle.S;
             if (nearL) return CropHandle.W;
             if (nearR) return CropHandle.E;
+            if (frame.Contains(p))
+            {
+                float mx = frame.Left + frame.Width / 2f, my = frame.Top + frame.Height / 2f;
+                if (Math.Abs(p.X - mx) <= g || Math.Abs(p.Y - my) <= g) return CropHandle.Rotate;
+            }
             if (canMove && frame.Contains(p)) return CropHandle.Move;
             return CropHandle.None;
         }
