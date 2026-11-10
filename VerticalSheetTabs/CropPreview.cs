@@ -21,6 +21,7 @@ namespace VerticalSheetTabs
         private double _rotateAngle;            // the angle of the pointer at the last turn that was taken
         private bool _rotateAngleKnown;
         private double _pointerAngle;
+        private bool _flip;                    // the picture is shown turned over left to right (the picture, the frame and the turn)
         private bool _limit = true;             // the frame is kept inside the (turned) picture; off: it may reach outside, anywhere in the area
         private string _message = "";
         private CropHandle _hold = CropHandle.None;
@@ -84,6 +85,27 @@ namespace VerticalSheetTabs
             }
         }
 
+        // The picture is shown turned over left to right, with the frame and the turn (the dragging and the turning are not turned over:
+        // they work on the screen as they are).
+        public bool FlipImage
+        {
+            get { return _flip; }
+            set
+            {
+                if (_flip == value) return;
+                _flip = value;
+                if (_image == null) return;
+                EndHold();
+                _image.RotateFlip(RotateFlipType.RotateNoneFlipX);
+                if (_scaled != null) { _scaled.Dispose(); _scaled = null; }
+                _crop = _crop.Mirror();
+                _rotation = _rotation.Mirror();
+                _hoverRotate = false;
+                Invalidate();
+                RaiseChanged();
+            }
+        }
+
         // What is written where there is no picture (none chosen, not found, cannot be read).
         public string Message
         {
@@ -92,10 +114,12 @@ namespace VerticalSheetTabs
         }
 
         // Takes the picture (null: no picture), the frame and the turn. The picture it had is disposed.
-        public void SetImage(Bitmap image, WallpaperCrop crop, WallpaperRotation rotation, bool limit = true)
+        public void SetImage(Bitmap image, WallpaperCrop crop, WallpaperRotation rotation, bool limit = true, bool flip = false)
         {
             EndHold();
             _limit = limit;
+            _flip = flip;
+            if (image != null && flip) image.RotateFlip(RotateFlipType.RotateNoneFlipX);   // (the crop and the turn are on the turned-over picture)
             if (_scaled != null) { _scaled.Dispose(); _scaled = null; }
             if (_image != null && !ReferenceEquals(_image, image)) _image.Dispose();
             _image = image;
