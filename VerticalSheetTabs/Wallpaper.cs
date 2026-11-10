@@ -30,11 +30,12 @@ namespace VerticalSheetTabs
         public WallpaperVAlign VAlign = WallpaperVAlign.Center;
         public WallpaperCrop Crop = WallpaperCrop.Full; // the part of the picture that is used (the rest is left out)
         public WallpaperRotation Rotation;              // how the picture is turned before the part is cut out (default: not turned)
+        public bool Flip;                               // the picture is turned over left to right first (the frame and the turn are on the turned-over picture)
         public bool LimitCrop = true;                   // the frame is kept inside the picture (the preview works so; the wallpaper is transparent where the frame reaches outside the picture either way)
 
         public bool SameAs(WallpaperOptions o)
         {
-            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign && Crop.SameAs(o.Crop) && Rotation.SameAs(o.Rotation);
+            return o != null && Path == o.Path && Fit == o.Fit && KeepRatio == o.KeepRatio && Tile == o.Tile && HAlign == o.HAlign && VAlign == o.VAlign && Crop.SameAs(o.Crop) && Rotation.SameAs(o.Rotation) && Flip == o.Flip;
         }
 
         public WallpaperOptions Clone()
@@ -232,6 +233,26 @@ namespace VerticalSheetTabs
         public static Bitmap Render(Bitmap source, int areaW, int areaH, WallpaperOptions o)
         {
             if (source == null || areaW < 1 || areaH < 1) return null;
+            if (!o.Flip) return RenderPart(source, areaW, areaH, o);
+            Bitmap turned = null;
+            try
+            {
+                turned = (Bitmap)source.Clone();
+                turned.RotateFlip(RotateFlipType.RotateNoneFlipX);
+                return RenderPart(turned, areaW, areaH, o);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+            finally
+            {
+                if (turned != null) turned.Dispose();
+            }
+        }
+
+        private static Bitmap RenderPart(Bitmap source, int areaW, int areaH, WallpaperOptions o)
+        {
             // The part of the picture that is used: the layout works with its size, the drawing takes its pixels.
             bool outside = !o.Crop.WithinPicture;
             Rectangle src = outside ? o.Crop.ToPixelsOpen(source.Width, source.Height) : o.Crop.ToPixels(source.Width, source.Height);

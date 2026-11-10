@@ -39,6 +39,13 @@ namespace VerticalSheetTabs
             return new WallpaperCrop(l, t, r, b);
         }
 
+        // The same frame on the picture turned over left to right (the left and the right change places).
+        public WallpaperCrop Mirror()
+        {
+            WallpaperCrop n = Normalize();
+            return new WallpaperCrop(1 - n.R, n.T, 1 - n.L, n.B).Normalize();
+        }
+
         // Does the frame lie inside the picture?
         public bool WithinPicture
         {

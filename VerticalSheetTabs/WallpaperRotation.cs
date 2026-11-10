@@ -43,6 +43,13 @@ namespace VerticalSheetTabs
             return new WallpaperRotation(a + 0.0, z);
         }
 
+        // The same turn on the picture turned over left to right (the angle goes the other way).
+        public WallpaperRotation Mirror()
+        {
+            WallpaperRotation n = Normalize();
+            return new WallpaperRotation(-n.Degrees, n.Zoom).Normalize();
+        }
+
         public bool IsIdentity
         {
             get

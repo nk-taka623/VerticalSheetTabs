@@ -604,6 +604,36 @@ namespace VerticalSheetTabs.Tests
                     }
                 }
             });
+            Test("Wallpaper flip", () =>
+            {
+                // the frame and the turn on the turned-over picture
+                Equal("0.6,0.1,0.9,0.8", WallpaperCrop.Parse("0.1,0.1,0.4,0.8").Mirror().Format());
+                Equal("0,0,1,1", WallpaperCrop.Full.Mirror().Format());
+                Equal("0.1,0.1,0.4,0.8", WallpaperCrop.Parse("0.1,0.1,0.4,0.8").Mirror().Mirror().Format());
+                Equal("-0.5,0,1.2,1", WallpaperCrop.Parse("-0.2,0,1.5,1").Mirror().Format());
+                True(new WallpaperRotation(40, 0.8).Mirror().SameAs(new WallpaperRotation(-40, 0.8)), "the angle goes the other way");
+                True(new WallpaperRotation(180, 0.7).Mirror().SameAs(new WallpaperRotation(180, 0.7)), "180 stays");
+                True(WallpaperRotation.None.Mirror().IsIdentity, "not turned stays");
+                // the wallpaper is made from the turned-over picture: left red, right blue becomes left blue, right red
+                using (var src = new System.Drawing.Bitmap(20, 20))
+                {
+                    for (int y = 0; y < 20; y++)
+                        for (int x = 0; x < 20; x++)
+                            src.SetPixel(x, y, x < 10 ? System.Drawing.Color.Red : System.Drawing.Color.Blue);
+                    var plain = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false };
+                    using (var r = Wallpaper.Render(src, 20, 20, plain))
+                        True(r.GetPixel(2, 10).R > 200 && r.GetPixel(17, 10).B > 200, "not turned over");
+                    var flipped = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Flip = true };
+                    using (var r = Wallpaper.Render(src, 20, 20, flipped))
+                        True(r.GetPixel(2, 10).B > 200 && r.GetPixel(17, 10).R > 200, "turned over: " + r.GetPixel(2, 10) + " " + r.GetPixel(17, 10));
+                    True(src.GetPixel(2, 10).R > 200, "the source picture is not changed");
+                    // the frame is on the turned-over picture: the right half of it is the red part
+                    var part = new WallpaperOptions { Fit = WallpaperFit.FitBoth, KeepRatio = false, Flip = true, Crop = new WallpaperCrop(0.5, 0, 1, 1) };
+                    using (var r = Wallpaper.Render(src, 20, 20, part))
+                        True(r.GetPixel(10, 10).R > 200 && r.GetPixel(10, 10).B < 60, "right half of the turned-over picture is red");
+                    True(!plain.SameAs(flipped), "the flip is part of the options");
+                }
+            });
             Test("Row transparency steps", () =>
             {
                 Equal(0, RowTransparencyScale.Clamp(-5)); Equal(45, RowTransparencyScale.Clamp(47)); Equal(90, RowTransparencyScale.Clamp(200));
