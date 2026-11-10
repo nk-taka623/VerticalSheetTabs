@@ -1,5 +1,5 @@
 @startuml
-title ユースケース図 (v1.7.7)
+title ユースケース図 (v1.7.8)
 left to right direction
 skinparam shadowing false
 skinparam packageStyle rectangle

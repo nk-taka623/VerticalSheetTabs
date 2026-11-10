@@ -21,6 +21,8 @@ namespace VerticalSheetTabs
         private double _rotateAngle;            // the angle of the pointer at the last turn that was taken
         private bool _rotateAngleKnown;
         private double _pointerAngle;
+        private double _rawDegrees;             // the angle of the turn as the pointer asks for it (without the steps of Ctrl); the turn goes on from it
+        public const double SnapStep = 5.0;     // degrees: with Ctrl held, the picture is turned in these steps
         private bool _flip;                    // the picture is shown turned over left to right (the picture, the frame and the turn)
         private bool _limit = true;             // the frame is kept inside the (turned) picture; off: it may reach outside, anywhere in the area
         private string _message = "";
@@ -240,6 +242,7 @@ namespace VerticalSheetTabs
                 if (h == CropHandle.Rotate)
                 {
                     _rotatePivot = new PointF(frame.Left + frame.Width / 2f, frame.Top + frame.Height / 2f);
+                    _rawDegrees = _rotation.Degrees;
                     _recentered = false;
                     _rotateBlocked = false;
                     _rotateAngleKnown = false;
@@ -353,7 +356,9 @@ namespace VerticalSheetTabs
                 return;
             }
             // the picture is turned round the middle of the preview; when the turn begins, the frame is brought to that middle too
-            double deg = WallpaperRotation.WrapDegrees(_rotation.Degrees + delta);
+            // (Ctrl held: the angle is put on a multiple of 5 degrees; the angle the pointer asks for goes on beside it, so that the steps follow the pointer)
+            double rawNext = WallpaperRotation.WrapDegrees(_rawDegrees + delta);
+            double deg = (Control.ModifierKeys & Keys.Control) != 0 ? RotationMath.SnapDegrees(rawNext, SnapStep) : rawNext;
             var next = new WallpaperRotation(deg, ZoomFor(deg, bounds));
             RectangleF start = Frame(bounds);
             PointF mid = RotationMath.Center(bounds);
@@ -365,6 +370,7 @@ namespace VerticalSheetTabs
             if (fits && fitted.Width >= minW && fitted.Height >= minH)
             {
                 _rotation = next;
+                _rawDegrees = rawNext;
                 _crop = CropPreviewMath.FromFrame(fitted, bounds);
                 if (!_recentered)
                 {
