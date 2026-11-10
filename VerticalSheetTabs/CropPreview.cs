@@ -156,8 +156,6 @@ namespace VerticalSheetTabs
                 frame = new RectangleF(mid.X - frame.Width / 2f, mid.Y - frame.Height / 2f, frame.Width, frame.Height);
             RectangleF fitted;
             if (!RotationMath.FitFrame(frame, corners, inset, out fitted)) fitted = frame;
-            RectangleF plain = fitted;
-            if (RotationMath.FitFrame(fitted, RotationMath.Corners(WallpaperRotation.None, bounds), inset, out plain)) fitted = plain;
             WallpaperCrop crop = CropPreviewMath.FromFrame(fitted, bounds);
             if (crop.SameAs(_crop)) return;
             _crop = crop;
@@ -230,6 +228,9 @@ namespace VerticalSheetTabs
                 RectangleF bounds = PictureBounds();
                 if (bounds.IsEmpty) return;
                 var p = new PointF(e.X, e.Y);
+                // (a frame that is outside the turned picture, as it came from the settings, is brought inside before it is held: the limit
+                // of the drag keeps a frame inside only if it is inside to begin with)
+                if (_limit && !Live(bounds).IsIdentity) FitToPicture();
                 RectangleF frame = Frame(bounds);
                 CropHandle h = CropDrag.HitTest(frame, p, Dip(8), !_crop.IsFull);
                 if (h == CropHandle.None) return;
@@ -267,7 +268,7 @@ namespace VerticalSheetTabs
                 }
                 if (_hold != CropHandle.None)
                 {
-                    RectangleF frame = CropDrag.Drag(_hold, _holdFrame, _holdPoint, new PointF(e.X, e.Y), _limit ? bounds : PictureArea(), Dip(24), Dip(24));
+                    RectangleF frame = CropDrag.Drag(_hold, _holdFrame, _holdPoint, new PointF(e.X, e.Y), (_limit && Live(bounds).IsIdentity) ? bounds : PictureArea(), Dip(24), Dip(24));   // (turned: the turned picture limits the frame, below; the place of the picture before the turn does not)
                     if (_limit && !Live(bounds).IsIdentity)
                         frame = RotationMath.LimitFrame(Frame(bounds), frame, RotationMath.Corners(Live(bounds), bounds), Inset(bounds), _hold == CropHandle.Move);
                     WallpaperCrop crop = CropPreviewMath.FromFrame(frame, bounds);
@@ -452,12 +453,11 @@ namespace VerticalSheetTabs
                 else
                 {
                     // the turned picture (made smaller if it would stick out of the area), cut off at the edge of the area; where
-                    // it does not reach inside the preview, a dark grey
+                    // it does not reach inside the preview, the colour of the control (the place the picture had before the turn is not shown)
                     RectangleF area = PictureArea();
                     shaded = area;
                     GraphicsState saved = g.Save();
-                    if (_limit) { using (var grey = new SolidBrush(Color.FromArgb(96, 96, 96))) g.FillRectangle(grey, bounds); }
-                    else FillChequer(g, area);
+                    if (!_limit) FillChequer(g, area);
                     g.SetClip(area);
                     using (var m = new Matrix())
                     {
