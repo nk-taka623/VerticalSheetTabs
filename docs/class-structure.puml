@@ -94,7 +94,8 @@ class CropPreview <<Control>> {
   +Crop : WallpaperCrop
   +Rotation : WallpaperRotation
   +LimitCrop : bool
-  +SetImage(image, crop, rotation, limit)
+  +FlipImage : bool
+  +SetImage(image, crop, rotation, limit, flip)
   +ResetCrop()
   +CropChanged : event
   -(頂点、辺、内側のドラッグ。枠の外は暗くする)

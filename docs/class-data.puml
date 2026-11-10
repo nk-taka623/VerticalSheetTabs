@@ -149,6 +149,7 @@ package "設定" {
     +Crop : WallpaperCrop
     +Rotation : WallpaperRotation
     +LimitCrop : bool
+    +Flip : bool
     +TileApplies(fit) {static}
     +KeepRatioApplies(fit) {static}
     +HAlignApplies(fit, keep) {static}
