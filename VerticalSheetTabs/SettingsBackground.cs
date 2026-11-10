@@ -77,10 +77,12 @@ namespace VerticalSheetTabs
             _pathBox.Margin = new Padding(3, 4, 3, 3);
             _pathBox.MinimumSize = new Size(260, 0);
             table.Controls.Add(_pathBox, 0, 0);
-            table.Controls.Add(browse, 1, 0);
-            table.Controls.Add(clear, 2, 0);
+            table.SetColumnSpan(_pathBox, 3);
             table.Controls.Add(_status, 0, 1);
-            table.SetColumnSpan(_status, 3);
+            table.Controls.Add(browse, 1, 1);
+            table.Controls.Add(clear, 2, 1);
+            _status.Anchor = AnchorStyles.Left;
+            browse.Margin = clear.Margin = new Padding(3, 1, 3, 0);   // (the group is as high as before the buttons moved below the path box)
             WallpaperGroup = Group("壁紙", font, table, true);
 
             // 表示方法
@@ -194,14 +196,14 @@ namespace VerticalSheetTabs
             Refresh();
         }
 
-        // The lower part of the tab (the whole row is width pixels wide): on the left 表示方法, 表示位置 and 透過率 one below the other,
-        // on the right the preview, as high as the three together.
+        // The body of the tab (the whole row is width pixels wide): on the left 壁紙, 表示方法, 表示位置 and 透過率 one below the other,
+        // on the right the preview, as high as the four together.
         public Control BodyRow(int width)
         {
-            int leftW = Math.Max(FitGroup.Width, Math.Max(PositionGroup.Width, TransparencyGroup.Width));
+            int leftW = Math.Max(WallpaperGroup.Width, Math.Max(FitGroup.Width, Math.Max(PositionGroup.Width, TransparencyGroup.Width)));
             leftW = Math.Min(leftW, (width - 12) * 6 / 10);
             var left = Stack();
-            GroupBox[] groups = { FitGroup, PositionGroup, TransparencyGroup };
+            GroupBox[] groups = { WallpaperGroup, FitGroup, PositionGroup, TransparencyGroup };
             for (int i = 0; i < groups.Length; i++)
             {
                 groups[i].Dock = DockStyle.None;
