@@ -210,6 +210,17 @@ namespace VerticalSheetTabs
             Rectangle shown = _tabs.DisplayRectangle;
             _tabs.Size = new Size(inner.Width + 1000 - shown.Width, inner.Height + 1000 - shown.Height);
             _tabs.Margin = new Padding(3);
+            // the body of the background page fills the page: the preview and the last group reach the bottom of the tabs
+            var backgroundLayout = _tabs.TabPages[1].Controls[0] as TableLayoutPanel;
+            if (backgroundLayout != null)
+            {
+                backgroundLayout.AutoSize = false;
+                backgroundLayout.Dock = DockStyle.Fill;
+                backgroundLayout.RowStyles.Clear();
+                backgroundLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                backgroundLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                _background.StretchBody();
+            }
             // the right column of the basic page is as high as the tabs: the previews take what the left column does not use
             if (_basicLayout != null)
             {

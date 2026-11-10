@@ -35,6 +35,7 @@ namespace VerticalSheetTabs
         private readonly Label _outlineNote = new Label { AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(3, 2, 3, 0) };
 
         public readonly GroupBox PreviewGroup;
+        private TableLayoutPanel _left, _body;   // the left column and the whole body (see BodyRow, StretchBody)
         private readonly CropPreview _preview = new CropPreview { Dock = DockStyle.Fill, Margin = new Padding(3, 4, 3, 3) };
         private readonly Button _resetCrop = new Button { Text = "リセット", AutoSize = true, MinimumSize = new Size(88, 0), Anchor = AnchorStyles.Right };
         private readonly CheckBox _limitCrop = new CheckBox { Text = "トリミング枠の範囲制限", AutoSize = true, Checked = true, Anchor = AnchorStyles.Right };
@@ -202,25 +203,51 @@ namespace VerticalSheetTabs
         {
             int leftW = Math.Max(WallpaperGroup.Width, Math.Max(FitGroup.Width, Math.Max(PositionGroup.Width, TransparencyGroup.Width)));
             leftW = Math.Min(leftW, (width - 12) * 6 / 10);
-            var left = Stack();
+            var left = new TableLayoutPanel { ColumnCount = 1, RowCount = 4, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = Padding.Empty };
+            left.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             GroupBox[] groups = { WallpaperGroup, FitGroup, PositionGroup, TransparencyGroup };
             for (int i = 0; i < groups.Length; i++)
             {
                 groups[i].Dock = DockStyle.None;
                 groups[i].Width = leftW;
                 groups[i].Margin = new Padding(3, i == 0 ? 3 : 8, 3, 3);
-                left.Controls.Add(groups[i]);
+                left.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                left.Controls.Add(groups[i], 0, i);
             }
-            left.PerformLayout();
+            // the preview is as high as the left column: its top and bottom edges are those of the first and the last group (both margins are 3 pixels)
             PreviewGroup.Dock = DockStyle.None;
             PreviewGroup.Margin = new Padding(3);
-            // the lower edge of the preview is the lower edge of the 透過率 group (the top edges are the same: both start 3 pixels down)
-            int height = TransparencyGroup.Bottom - PreviewGroup.Margin.Top;
-            PreviewGroup.Size = new Size(Math.Max(200, width - leftW - 12), height);
-            var row = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
-            row.Controls.Add(left);
-            row.Controls.Add(PreviewGroup);
-            return row;
+            PreviewGroup.Size = new Size(Math.Max(200, width - leftW - 12), left.PreferredSize.Height - 6);
+            var body = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Margin = Padding.Empty };
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            body.Controls.Add(left, 0, 0);
+            body.Controls.Add(PreviewGroup, 1, 0);
+            _left = left;
+            _body = body;
+            return body;
+        }
+
+        // Called when the tabs have their size: the body fills the page down to the bottom, and the last group of the left column (透過率) and
+        // the preview are stretched to that bottom, so that their lower edges are the same (whatever the scale of the screen is).
+        public void StretchBody()
+        {
+            if (_body == null || _left == null) return;
+            // (the widths stay as they are; only the height follows the page)
+            int leftWidth = _left.PreferredSize.Width;
+            int previewWidth = PreviewGroup.Width + PreviewGroup.Margin.Horizontal;
+            _body.AutoSize = false;
+            _body.ColumnStyles[0] = new ColumnStyle(SizeType.Absolute, leftWidth);
+            _body.ColumnStyles[1] = new ColumnStyle(SizeType.Absolute, previewWidth);
+            _body.Width = leftWidth + previewWidth;
+            _body.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            _body.RowStyles[0] = new RowStyle(SizeType.Percent, 100);
+            _left.AutoSize = false;
+            _left.Dock = DockStyle.Fill;
+            _left.RowStyles[3] = new RowStyle(SizeType.Percent, 100);
+            TransparencyGroup.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            PreviewGroup.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
         }
 
         // Reads the picture for the preview if that has not been done (the first time the preview is shown).
