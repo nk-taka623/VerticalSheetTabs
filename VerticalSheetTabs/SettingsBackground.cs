@@ -211,10 +211,12 @@ namespace VerticalSheetTabs
                 groups[i].Margin = new Padding(3, i == 0 ? 3 : 8, 3, 3);
                 left.Controls.Add(groups[i]);
             }
-            int height = left.PreferredSize.Height - 6;
+            left.PerformLayout();
             PreviewGroup.Dock = DockStyle.None;
-            PreviewGroup.Size = new Size(Math.Max(200, width - leftW - 12), height);
             PreviewGroup.Margin = new Padding(3);
+            // the lower edge of the preview is the lower edge of the 透過率 group (the top edges are the same: both start 3 pixels down)
+            int height = TransparencyGroup.Bottom - PreviewGroup.Margin.Top;
+            PreviewGroup.Size = new Size(Math.Max(200, width - leftW - 12), height);
             var row = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = Padding.Empty };
             row.Controls.Add(left);
             row.Controls.Add(PreviewGroup);
