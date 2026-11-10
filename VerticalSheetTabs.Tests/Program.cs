@@ -433,6 +433,22 @@ namespace VerticalSheetTabs.Tests
                 True(Math.Abs(RotationMath.Delta(170, -170) - 20) < 1e-9, "over 180");
                 True(Math.Abs(RotationMath.Delta(-170, 170) + 20) < 1e-9, "over -180");
             });
+            Test("RotationMath.SnapDegrees puts the angle on steps of 5", () =>
+            {
+                True(RotationMath.SnapDegrees(0, 5) == 0, "0");
+                True(RotationMath.SnapDegrees(2.4, 5) == 0, "2.4 down");
+                True(RotationMath.SnapDegrees(2.5, 5) == 5, "2.5 goes away from 0");
+                True(RotationMath.SnapDegrees(-2.5, 5) == -5, "-2.5 goes away from 0");
+                True(RotationMath.SnapDegrees(37, 5) == 35, "37");
+                True(RotationMath.SnapDegrees(38, 5) == 40, "38");
+                True(RotationMath.SnapDegrees(-37, 5) == -35, "-37");
+                True(RotationMath.SnapDegrees(89.9, 5) == 90, "89.9");
+                True(RotationMath.SnapDegrees(179, 5) == 180, "179 is 180");
+                True(RotationMath.SnapDegrees(-179, 5) == 180, "-179 is 180 (the range is -180 excluded to 180 included)");
+                True(RotationMath.SnapDegrees(-180, 5) == 180, "-180 is 180");
+                True(BitConverter.DoubleToInt64Bits(RotationMath.SnapDegrees(-1, 5)) == 0, "no negative zero");
+                True(RotationMath.SnapDegrees(33.3, 0) == 33.3, "a step of 0 does not change the angle");
+            });
             Test("RotationMath.FitZoom keeps the corners of the turned picture inside the area", () =>
             {
                 // the picture 400 x 200 in an area 600 x 200: the picture is as high as the area

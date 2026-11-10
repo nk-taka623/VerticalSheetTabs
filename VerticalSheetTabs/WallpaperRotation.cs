@@ -165,6 +165,16 @@ namespace VerticalSheetTabs
             return WallpaperRotation.WrapDegrees(b - a);
         }
 
+        // The angle put on the nearest multiple of step (0, 5, 10 ... for step 5; the middle between two goes away from 0), in the range
+        // -180 (excluded) to 180 (included). Used while the picture is turned with Ctrl held.
+        public static double SnapDegrees(double degrees, double step)
+        {
+            if (step <= 0 || double.IsNaN(degrees) || double.IsInfinity(degrees)) return degrees;
+            double s = Math.Round(degrees / step, MidpointRounding.AwayFromZero) * step;
+            s = WallpaperRotation.WrapDegrees(s);
+            return s + 0.0;   // (no negative zero)
+        }
+
         // Makes the frame smaller (round its middle, with its ratio) until its four corners lie inside the picture. A frame that
         // is inside is not changed, and a frame is never made larger. False when that cannot be done (the middle is outside).
         public static bool FitFrame(RectangleF frame, PointF[] corners, double inset, out RectangleF result)
